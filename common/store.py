@@ -10,6 +10,7 @@ khi đọc và khi gộp, dựa vào khoá của từng loại (xem KEYS).
 from __future__ import annotations
 
 import os
+import json
 import re
 import time
 import tomllib
@@ -51,6 +52,14 @@ SCHEMAS: dict[str, list[tuple[str, str]]] = {
     # chuỗi quyền chọn Deribit, mỗi 15 phút một snapshot. expiry = thời điểm hết hạn (ms), strike = giá thực hiện (USD),
     # cp = true nếu là call, oi = open interest (số hợp đồng, 1 hợp đồng = 1 BTC), iv = mark IV (%),
     # fwd = giá underlying của kỳ hạn đó, spot = giá chỉ số
+    # sổ lệnh 3 mức của HOSE (VN100), ghi khi có thay đổi. Giá là đồng (số nguyên). last = giá khớp gần nhất,
+    # tv = tổng khối lượng khớp trong phiên (cộng dồn), bu/sd = khối lượng "mua lên"/"bán xuống" cộng dồn
+    "vn_book": [
+        ("ts", "BIGINT"), ("b1p", "INTEGER"), ("b1v", "BIGINT"), ("b2p", "INTEGER"), ("b2v", "BIGINT"),
+        ("b3p", "INTEGER"), ("b3v", "BIGINT"), ("a1p", "INTEGER"), ("a1v", "BIGINT"), ("a2p", "INTEGER"),
+        ("a2v", "BIGINT"), ("a3p", "INTEGER"), ("a3v", "BIGINT"), ("last", "INTEGER"), ("tv", "BIGINT"),
+        ("bu", "BIGINT"), ("sd", "BIGINT"),
+    ],
     "options": [
         ("ts", "BIGINT"), ("expiry", "BIGINT"), ("strike", "INTEGER"), ("cp", "BOOLEAN"),
         ("oi", "FLOAT"), ("iv", "FLOAT"), ("fwd", "DOUBLE"), ("spot", "DOUBLE"),
@@ -60,12 +69,12 @@ SCHEMAS: dict[str, list[tuple[str, str]]] = {
 # Khoá duy nhất của từng loại, dùng để loại trùng. Dòng trùng khoá: giữ dòng có ts nhỏ nhất.
 KEYS: dict[str, list[str]] = {
     "ticks": ["id"], "bars": ["ts"], "book": ["ts", "p"], "bookdepth": ["ts", "pct"], "metrics": ["ts"],
-    "footprint_1m": ["ts", "p"], "book_1m": ["ts", "p"], "options": ["ts", "expiry", "strike", "cp"],
+    "footprint_1m": ["ts", "p"], "book_1m": ["ts", "p"], "options": ["ts", "expiry", "strike", "cp"], "vn_book": ["ts"],
 }
 # Thứ tự sắp xếp khi ghi và đọc (ổn định khi nhiều lệnh cùng mili giây).
 ORDER: dict[str, str] = {
     "ticks": "ts, id", "bars": "ts", "book": "ts, p", "bookdepth": "ts, pct", "metrics": "ts",
-    "footprint_1m": "ts, p", "book_1m": "ts, p", "options": "ts, expiry, strike, cp",
+    "footprint_1m": "ts, p", "book_1m": "ts, p", "options": "ts, expiry, strike, cp", "vn_book": "ts",
 }
 
 INT32_MAX = 2**31 - 1
@@ -116,23 +125,43 @@ def _check(kind: str, symbol: str) -> None:
 # ---------- giá dạng số nguyên ----------
 
 _SYMBOLS_FILE = ROOT / "config" / "symbols.toml"
-_symbols_cache: tuple[int, dict] | None = None   # (mtime_ns, nội dung)
+VN100_FILE = ROOT / "config" / "vn100.json"
+_symbols_cache: tuple[tuple[int, int], dict] | None = None   # ((mtime toml, mtime vn100), nội dung)
+
+# Mã VN100 không cần khai từng mã trong symbols.toml: lấy từ vn100.json với cấu hình chung.
+# Giá lưu theo nghìn đồng với tick 0.001 (1 đồng) vì lịch sử đã điều chỉnh có 3 chữ số thập phân.
+VN_DEFAULTS = {"source": "vn", "market": "vn", "tick": 0.001, "qty_step": 1,
+               "footprint_bucket": 0.01, "book_window_pct": 0.0, "book_bucket": 0.01}
+
+
+def vn100_symbols() -> list[str]:
+    try:
+        with open(VN100_FILE, "rb") as f:
+            return list(json.load(f)["symbols"])
+    except (OSError, ValueError, KeyError):
+        return []
 
 
 def _load_symbols() -> dict:
-    """Đọc config/symbols.toml, giữ bản nhớ đệm và chỉ đọc lại khi file đổi.
+    """Đọc config/symbols.toml và config/vn100.json, giữ bản nhớ đệm và chỉ đọc lại khi file đổi.
 
     to_int_price chạy cho từng tick, nên không được mở file mỗi lần. Nếu file đang bị khoá
     (OneDrive, trình soạn thảo) mà đã có bản nhớ đệm thì dùng bản đó thay vì làm sập luồng.
     """
     global _symbols_cache
     try:
-        mtime = _SYMBOLS_FILE.stat().st_mtime_ns
-        if _symbols_cache is not None and _symbols_cache[0] == mtime:
+        m1 = _SYMBOLS_FILE.stat().st_mtime_ns
+        try:
+            m2 = VN100_FILE.stat().st_mtime_ns
+        except OSError:
+            m2 = 0
+        if _symbols_cache is not None and _symbols_cache[0] == (m1, m2):
             return _symbols_cache[1]
         with open(_SYMBOLS_FILE, "rb") as f:
             cfg = tomllib.load(f)
-        _symbols_cache = (mtime, cfg)
+        for sym in vn100_symbols():
+            cfg.setdefault(sym, dict(VN_DEFAULTS))
+        _symbols_cache = ((m1, m2), cfg)
         return cfg
     except OSError:
         if _symbols_cache is not None:

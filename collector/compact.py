@@ -31,7 +31,7 @@ from common import store
 
 log = logging.getLogger("collector.compact")
 
-MERGE_KINDS = ("ticks", "bars", "book", "bookdepth", "metrics", "footprint_1m", "book_1m", "options")
+MERGE_KINDS = ("ticks", "bars", "book", "bookdepth", "metrics", "footprint_1m", "book_1m", "options", "vn_book")
 MIN_AGE_S = 15 * 60          # không đụng ngày vừa kết thúc dưới 15 phút
 REL_TOL = 1e-5               # sai số cho phép khi so tổng (float32)
 LIMIT_ORDER = ("book_1m", "options", "ticks")
@@ -200,7 +200,7 @@ def compact_book(symbol: str, now: datetime, raw_days: int, agg_days: int, dry: 
 def data_bytes() -> int:
     root = store.data_dir()
     total = 0
-    for kind in (*MERGE_KINDS, "vn_book"):
+    for kind in MERGE_KINDS:
         d = root / kind
         if d.exists():
             total += sum(f.stat().st_size for f in d.rglob("*.parquet"))

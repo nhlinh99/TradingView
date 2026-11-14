@@ -80,3 +80,12 @@ Thư mục `book` sau 61 phút: BTCUSDT 0,56 MB (59 file part), XAUUSDT 0,31 MB 
 - Dung lượng: khoảng 12 triệu tick/ngày, nhiều hơn BTC trong cùng ngày. Gom nén (`footprint_1m`) vẫn giữ nguyên quy tắc 30 ngày.
 - UI ghi rõ: "Volume và orderflow của hợp đồng Binance, không phải COMEX".
 - Phase 6B (GEX vàng từ options GLD) chưa làm: nguồn miễn phí tự động hoá được chưa kiểm chứng điều khoản sử dụng, và GLD là ETF chứ không phải COMEX. 6C (GC1!, options vàng) cần trả phí Databento, bỏ qua khi chưa có khoá. Cả hai là tuỳ chọn.
+
+### VN100: nguồn và kiểm tra (Phase 7, 2026-11-14)
+
+Không có khoá SSI FastConnect, nên dùng hai endpoint công khai không có tài liệu chính thức (có thể đổi hoặc bị chặn; chỉ dùng cá nhân, gọi thưa, chưa đọc điều khoản của hai bên):
+- **Danh sách và bảng giá 3 mức**: SSI iBoard `iboard-query.ssi.com.vn/stock/group/VN100`. Trả đúng 100 mã, tất cả `hose`, 196 KB và 0,2 giây mỗi lần gọi. Có `best1..3Bid/Offer` kèm khối lượng, `nmTotalTradedQty`, `stockBUVol` (mua lên) và `stockSDVol` (bán xuống); BU + SD bằng đúng tổng khối lượng khớp. Đây là snapshot, không phải từng lệnh khớp, nên mọi số liệu orderflow VN là xấp xỉ theo nhịp lấy mẫu (10 giây).
+- **Nến lịch sử**: VNDirect dchart `dchart-api.vndirect.com.vn/dchart/history`. Nến 1 phút có khoảng 270 ngày (từ 2025-10-31), ~29 000 nến mỗi mã. Giá là nghìn đồng, 3 chữ số thập phân (đã điều chỉnh sự kiện doanh nghiệp), nên kho dùng tick 0,001.
+- Kiểm tra volume ngày (43 ngày gần nhất, tổng nến 1 phút so với nến ngày của dchart): VNM trung vị lệch 0,00%, tối đa 4,06%; FPT trung vị 0,85%, tối đa 7,84%; VCB trung vị 0,50%, tối đa 13,13%. Nến ngày của dchart khớp chính xác `nmTotalTradedQty` của SSI (VNM 2026-11-13: 2 391 600 ở cả hai). Vậy nến 1 phút của dchart thiếu một phần lệnh khớp ở một số ngày; chưa rõ nguyên nhân (nến ATO 09:15 và ATC 14:45 có mặt). Đích nghiệm thu 0,5% chỉ đạt với nến ngày, chưa đạt với tổng nến phút. Khi cần volume ngày chính xác, dùng nến ngày của dchart hoặc bộ đếm `tv` của sổ lệnh.
+- Dung lượng nến 1 phút: ghi 131 file ngày mỗi mã trong lần nạp đầu; mỗi lần ghi file khoảng 0,2 giây nên nạp cả VN100 mất khoảng 1,5 giờ.
+- Chưa có số đo sổ lệnh VN: thị trường đóng cửa vào thứ Bảy 14/11. Việc đo cần một phiên (thứ Hai 16/11).

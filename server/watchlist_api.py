@@ -6,8 +6,6 @@ PUT /api/watchlist   thay cả danh sách (và thứ tự). Chỉ nhận symbol 
 """
 from __future__ import annotations
 
-import tomllib
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -20,9 +18,13 @@ class WatchlistBody(BaseModel):
     symbols: list[str]
 
 
+def seed_symbols() -> list[str]:
+    """Watchlist ban đầu: các mã khai trong symbols.toml. Mã VN100 thêm tay từ danh sách."""
+    return [s for s, c in configured().items() if c.get("market") != "vn"]
+
+
 def configured() -> dict[str, dict]:
-    with open(store.ROOT / "config" / "symbols.toml", "rb") as f:
-        return tomllib.load(f)
+    return store._load_symbols()   # symbols.toml cộng các mã trong vn100.json
 
 
 def _read(con) -> list[str]:
@@ -42,7 +44,7 @@ def get_watchlist() -> dict:
         syms = _read(con)
         if not syms:  # lần đầu: bắt đầu bằng mọi symbol đã cấu hình
             con.executemany("INSERT INTO watchlist(symbol, position) VALUES (?, ?)",
-                            [(s, i) for i, s in enumerate(configured())])
+                            [(s, i) for i, s in enumerate(seed_symbols())])
             con.commit()
             syms = _read(con)
         return {"symbols": syms}

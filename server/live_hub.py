@@ -100,7 +100,10 @@ class LiveHub:
         feed = self.feeds.get(symbol)
         if feed is None:
             feed = self.feeds[symbol] = Feed(self, symbol)
-            feed.task = asyncio.get_running_loop().create_task(feed.run(), name=f"feed-{symbol}")
+            if store.symbol_config(symbol).get("market") == "vn":
+                feed.state = "connected"   # cổ phiếu VN: không có luồng lệnh khớp; nến cập nhật theo lần tải lại
+            else:
+                feed.task = asyncio.get_running_loop().create_task(feed.run(), name=f"feed-{symbol}")
         q: asyncio.Queue = asyncio.Queue(maxsize=QUEUE_SIZE)
         feed.subs.add(q)
         q.put_nowait({"t": "status", "s": symbol, "state": feed.state})

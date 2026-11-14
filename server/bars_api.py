@@ -127,10 +127,17 @@ def get_bars(symbol: str, tf: str, start_ms: int | None, end_ms: int | None, lim
         tf_ms = tickbars.tf_to_ms(tf)
     except ValueError as e:
         raise HTTPException(422, str(e))
-    live = end_ms is None          # chỉ yêu cầu nến mới nhất mới cần đuôi từ REST
+    is_vn = cfg.get("market") == "vn"
+    live = end_ms is None and not is_vn   # chỉ yêu cầu nến mới nhất mới cần đuôi từ REST; cổ phiếu VN không có tick
     now_ms = int(time.time() * 1000)
     if end_ms is None:
         end_ms = now_ms + 1  # gồm cả nến đang chạy
+        if is_vn:
+            # thị trường VN đóng cửa nhiều ngày (cuối tuần, lễ): lấy khoảng kết thúc ở nến cuối cùng đang có
+            from collector import vn as vn_collector
+            last = vn_collector.last_bar_ts(symbol)
+            if last is not None and last < now_ms - tf_ms:
+                end_ms = last + 1
     if start_ms is None:
         start_ms = end_ms - limit * tf_ms
     if start_ms >= end_ms:
@@ -139,6 +146,8 @@ def get_bars(symbol: str, tf: str, start_ms: int | None, end_ms: int | None, lim
         raise HTTPException(422, f"khoảng thời gian quá lớn cho timeframe {tf}")
     start_ms = start_ms // tf_ms * tf_ms          # căn đầu nến để nến đầu tiên đủ dữ liệu
 
+    if tf_ms < MINUTE and is_vn:
+        raise HTTPException(422, "cổ phiếu VN chỉ có nến từ 1 phút trở lên (không có tick)")
     if tf_ms < MINUTE:
         rows, last_id = tick_bars(symbol, tf_ms, start_ms, end_ms, live)
     elif tf_ms % MINUTE == 0:
