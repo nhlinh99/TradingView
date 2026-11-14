@@ -9,9 +9,9 @@ Dự án không liên kết với TradingView. Không dùng tên, logo hay giao 
 | Phase | Nội dung | Trạng thái |
 |---|---|---|
 | 0 | Khung dự án, kho Parquet, server, trang web | Xong |
-| 1 | Collector BTC và vàng (Binance Futures): nến, backfill, tick trực tiếp, sổ lệnh, gom nén | Xong. Còn đo lại dung lượng sổ lệnh trên mẫu dài (xem `NOTES.md`) |
-| 2 | Chart cơ bản | Chưa làm |
-| 3 | Orderflow | Chưa làm |
+| 1 | Collector BTC và vàng (Binance Futures): nến, backfill, tick trực tiếp, sổ lệnh, gom nén | Xong. Đã đo sổ lệnh 1 giờ (xem `NOTES.md`) |
+| 2 | Chart cơ bản: nến, volume, danh sách theo dõi, trực tiếp, múi giờ, giao diện tối | Xong |
+| 3 | Orderflow: footprint (imbalance, POC), delta, CVD, VPVR (POC/VAH/VAL) | Xong, trừ volume profile theo phiên |
 | 4 | Heatmap thanh khoản | Chưa làm |
 | 5 | GEX BTC (Deribit) | Chưa làm |
 | 6 | Vàng (XAUUSDT; GC1! tuỳ chọn, trả phí) | Chưa làm |

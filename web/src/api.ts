@@ -87,3 +87,9 @@ export function fetchFootprint(symbol: string, tf: string, from: number, to: num
   const q = new URLSearchParams({ symbol, tf, from: String(from), to: String(to), mult: String(mult) })
   return json<FootprintResponse>(`/api/footprint?${q}`, { signal })
 }
+
+export type ProfileResponse = { symbol: string; from: number; to: number; bucket: number; rows: number[][] }
+export function fetchProfile(symbol: string, from: number, to: number, mult: number, signal?: AbortSignal) {
+  const q = new URLSearchParams({ symbol, from: String(from), to: String(to), mult: String(mult) })
+  return json<ProfileResponse>(`/api/profile?${q}`, { signal })
+}

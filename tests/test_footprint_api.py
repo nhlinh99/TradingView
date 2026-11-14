@@ -87,3 +87,20 @@ def test_empty_and_bad_requests(data_root):
         r = client.get("/api/footprint", params={"symbol": "BTCUSDT", "from": T0, "to": T0 + 60 * MIN, **params})
         assert r.status_code == 400
     assert client.get("/api/footprint", params={"symbol": "NOPE"}).status_code == 400
+
+
+def test_profile_equals_sum_of_footprint(data_root):
+    put(make_ticks())
+    f = fp(tf="1m")
+    want: dict[float, list[float]] = {}
+    for _bar, p, buy, sell in f["rows"]:
+        w = want.setdefault(p, [0.0, 0.0])
+        w[0] += buy
+        w[1] += sell
+    r = client.get("/api/profile", params={"symbol": "BTCUSDT", "from": T0, "to": T0 + 60 * MIN})
+    assert r.status_code == 200
+    got = {p: (b, s) for p, b, s in r.json()["rows"]}
+    assert set(got) == set(want)
+    for p, (b, s) in got.items():
+        assert b == pytest.approx(want[p][0], abs=1e-4) and s == pytest.approx(want[p][1], abs=1e-4)
+    assert client.get("/api/profile", params={"symbol": "BTCUSDT", "from": T0, "to": T0}).status_code == 400

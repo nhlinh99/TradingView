@@ -99,3 +99,34 @@ def footprint_endpoint(
     mult: int = Query(1, ge=1, le=1000, description="nhân bucket giá"),
 ) -> dict:
     return get_footprint(symbol.upper(), tf, from_, to, limit, mult)
+
+
+def get_profile(symbol: str, start_ms: int, end_ms: int, mult: int) -> dict:
+    """Volume profile của cả khoảng [start, end): mỗi mức giá một dòng [price, buy, sell]."""
+    try:
+        cfg = store.symbol_config(symbol)
+    except (ValueError, KeyError) as e:
+        raise HTTPException(400, str(e)) from e
+    if end_ms <= start_ms:
+        raise HTTPException(400, "to phải lớn hơn from")
+    sql = footprint_sql(symbol, 10**12, start_ms, end_ms, mult)
+    rows: list[list] = []
+    if sql:
+        con = duckdb.connect()
+        try:
+            data = con.execute(f"SELECT p, sum(buy), sum(sell) FROM ({sql}) GROUP BY p ORDER BY p").fetchall()
+        finally:
+            con.close()
+        rows = [[round(p * cfg["tick"], 10), round(b, 6), round(s, 6)] for p, b, s in data]
+    bucket = round(round(cfg["footprint_bucket"] / cfg["tick"]) * mult * cfg["tick"], 10)
+    return {"symbol": symbol, "from": start_ms, "to": end_ms, "bucket": bucket, "rows": rows}
+
+
+@router.get("/api/profile")
+def profile_endpoint(
+    symbol: str,
+    from_: int = Query(..., alias="from"),
+    to: int = Query(...),
+    mult: int = Query(1, ge=1, le=100000),
+) -> dict:
+    return get_profile(symbol.upper(), from_, to, mult)
