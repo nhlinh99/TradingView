@@ -1,10 +1,14 @@
 import time
 from datetime import date, datetime, timezone
 
+import httpx
+
 import pytest
 from fastapi.testclient import TestClient
 
+from collector import binance
 from common import store
+from server import bars_api
 from server.main import app
 
 client = TestClient(app)
@@ -19,6 +23,28 @@ def data_root(tmp_path, monkeypatch):
     root = tmp_path / "tv-data"
     monkeypatch.setenv("DATA_DIR", str(root))
     return root
+
+
+REST_CALLS: list[dict] = []
+
+
+def rest_serving(trades):
+    """Client REST giả phục vụ /fapi/v1/aggTrades?fromId= từ danh sách (id, ts, giá, khối lượng, m)."""
+    def handler(req):
+        p = dict(req.url.params)
+        REST_CALLS.append(p)
+        from_id = int(p["fromId"])
+        rows = [{"a": a, "p": f"{price:.1f}", "q": str(q), "f": a, "l": a, "T": ts, "m": m}
+                for a, ts, price, q, m in trades if a >= from_id][: int(p["limit"])]
+        return httpx.Response(200, json=rows)
+    return lambda: binance.make_client(httpx.MockTransport(handler))
+
+
+@pytest.fixture(autouse=True)
+def no_network_rest(monkeypatch):
+    """Mặc định REST giả không có lệnh khớp nào, để test không gọi mạng thật."""
+    REST_CALLS.clear()
+    monkeypatch.setattr(bars_api, "rest_client_factory", rest_serving([]))
 
 
 def kline_rows(n, start=T0, base=670000):
@@ -136,3 +162,82 @@ def test_live_real_data_directory_serves_recent_bars(monkeypatch):
     ts = [b[0] for b in j["bars"]]
     assert len(ts) > 100 and ts == sorted(ts) and len(set(ts)) == len(ts)
     assert time.time() * 1000 - ts[-1] < 5 * MIN
+
+
+# ---------- đuôi lấy từ REST và last_trade_id ----------
+
+def test_latest_request_adds_rest_trades_after_the_last_stored_tick(data_root, monkeypatch):
+    put_klines(kline_rows(3))
+    m3 = T0 + 3 * MIN
+    put_ticks([(m3 + 1000, 10, 670100, 1.0, False), (m3 + 2000, 11, 670110, 2.0, True)])   # collector đã ghi tới id 11
+    rest = [(12, m3 + 3000, 6712.0 * 10, 1.0, False), (13, m3 + 4000, 6705.0 * 10, 0.5, True)]
+    monkeypatch.setattr(bars_api, "rest_client_factory", rest_serving(rest))
+    monkeypatch.setattr(bars_api.time, "time", lambda: (m3 + 30_000) / 1000)
+    j = client.get("/api/bars", params={"symbol": "BTCUSDT", "tf": "1m", "from": T0}).json()
+    forming = j["bars"][-1]
+    # mở 67010 (id 10), cao 67120 (REST id 12), thấp 67010... đóng 67050 (id 13)
+    assert forming[0] == m3 and forming[1] == 67010.0 and forming[4] == 67050.0
+    assert forming[2] == 67120.0 and forming[3] == 67010.0
+    assert forming[5:] == [4.5, 2.0, 2.5]                            # v, mua chủ động, bán chủ động
+    assert j["last_trade_id"] == 13
+    assert REST_CALLS and REST_CALLS[0]["fromId"] == "12"          # chỉ xin phần sau tick đã lưu
+
+
+def test_rest_trades_crossing_into_next_minute_open_a_new_bar(data_root, monkeypatch):
+    put_klines(kline_rows(3))
+    m3 = T0 + 3 * MIN
+    put_ticks([(m3 + 59_000, 10, 670100, 1.0, False)])
+    rest = [(11, m3 + 61_000, 6711.0 * 10, 2.0, True)]
+    monkeypatch.setattr(bars_api, "rest_client_factory", rest_serving(rest))
+    monkeypatch.setattr(bars_api.time, "time", lambda: (m3 + 62_000) / 1000)
+    j = client.get("/api/bars", params={"symbol": "BTCUSDT", "tf": "1m", "from": T0}).json()
+    assert [b[0] for b in j["bars"]][-2:] == [m3, m3 + MIN]
+    assert j["bars"][-1][5] == 2.0 and j["last_trade_id"] == 11
+
+
+def test_rest_failure_falls_back_to_stored_ticks(data_root, monkeypatch):
+    put_klines(kline_rows(3))
+    put_ticks([(T0 + 3 * MIN + 1000, 10, 670100, 1.0, False)])
+    monkeypatch.setattr(bars_api, "rest_client_factory",
+                        lambda: binance.make_client(httpx.MockTransport(lambda req: httpx.Response(400, text="lỗi"))))
+    monkeypatch.setattr(bars_api.time, "time", lambda: (T0 + 3 * MIN + 30_000) / 1000)
+    r = client.get("/api/bars", params={"symbol": "BTCUSDT", "tf": "1m", "from": T0})
+    assert r.status_code == 200 and r.json()["last_trade_id"] == 10 and r.json()["bars"][-1][5] == 1.0
+
+
+def test_historical_request_never_calls_rest(data_root):
+    put_klines(kline_rows(3))
+    put_ticks([(T0 + 3 * MIN + 1000, 10, 670100, 1.0, False)])
+    client.get("/api/bars", params={"symbol": "BTCUSDT", "tf": "1m", "from": T0, "to": T0 + 4 * MIN})
+    assert REST_CALLS == []
+
+
+def test_larger_timeframe_also_gets_the_rest_tail(data_root, monkeypatch):
+    put_klines(kline_rows(5))
+    put_ticks([(T0 + 5 * MIN + 1000, 10, 670100, 1.0, False)])
+    monkeypatch.setattr(bars_api, "rest_client_factory", rest_serving([(11, T0 + 5 * MIN + 2000, 6720.0 * 10, 3.0, False)]))
+    monkeypatch.setattr(bars_api.time, "time", lambda: (T0 + 5 * MIN + 30_000) / 1000)
+    j = client.get("/api/bars", params={"symbol": "BTCUSDT", "tf": "5m", "from": T0}).json()
+    assert j["bars"][-1][0] == T0 + 5 * MIN and j["bars"][-1][5] == 4.0 and j["bars"][-1][4] == 67200.0
+
+
+def test_sub_minute_latest_gets_rest_tail_and_last_id(data_root, monkeypatch):
+    put_ticks([(T0 + 100, 1, 670000, 1.0, False)])
+    monkeypatch.setattr(bars_api, "rest_client_factory", rest_serving([(2, T0 + 400, 670010, 2.0, True)]))
+    monkeypatch.setattr(bars_api.time, "time", lambda: (T0 + 900) / 1000)
+    j = client.get("/api/bars", params={"symbol": "BTCUSDT", "tf": "1s", "from": T0}).json()
+    assert j["bars"][-1][5] == 3.0 and j["last_trade_id"] == 2
+
+
+def test_no_stored_ticks_means_no_rest_call_and_null_last_id(data_root):
+    put_klines(kline_rows(3))
+    j = client.get("/api/bars", params={"symbol": "BTCUSDT", "tf": "1m", "from": T0}).json()
+    assert j["last_trade_id"] is None and REST_CALLS == []
+
+
+def test_merge_tail_helpers():
+    from common import bars
+    ticks = [(T0 + 10, 2, 105, 1.0, True), (T0 + 5, 1, 100, 2.0, False)]
+    b = bars.bars_from_tick_rows(ticks, "1m")
+    assert b == [(T0, 100, 105, 100, 105, 3.0, 2.0, 1.0)]
+    assert bars.combine_bars((T0, 100, 110, 99, 105, 1.0, 1.0, 0.0), (T0, 106, 120, 104, 118, 2.0, 0.0, 2.0)) ==         (T0, 100, 120, 99, 118, 3.0, 1.0, 2.0)
