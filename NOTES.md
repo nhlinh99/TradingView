@@ -67,3 +67,7 @@ Thấp hơn ước tính 15-25 MB trong kế hoạch, nhưng mẫu chỉ 14 phú
 ### Đo lại dung lượng sổ lệnh (1 giờ, 19:00-20:01 giờ máy)
 
 Thư mục `book` sau 61 phút: BTCUSDT 0,56 MB (59 file part), XAUUSDT 0,31 MB (58 file part), chưa gộp. Quy ra khoảng 13 MB/ngày cho BTC, 7 MB/ngày cho XAU. Số BTC khớp mẫu 14 phút (12,5 MB/ngày). Số XAU cao hơn mẫu cũ (2,5 MB/ngày) vì file part chưa gộp nên còn tốn phần đầu file; sau `merge_day` số này sẽ giảm. Vẫn trong ngân sách kế hoạch (15-25 MB/ngày). Mới đo một giờ, chưa đo lúc biến động mạnh.
+
+### Kiểm thử chạy thật (2026-11-14 20:02)
+
+`scripts/run-collectors.ps1`: cả hai collector (trades, book) khởi động, log nằm ở `C:\tv-data\logs`. Kết thúc một tiến trình trades thì script dựng lại tiến trình mới trong vài giây. `python -m collector.daily` chạy xong 9 bước trong 3 giây, thoát mã 0, trong lúc collector vẫn chạy. Mỗi collector hiện hai PID trong danh sách tiến trình vì venv của Python 3.15 có một bộ khởi chạy và một tiến trình con; đó là bình thường. Phase 1 đóng.
