@@ -9,7 +9,7 @@ Dự án không liên kết với TradingView. Không dùng tên, logo hay giao 
 | Phase | Nội dung | Trạng thái |
 |---|---|---|
 | 0 | Khung dự án, kho Parquet, server, trang web | Xong |
-| 1 | Collector BTC (Binance Futures) | Chưa làm |
+| 1 | Collector BTC và vàng (Binance Futures): nến, backfill, tick trực tiếp, sổ lệnh, gom nén | Xong. Còn đo lại dung lượng sổ lệnh trên mẫu dài (xem `NOTES.md`) |
 | 2 | Chart cơ bản | Chưa làm |
 | 3 | Orderflow | Chưa làm |
 | 4 | Heatmap thanh khoản | Chưa làm |
@@ -69,16 +69,48 @@ Chạy test:
 C:\tv-data\.venv\Scripts\python.exe -m pytest
 ```
 
+## Thu thập dữ liệu
+
+Đặt `$py = 'C:\tv-data\.venv\Scripts\python.exe'` (hoặc đường dẫn venv của bạn), chạy từ thư mục dự án.
+
+| Việc | Lệnh |
+|---|---|
+| Nến 1 phút 30 ngày gần nhất | `& $py -m collector.klines --symbol BTCUSDT --days 30` |
+| Lịch sử tick (kiểm checksum) | `& $py -m collector.backfill --symbol BTCUSDT --dataset aggTrades --days 30` |
+| Lịch sử độ sâu thô, open interest | `--dataset bookDepth` hoặc `--dataset metrics` |
+| Kiểm tra nến dựng từ tick so với kline | `& $py -m collector.verify --symbol BTCUSDT --days 3` |
+| Tick trực tiếp | `& $py -m collector.live_trades --symbols BTCUSDT,XAUUSDT` |
+| Sổ lệnh trực tiếp (heatmap) | `& $py -m collector.live_book --symbols BTCUSDT,XAUUSDT` |
+| Gom nén (thử trước) | `& $py -m collector.compact --dry-run` |
+
+Collector trực tiếp chỉ chạy khi tiến trình còn sống, và dữ liệu sổ lệnh trong quá khứ không lấy lại được miễn phí. Muốn chạy liên tục, dùng:
+
+```powershell
+.\scripts\run-collectors.ps1
+```
+
+Script khởi động cả hai collector, tự chạy lại nếu một cái thoát, ghi log vào `DATA_DIR\logs`. Để tự chạy khi đăng nhập Windows và gom nén mỗi đêm, tạo hai tác vụ (chạy một lần, đổi đường dẫn cho đúng):
+
+```powershell
+$root = 'C:\duong\dan\toi\TradingView'
+schtasks /Create /TN tv-collectors /SC ONLOGON /TR "powershell -NoProfile -ExecutionPolicy Bypass -File $root\scripts\run-collectors.ps1"
+schtasks /Create /TN tv-compact /SC DAILY /ST 03:00 /TR "cmd /c cd /d $root && C:\tv-data\.venv\Scripts\python.exe -m collector.compact"
+```
+
+Gom nén chỉ đụng các ngày đã qua. Tick quá 30 ngày được gom thành footprint 1 phút (chỉ bằng khoảng 6% dung lượng) sau khi kiểm tra tổng mua và bán từng phút. Chính sách nằm trong `config/retention.toml`.
+
+Ghi chú kỹ thuật, số đo và các quyết định đã đổi so với kế hoạch: [`NOTES.md`](NOTES.md).
+
 ## Cấu trúc
 
 ```
 common/      kho Parquet (store.py), SQLite (appdb.py), khởi tạo thư mục
-collector/   thu thập dữ liệu nền (Phase 1)
+collector/   thu thập: binance.py, klines.py, backfill.py, live_trades.py, live_book.py, verify.py, compact.py
 server/      FastAPI: /health, sau này /bars, /footprint, /heatmap, /gex
 web/         Vite + React + TypeScript + Lightweight Charts
 config/      symbols.toml (tick size), retention.toml (chính sách giữ dữ liệu)
 tests/       pytest
-scripts/     web-deps.ps1
+scripts/     web-deps.ps1, run-collectors.ps1, ...
 plan-viewer/ sơ đồ tương tác của kế hoạch
 ```
 
