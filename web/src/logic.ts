@@ -96,3 +96,59 @@ export function formatVolume(v: number): string {
   if (v >= 1e3) return (v / 1e3).toFixed(2) + 'K'
   return v.toFixed(v < 1 ? 4 : 2)
 }
+
+// ---------- orderflow ----------
+
+export const delta = (b: Bar) => b.buy - b.sell
+
+/** CVD cộng dồn delta. session='day': về 0 vào đầu mỗi ngày UTC. */
+export function cvdSeries(bars: Bar[], session: 'none' | 'day'): number[] {
+  const out: number[] = []
+  let sum = 0
+  let day = -1
+  for (const b of bars) {
+    const d = Math.floor(b.time / 86400)
+    if (session === 'day' && d !== day) sum = 0
+    day = d
+    sum += delta(b)
+    out.push(sum)
+  }
+  return out
+}
+
+export type Cell = { price: number; buy: number; sell: number }
+export type ImbalanceSide = 'buy' | 'sell' | null
+
+/**
+ * Imbalance chéo kiểu footprint: mua ở mức giá p so với bán ở mức giá thấp hơn một bước (và ngược lại),
+ * vì người mua chủ động khớp với lệnh bán chờ nằm ở mức giá cao hơn, tức bán ở p-1 bước đối ứng mua ở p.
+ * Trả về 'buy' nếu buy[p] >= ratio * sell[p - step], 'sell' nếu sell[p] >= ratio * buy[p + step].
+ */
+export function imbalance(cells: Cell[], i: number, step: number, ratio: number, minVol = 0): ImbalanceSide {
+  const c = cells[i]
+  const below = cells.find((x) => Math.abs(x.price - (c.price - step)) < step / 2)
+  const above = cells.find((x) => Math.abs(x.price - (c.price + step)) < step / 2)
+  if (below && below.sell > 0 && c.buy >= minVol && c.buy >= ratio * below.sell) return 'buy'
+  if (above && above.buy > 0 && c.sell >= minVol && c.sell >= ratio * above.buy) return 'sell'
+  return null
+}
+
+/** Volume profile: POC và vùng giá trị (VAH/VAL) chứa `share` tổng khối lượng, mở rộng từ POC. */
+export function profileStats(cells: Cell[], share = 0.7): { poc: number; vah: number; val: number } | null {
+  const rows = cells.filter((c) => c.buy + c.sell > 0).sort((a, b) => a.price - b.price)
+  if (rows.length === 0) return null
+  const vol = rows.map((c) => c.buy + c.sell)
+  const total = vol.reduce((a, b) => a + b, 0)
+  let poc = 0
+  vol.forEach((v, i) => { if (v > vol[poc]) poc = i })
+  let lo = poc
+  let hi = poc
+  let acc = vol[poc]
+  while (acc < share * total && (lo > 0 || hi < rows.length - 1)) {
+    const down = lo > 0 ? vol[lo - 1] : -1
+    const up = hi < rows.length - 1 ? vol[hi + 1] : -1
+    if (up >= down) acc += vol[++hi]
+    else acc += vol[--lo]
+  }
+  return { poc: rows[poc].price, vah: rows[hi].price, val: rows[lo].price }
+}

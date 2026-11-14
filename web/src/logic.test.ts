@@ -80,3 +80,36 @@ test('tickLabel', () => {
   assert.equal(tickLabel(t, 'UTC', 1000), '13:05:07')
   assert.equal(tickLabel(t, 'UTC', 86_400_000), '10/11')
 })
+
+import { cvdSeries, delta, imbalance, profileStats, type Cell } from './logic.ts'
+
+test('delta and CVD, with and without daily reset', () => {
+  const b = (time: number, buy: number, sell: number): Bar => ({ time, open: 1, high: 1, low: 1, close: 1, volume: buy + sell, buy, sell })
+  const bars = [b(86400 - 60, 3, 1), b(86400, 1, 4), b(86400 + 60, 2, 0)]
+  assert.equal(delta(bars[1]), -3)
+  assert.deepEqual(cvdSeries(bars, 'none'), [2, -1, 1])
+  assert.deepEqual(cvdSeries(bars, 'day'), [2, -3, -1])
+})
+
+test('diagonal imbalance at 3:1', () => {
+  const cells: Cell[] = [
+    { price: 100, buy: 1, sell: 2 },
+    { price: 101, buy: 6, sell: 1 }, // buy 6 vs sell below 2 -> 3:1 buy imbalance
+    { price: 102, buy: 1, sell: 9 }, // sell 9 vs buy above? none above -> null
+  ]
+  assert.equal(imbalance(cells, 1, 1, 3), 'buy')
+  assert.equal(imbalance(cells, 0, 1, 3), null)
+  assert.equal(imbalance(cells, 1, 1, 4), null)
+  const c2: Cell[] = [{ price: 100, buy: 2, sell: 1 }, { price: 101, buy: 1, sell: 7 }]
+  assert.equal(imbalance(c2, 1, 1, 3), null) // sell side needs a buy cell ABOVE
+  const c3: Cell[] = [{ price: 100, buy: 1, sell: 1 }, { price: 99, buy: 0, sell: 3 }]
+  assert.equal(imbalance(c3, 1, 1, 3), 'sell') // sell 3 at 99 vs buy 1 at 100 above: 3:1
+})
+
+test('profile POC and value area', () => {
+  const cells: Cell[] = [10, 20, 100, 30, 5].map((v, i) => ({ price: 100 + i, buy: v / 2, sell: v / 2 }))
+  const p = profileStats(cells, 0.7)!
+  assert.equal(p.poc, 102)
+  assert.ok(p.val <= 102 && p.vah >= 102)
+  assert.equal(profileStats([]), null)
+})

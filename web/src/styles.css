@@ -8,7 +8,7 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 syst
 button, select { font: inherit; color: inherit; }
 button:focus-visible, select:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
 
-.app { display: grid; grid-template-columns: 180px minmax(0, 1fr); height: 100%; }
+.app { overflow: hidden; display: grid; grid-template-columns: 180px minmax(0, 1fr); height: 100%; }
 .side { border-right: 1px solid var(--line); padding: 12px; overflow: auto; }
 .side h2 { font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--mute); margin: 0 0 8px; }
 .side ul { list-style: none; margin: 0 0 8px; padding: 0; }
@@ -52,3 +52,9 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--focus); ou
   .side ul { display: flex; margin: 0; }
   .side select { width: auto; }
 }
+
+.fp-canvas { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.opts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; color: var(--mute); }
+.opts label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+.opts input[type='number'] { width: 52px; padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.opts select { padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }

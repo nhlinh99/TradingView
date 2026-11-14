@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import Chart from './Chart'
+import Chart, { type Flow } from './Chart'
 import { fetchSymbols, fetchWatchlist, saveWatchlist, type StreamState, type SymbolInfo } from './api'
 import { TIMEFRAMES, TIMEZONES } from './logic'
 
@@ -32,6 +32,17 @@ export default function App() {
   const [tz, setTz] = useState(() => pref('tz', 'UTC', TIMEZONES.map((t) => t.id)))
   const [theme, setTheme] = useState(() =>
     pref('theme', window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light', ['light', 'dark']) as 'light' | 'dark')
+  const [flow, setFlow] = useState<Flow>(() => ({
+    delta: pref('delta', '0', ['0', '1']) === '1',
+    cvd: pref('cvd', 'off', ['off', 'none', 'day']) as Flow['cvd'],
+    footprint: pref('footprint', '0', ['0', '1']) === '1',
+    ratio: Number(pref('ratio', '3', ['2', '3', '4', '5'])),
+  }))
+  const setF = (patch: Partial<Flow>) => setFlow((f) => {
+    const n = { ...f, ...patch }
+    savePref('delta', n.delta ? '1' : '0'); savePref('cvd', n.cvd); savePref('footprint', n.footprint ? '1' : '0'); savePref('ratio', String(n.ratio))
+    return n
+  })
   const [state, setState] = useState<StreamState>('connecting')
   const [err, setErr] = useState<string | null>(null)
 
@@ -100,13 +111,29 @@ export default function App() {
               {TIMEZONES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
           </label>
+          <div className="opts" role="group" aria-label="Orderflow">
+            <label><input type="checkbox" checked={flow.footprint} onChange={(e) => setF({ footprint: e.target.checked })} />Footprint</label>
+            <label><input type="checkbox" checked={flow.delta} onChange={(e) => setF({ delta: e.target.checked })} />Delta</label>
+            <label>CVD
+              <select value={flow.cvd} onChange={(e) => setF({ cvd: e.target.value as Flow['cvd'] })} aria-label="CVD">
+                <option value="off">Tắt</option><option value="none">Liên tục</option><option value="day">Reset theo ngày</option>
+              </select>
+            </label>
+            {flow.footprint && (
+              <label>Imbalance
+                <select value={flow.ratio} onChange={(e) => setF({ ratio: Number(e.target.value) })} aria-label="Ngưỡng imbalance">
+                  {[2, 3, 4, 5].map((r) => <option key={r} value={r}>{r}:1</option>)}
+                </select>
+              </label>
+            )}
+          </div>
           <button className="themebtn" aria-label="Đổi giao diện sáng/tối"
             onClick={() => { const n = theme === 'dark' ? 'light' : 'dark'; setTheme(n); savePref('theme', n) }}>
             {theme === 'dark' ? 'Sáng' : 'Tối'}
           </button>
           <span className={`live ${state}`} role="status" data-testid="stream-state">{STATE_LABEL[state]}</span>
         </header>
-        {symbol && <Chart symbol={symbol} tf={tf} tz={tz} theme={theme} onState={onState} />}
+        {symbol && <Chart symbol={symbol} tf={tf} tz={tz} flow={flow} theme={theme} onState={onState} />}
         {err && <p className="status bad" role="alert">{err}</p>}
       </section>
     </div>

@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, createChart,
+  CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSeries, createChart,
   type IChartApi, type ISeriesApi, type UTCTimestamp,
 } from 'lightweight-charts'
 import { fetchBars, openStream, type StreamState } from './api'
+import Footprint from './Footprint'
 import {
-  applyTrade, barFromRow, decimalsFromTick, formatTime, formatVolume, mergeOlder, tfMs, tickLabel,
+  applyTrade, cvdSeries, delta, barFromRow, decimalsFromTick, formatTime, formatVolume, mergeOlder, tfMs, tickLabel,
   type Bar, type Trade,
 } from './logic'
 
@@ -15,10 +16,11 @@ const PALETTE = {
 }
 const volColor = (b: Bar, up: string, down: string) => (b.close >= b.open ? up + '88' : down + '88')
 
-type Props = { symbol: string; tf: string; tz: string; theme: 'light' | 'dark'; onState: (s: StreamState) => void }
+export type Flow = { delta: boolean; cvd: 'off' | 'none' | 'day'; footprint: boolean; ratio: number }
+type Props = { symbol: string; tf: string; tz: string; flow: Flow; theme: 'light' | 'dark'; onState: (s: StreamState) => void }
 type Legend = { time: number; bar: Bar } | null
 
-export default function Chart({ symbol, tf, tz, theme, onState }: Props) {
+export default function Chart({ symbol, tf, tz, flow, theme, onState }: Props) {
   const box = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candles = useRef<ISeriesApi<'Candlestick'> | null>(null)
@@ -26,6 +28,11 @@ export default function Chart({ symbol, tf, tz, theme, onState }: Props) {
   const bars = useRef<Bar[]>([])
   const tzRef = useRef(tz)
   const tfRef = useRef(tfMs(tf))
+  const deltaS = useRef<ISeriesApi<'Histogram'> | null>(null)
+  const cvdS = useRef<ISeriesApi<'Line'> | null>(null)
+  const flowRef = useRef(flow)
+  flowRef.current = flow
+  const [version, setVersion] = useState(0)
   const [legend, setLegend] = useState<Legend>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -62,13 +69,48 @@ export default function Chart({ symbol, tf, tz, theme, onState }: Props) {
       setLegend(b ? { time: b.time, bar: b } : null)
     })
     chartRef.current = chart
+    if (import.meta.env.DEV) (window as unknown as { __tvChart?: IChartApi }).__tvChart = chart // chỉ để kiểm thử trong dev
     candles.current = c
     volume.current = v
     return () => {
       chart.remove()
-      chartRef.current = candles.current = volume.current = null
+      chartRef.current = candles.current = volume.current = deltaS.current = cvdS.current = null
     }
   }, [])
+
+  // vẽ lại delta/CVD từ mảng nến hiện có
+  const refreshFlow = useCallback(() => {
+    const P = PALETTE[themeRef.current]
+    const list = bars.current
+    deltaS.current?.setData(list.map((b) => ({ time: b.time as UTCTimestamp, value: delta(b), color: delta(b) >= 0 ? P.up : P.down })))
+    if (cvdS.current && flowRef.current.cvd !== 'off') {
+      const cv = cvdSeries(list, flowRef.current.cvd)
+      cvdS.current.setData(list.map((b, i) => ({ time: b.time as UTCTimestamp, value: cv[i] })))
+    }
+  }, [])
+  const refreshRef = useRef(refreshFlow)
+  refreshRef.current = refreshFlow
+
+  // bật/tắt pane delta và CVD
+  useEffect(() => {
+    const chart = chartRef.current
+    if (!chart) return
+    if (flow.delta && !deltaS.current) {
+      deltaS.current = chart.addSeries(HistogramSeries, { priceLineVisible: false, lastValueVisible: false, priceFormat: { type: 'volume' } }, chart.panes().length)
+    } else if (!flow.delta && deltaS.current) {
+      chart.removeSeries(deltaS.current)
+      deltaS.current = null
+    }
+    if (flow.cvd !== 'off' && !cvdS.current) {
+      cvdS.current = chart.addSeries(LineSeries, { color: '#f0b90b', lineWidth: 2, priceLineVisible: false, priceFormat: { type: 'volume' } }, chart.panes().length)
+    } else if (flow.cvd === 'off' && cvdS.current) {
+      chart.removeSeries(cvdS.current)
+      cvdS.current = null
+    }
+    const panes = chart.panes()
+    panes.forEach((p, i) => { if (i >= 2) p.setStretchFactor(0.2) })
+    refreshFlow()
+  }, [flow.delta, flow.cvd, refreshFlow])
 
   // đổi giao diện sáng/tối
   useEffect(() => {
@@ -78,9 +120,10 @@ export default function Chart({ symbol, tf, tz, theme, onState }: Props) {
       grid: { vertLines: { color: P.grid }, horzLines: { color: P.grid } },
       rightPriceScale: { borderColor: P.line }, timeScale: { borderColor: P.line },
     })
-    candles.current?.applyOptions({ upColor: P.up, downColor: P.down, borderUpColor: P.up, borderDownColor: P.down, wickUpColor: P.up, wickDownColor: P.down })
+    candles.current?.applyOptions({ upColor: flow.footprint ? 'transparent' : P.up, downColor: flow.footprint ? 'transparent' : P.down, borderUpColor: P.up, borderDownColor: P.down, wickUpColor: P.up, wickDownColor: P.down })
     volume.current?.setData(bars.current.map((b) => ({ time: b.time as UTCTimestamp, value: b.volume, color: volColor(b, P.up, P.down) })))
-  }, [theme])
+    refreshRef.current()
+  }, [theme, flow.footprint])
 
   // đổi múi giờ: vẽ lại nhãn
   useEffect(() => {
@@ -99,10 +142,17 @@ export default function Chart({ symbol, tf, tz, theme, onState }: Props) {
     let seq = 0
     const step = tfMs(tf)
 
+    let flowTimer = 0
+    const scheduleFlow = () => {
+      if (flowTimer) return
+      flowTimer = window.setTimeout(() => { flowTimer = 0; refreshRef.current() }, 250)
+    }
     const paint = (all: Bar[], fit: boolean) => {
       candles.current?.setData(all.map((b) => ({ time: b.time as UTCTimestamp, open: b.open, high: b.high, low: b.low, close: b.close })))
       volume.current?.setData(all.map((b) => ({ time: b.time as UTCTimestamp, value: b.volume, color: volColor(b, PALETTE[themeRef.current].up, PALETTE[themeRef.current].down) })))
       if (fit) chartRef.current?.timeScale().fitContent()
+      refreshRef.current()
+      setVersion((v) => v + 1)
     }
     const apply = (t: Trade) => {
       if (lastId !== null && t.id <= lastId) return // đã nằm trong nến tải về
@@ -111,6 +161,7 @@ export default function Chart({ symbol, tf, tz, theme, onState }: Props) {
       if (!b) return
       candles.current?.update({ time: b.time as UTCTimestamp, open: b.open, high: b.high, low: b.low, close: b.close })
       volume.current?.update({ time: b.time as UTCTimestamp, value: b.volume, color: volColor(b, PALETTE[themeRef.current].up, PALETTE[themeRef.current].down) })
+      scheduleFlow()
     }
     const load = async () => {
       const my = ++seq
@@ -172,6 +223,7 @@ export default function Chart({ symbol, tf, tz, theme, onState }: Props) {
 
     return () => {
       ctrl.abort()
+      window.clearTimeout(flowTimer)
       stop()
       chartRef.current?.timeScale().unsubscribeVisibleLogicalRangeChange(onRange)
     }
@@ -181,6 +233,8 @@ export default function Chart({ symbol, tf, tz, theme, onState }: Props) {
   return (
     <div className="chart-wrap">
       <div ref={box} className="chart" data-testid="chart" />
+      <Footprint on={flow.footprint} symbol={symbol} tf={tf} ratio={flow.ratio} dark={theme === 'dark'}
+        chart={chartRef} candles={candles} bars={bars} version={version} />
       <div className="legend" aria-live="off">
         {b ? (
           <>

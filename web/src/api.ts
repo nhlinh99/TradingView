@@ -81,3 +81,9 @@ export function openStream(symbol: string, h: StreamHandlers): () => void {
     ws?.close()
   }
 }
+
+export type FootprintResponse = { symbol: string; tf: string; tick: number; bucket: number; from: number; to: number; rows: number[][] }
+export function fetchFootprint(symbol: string, tf: string, from: number, to: number, mult: number, signal?: AbortSignal) {
+  const q = new URLSearchParams({ symbol, tf, from: String(from), to: String(to), mult: String(mult) })
+  return json<FootprintResponse>(`/api/footprint?${q}`, { signal })
+}
