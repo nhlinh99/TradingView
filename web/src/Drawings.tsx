@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactElement } from 'react'
 import type { IChartApi, ISeriesApi } from 'lightweight-charts'
 import { clearDrawings, createDrawing, deleteDrawing, fetchDrawings } from './api'
 import {
@@ -25,6 +25,21 @@ const TOOLS: { id: Tool; label: string; title: string }[] = [
   { id: 'text', label: 'Chữ', title: 'Văn bản: bấm một điểm' },
   { id: 'erase', label: 'Xoá', title: 'Bấm vào hình để xoá' },
 ]
+
+const ICONS: Record<string, ReactElement> = {
+  cursor: <path d="M5 3l12 8-5.5 1.2L9 18z" />,
+  trend: <><circle cx="5" cy="17" r="2" /><circle cx="17" cy="5" r="2" /><path d="M6.5 15.5L15.5 6.5" /></>,
+  hline: <path d="M2 11h18M2 11l3-3M2 11l3 3" />,
+  rect: <rect x="4" y="6" width="14" height="10" rx="1" />,
+  fib: <path d="M3 4h16M3 9h16M3 13h16M3 18h16" />,
+  text: <path d="M5 5h12M11 5v12M8 17h6" />,
+  erase: <path d="M4 15l8-9 6 5-6 7H8zM12 18h7" />,
+  clear: <path d="M5 7h12M9 7V5h4v2M7 7l1 11h6l1-11" />,
+}
+function Icon({ id }: { id: string }) {
+  return <svg viewBox="0 0 22 22" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{ICONS[id]}</svg>
+}
+
 const NEED: Record<DrawKind, number> = { trend: 2, hline: 1, rect: 2, fib: 2, text: 1 }
 const COLOR = '#f0b90b'
 
@@ -245,9 +260,12 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
       />
       <div className="draw-tools" role="toolbar" aria-label="Công cụ vẽ">
         {TOOLS.map((t) => (
-          <button key={t.id} title={t.title} aria-pressed={tool === t.id} className={tool === t.id ? 'on' : ''} onClick={() => setTool(t.id)}>{t.label}</button>
+          <button key={t.id} title={t.title} aria-label={t.title} aria-pressed={tool === t.id} className={tool === t.id ? 'on' : ''} onClick={() => setTool(t.id)}>
+            <Icon id={t.id} />
+          </button>
         ))}
-        <button title="Xoá mọi hình của symbol này" onClick={() => void clearAll()} disabled={items.length === 0}>Xoá hết</button>
+        <span className="sep" aria-hidden="true" />
+        <button title="Xoá mọi hình của symbol này" aria-label="Xoá mọi hình" onClick={() => void clearAll()} disabled={items.length === 0}><Icon id="clear" /></button>
         {err && <span className="bad" role="alert">{err}</span>}
       </div>
     </>

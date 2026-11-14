@@ -121,3 +121,79 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--focus); ou
 .cellbar { display: flex; gap: 6px; padding: 3px 8px; border-bottom: 1px solid var(--line); }
 .cellbar select { padding: 1px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
 @media (max-width: 700px) { .cells-2, .cells-4 { grid-template-columns: 1fr; grid-template-rows: none; } }
+
+/* ===== Giao diện thân thiện hơn: header gọn, bảng Chỉ báo, nút phân đoạn, thanh vẽ biểu tượng ===== */
+:root { --accent: #2962ff; --shadow: 0 8px 28px rgba(0,0,0,.18); }
+:root[data-theme='dark'] { --accent: #4c8dff; --shadow: 0 8px 28px rgba(0,0,0,.55); }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.bar .spacer { flex: 1; }
+.titlebox { display: flex; align-items: center; gap: 8px; min-width: 120px; }
+.titlebox h1 { font-size: 17px; margin: 0; min-width: 0; }
+.live { margin-left: 0; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--bg); }
+.seg button { border: 0; border-right: 1px solid var(--line); background: transparent; color: var(--ink); padding: 4px 10px; cursor: pointer; font-size: 13px; }
+.seg button:last-child { border-right: 0; }
+.seg button:hover { background: var(--hover); }
+.seg button.on, .seg button[aria-pressed='true'] { background: var(--ink); color: var(--bg); }
+.tfs button { padding: 4px 9px; }
+.iconbtn { width: 32px; height: 30px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); cursor: pointer; font-size: 15px; }
+.iconbtn:hover { background: var(--hover); }
+.tz select { padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+
+.flowmenu { position: relative; }
+.menubtn { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); cursor: pointer; font-size: 13px; }
+.menubtn:hover { background: var(--hover); }
+.menubtn.has { border-color: var(--accent); }
+.menubtn .badge { background: var(--accent); color: #fff; border-radius: 999px; font-size: 11px; padding: 0 6px; line-height: 17px; }
+.popover { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; width: 360px; max-width: calc(100vw - 24px); max-height: min(78vh, 640px); overflow: auto;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 12px; }
+.presets { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.presets button { flex: 1; min-width: 70px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--chip); color: var(--ink); cursor: pointer; font-size: 13px; }
+.presets button:hover { border-color: var(--accent); }
+.presets button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.fgroup { padding: 8px 0 2px; border-top: 1px solid var(--line); }
+.fgroup h3 { margin: 0 0 6px; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--mute); }
+.fnote { margin: 8px 0 0; font-size: 12px; color: var(--mute); }
+.sw { display: flex; align-items: flex-start; gap: 10px; padding: 5px 0; cursor: pointer; }
+.sw.dis { opacity: .45; cursor: not-allowed; }
+.sw input { position: absolute; opacity: 0; pointer-events: none; }
+.sw .track { flex: none; width: 34px; height: 20px; margin-top: 1px; border-radius: 999px; background: var(--line); position: relative; transition: background .15s; }
+.sw .knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.sw input:checked + .track { background: var(--accent); }
+.sw input:checked + .track .knob { transform: translateX(14px); }
+.sw input:focus-visible + .track { outline: 3px solid var(--focus); outline-offset: 2px; }
+.swtext { display: flex; flex-direction: column; min-width: 0; }
+.swtext b { font-weight: 600; font-size: 13px; }
+.swtext small { color: var(--mute); font-size: 12px; line-height: 1.35; }
+.opt { margin: 0 0 6px 44px; padding: 8px 10px; border-left: 2px solid var(--line); display: grid; gap: 6px; }
+.opt .seg { justify-self: start; }
+.opt .sw { padding: 2px 0; }
+.opt .sw .swtext b { font-weight: 500; }
+.sl { display: grid; grid-template-columns: 78px 1fr 48px; align-items: center; gap: 8px; font-size: 12px; color: var(--mute); }
+.sl input[type='range'] { width: 100%; accent-color: var(--accent); }
+.sl output { text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; }
+.fgroup .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: 13px; }
+
+.draw-tools { top: 12px; left: 8px; gap: 2px; padding: 4px; width: 38px; align-items: center; border-radius: 10px; box-shadow: var(--shadow); }
+.draw-tools button { width: 30px; height: 30px; padding: 0; display: grid; place-items: center; border: 0; background: transparent; border-radius: 7px; }
+.draw-tools button:hover { background: var(--hover); }
+.draw-tools button.on { background: var(--accent); color: #fff; }
+.draw-tools .sep { width: 20px; height: 1px; background: var(--line); margin: 3px 0; }
+.draw-tools .bad { writing-mode: horizontal-tb; }
+
+.replaybar button, .pine-bar button, .alerts button { border-radius: 8px; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+@media (max-width: 700px) { .popover { position: fixed; left: 8px; right: 8px; top: 96px; width: auto; } .bar .spacer { display: none; } }
+
+@media (max-width: 700px) {
+  .bar { gap: 6px; padding: 6px 8px; }
+  .titlebox { min-width: 0; }
+  .tfs { max-width: 100%; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+  .tfs button { flex: none; padding: 5px 10px; }
+  .tz { display: none; }
+  .seg button, .menubtn, .iconbtn { padding-top: 6px; padding-bottom: 6px; }
+  .draw-tools { flex-direction: row; width: auto; top: 6px; left: 6px; padding: 2px; }
+  .draw-tools .sep { width: 1px; height: 20px; margin: 0 3px; }
+  .draw-tools button { width: 28px; height: 28px; }
+  .srcnote { font-size: 11px; padding: 2px 8px; }
+}

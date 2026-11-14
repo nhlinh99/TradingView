@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Chart, { type Flow } from './Chart'
 import PinePanel from './PinePanel'
+import FlowMenu from './FlowMenu'
 import AlertsPanel from './AlertsPanel'
 import { SyncBus } from './sync'
 import { fetchSymbols, fetchWatchlist, saveWatchlist, type PineResult, type StreamState, type SymbolInfo } from './api'
@@ -141,96 +142,38 @@ export default function App() {
 
       <section className="main">
         <header className="bar">
-          <h1>{symbol || '...'}</h1>
-          <div className="tfs" role="group" aria-label="Khung thời gian">
+          <div className="titlebox">
+            <h1>{symbol || '...'}</h1>
+            <span className={`live ${state}`} role="status" data-testid="stream-state">{STATE_LABEL[state]}</span>
+          </div>
+          <div className="seg tfs" role="group" aria-label="Khung thời gian">
             {TIMEFRAMES.map((t) => (
               <button key={t} className={t === tf ? 'on' : ''} aria-pressed={t === tf}
                 onClick={() => { setTf(t); savePref('tf', t) }}>{t}</button>
             ))}
           </div>
-          <label className="tz">Múi giờ
-            <select value={tz} onChange={(e) => { setTz(e.target.value); savePref('tz', e.target.value) }}>
+          <FlowMenu flow={flow} setF={setF} symbol={symbol} isVn={all.find((s) => s.symbol === symbol)?.source === 'vn'} />
+          <div className="seg" role="group" aria-label="Bố cục">
+            {[1, 2, 4].map((n) => (
+              <button key={n} className={layout === n ? 'on' : ''} aria-pressed={layout === n} title={`${n} biểu đồ`}
+                onClick={() => { setLayout(n); savePref('layout', String(n)) }}>{n === 1 ? '▢' : n === 2 ? '◫' : '▦'}</button>
+            ))}
+          </div>
+          <div className="spacer" />
+          <label className="tz" title="Múi giờ hiển thị">
+            <select aria-label="Múi giờ" value={tz} onChange={(e) => { setTz(e.target.value); savePref('tz', e.target.value) }}>
               {TIMEZONES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
           </label>
-          <div className="opts" role="group" aria-label="Orderflow">
-            <label><input type="checkbox" checked={flow.footprint} onChange={(e) => setF({ footprint: e.target.checked })} />Footprint</label>
-            <label><input type="checkbox" checked={flow.heatmap} onChange={(e) => setF({ heatmap: e.target.checked })} />Heatmap</label>
-            <label><input type="checkbox" checked={flow.iceberg} onChange={(e) => setF({ iceberg: e.target.checked })} />Iceberg</label>
-            <label><input type="checkbox" checked={flow.bubbles} onChange={(e) => setF({ bubbles: e.target.checked })} />Bong bóng</label>
-            <label><input type="checkbox" checked={flow.gex} onChange={(e) => setF({ gex: e.target.checked })} />GEX</label>
-            <label><input type="checkbox" checked={flow.vpvr} onChange={(e) => setF({ vpvr: e.target.checked })} />VPVR</label>
-            <label><input type="checkbox" checked={flow.delta} onChange={(e) => setF({ delta: e.target.checked })} />Delta</label>
-            <label>CVD
-              <select value={flow.cvd} onChange={(e) => setF({ cvd: e.target.value as Flow['cvd'] })} aria-label="CVD">
-                <option value="off">Tắt</option><option value="none">Liên tục</option><option value="day">Reset theo ngày</option>
-              </select>
-            </label>
-            {flow.footprint && (
-              <label>Kiểu
-                <select value={flow.fpMode} onChange={(e) => setF({ fpMode: e.target.value as Flow['fpMode'] })} aria-label="Kiểu footprint">
-                  <option value="bidask">Bid x Ask</option><option value="delta">Delta</option><option value="volume">Volume</option><option value="profile">Profile</option>
-                </select>
-              </label>
-            )}
-            {flow.heatmap && (
-              <label>Màu heatmap
-                <select value={flow.heatMode} onChange={(e) => setF({ heatMode: e.target.value as Flow['heatMode'] })} aria-label="Màu heatmap">
-                  <option value="bookmap">Bookmap</option><option value="intensity">Cường độ</option><option value="side">Mua/Bán</option>
-                </select>
-              </label>
-            )}
-            {flow.heatmap && (
-              <>
-                <label>Cắt thấp
-                  <select value={flow.heatLo} onChange={(e) => setF({ heatLo: Number(e.target.value) })} aria-label="Cắt thấp heatmap">
-                    {[0, 5, 10, 20, 30, 40, 50].map((v) => <option key={v} value={v}>{v}%</option>)}
-                  </select>
-                </label>
-                <label>Cắt cao
-                  <select value={flow.heatHi} onChange={(e) => setF({ heatHi: Number(e.target.value) })} aria-label="Cắt cao heatmap">
-                    {[40, 50, 60, 70, 80, 90, 100].map((v) => <option key={v} value={v}>{v}%</option>)}
-                  </select>
-                </label>
-                <label><input type="checkbox" checked={flow.bestLines} onChange={(e) => setF({ bestLines: e.target.checked })} />Bid/Ask</label>
-                <label><input type="checkbox" checked={flow.strip} onChange={(e) => setF({ strip: e.target.checked })} />Dải volume</label>
-              </>
-            )}
-            {flow.bubbles && (
-              <>
-                <label>Cỡ chấm
-                  <select value={flow.dotScale} onChange={(e) => setF({ dotScale: Number(e.target.value) })} aria-label="Cỡ chấm">
-                    {[50, 75, 100, 150, 200, 300].map((v) => <option key={v} value={v}>{v}%</option>)}
-                  </select>
-                </label>
-                <label>Lọc nhỏ
-                  <select value={flow.dotMin} onChange={(e) => setF({ dotMin: Number(e.target.value) })} aria-label="Lọc chấm nhỏ">
-                    {[0, 2, 5, 10, 20].map((v) => <option key={v} value={v}>{v === 0 ? 'Tắt' : `<${v}%`}</option>)}
-                  </select>
-                </label>
-              </>
-            )}
-            {flow.footprint && (
-              <label>Imbalance
-                <select value={flow.ratio} onChange={(e) => setF({ ratio: Number(e.target.value) })} aria-label="Ngưỡng imbalance">
-                  {[2, 3, 4, 5].map((r) => <option key={r} value={r}>{r}:1</option>)}
-                </select>
-              </label>
-            )}
+          <div className="seg" role="group" aria-label="Công cụ">
+            <button aria-pressed={replay !== null} title="Phát lại từng nến" onClick={() => { setPlaying(false); setReplay((r) => (r === null ? Math.max(2, total - 100) : null)) }}>Replay</button>
+            <button aria-pressed={alertsOpen} title="Cảnh báo giá" onClick={() => { const n = !alertsOpen; setAlertsOpen(n); savePref('alertsOpen', n ? '1' : '0') }}>Cảnh báo</button>
+            <button aria-pressed={pineOpen} title="Pine Script và backtest" onClick={() => { const n = !pineOpen; setPineOpen(n); savePref('pineOpen', n ? '1' : '0') }}>Pine</button>
           </div>
-          <label className="tz">Layout
-            <select value={layout} onChange={(e) => { setLayout(Number(e.target.value)); savePref('layout', e.target.value) }}>
-              <option value={1}>1 ô</option><option value={2}>2 ô</option><option value={4}>4 ô</option>
-            </select>
-          </label>
-          <button className="themebtn" aria-pressed={replay !== null} onClick={() => { setPlaying(false); setReplay((r) => (r === null ? Math.max(2, total - 100) : null)) }}>Replay</button>
-          <button className="themebtn" aria-pressed={alertsOpen} onClick={() => { const n = !alertsOpen; setAlertsOpen(n); savePref('alertsOpen', n ? '1' : '0') }}>Cảnh báo</button>
-          <button className="themebtn" aria-pressed={pineOpen} onClick={() => { const n = !pineOpen; setPineOpen(n); savePref('pineOpen', n ? '1' : '0') }}>Pine</button>
-          <button className="themebtn" aria-label="Đổi giao diện sáng/tối"
+          <button className="iconbtn" aria-label="Đổi giao diện sáng/tối" title={theme === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
             onClick={() => { const n = theme === 'dark' ? 'light' : 'dark'; setTheme(n); savePref('theme', n) }}>
-            {theme === 'dark' ? 'Sáng' : 'Tối'}
+            {theme === 'dark' ? '☀' : '☾'}
           </button>
-          <span className={`live ${state}`} role="status" data-testid="stream-state">{STATE_LABEL[state]}</span>
         </header>
         {replay !== null && (
           <div className="replaybar" role="group" aria-label="Phát lại nến">

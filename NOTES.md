@@ -129,3 +129,8 @@ Nguồn tham khảo: kết quả tìm kiếm về Bookmap (heatmap, volume dots,
 - Đã làm: kiểu màu Bookmap (mặc định), cắt thấp/cao, đường bid/ask tốt nhất bậc thang, dải volume mua/bán dưới đáy, cỡ chấm và lọc chấm nhỏ, dấu hiệu iceberg.
 - **Iceberg chỉ là ước lượng độ tin cậy thấp.** Ô (thời gian, giá) bị đánh dấu khi khối lượng khớp lớn hơn 5 lần thanh khoản hiển thị ở phía bị đánh. Sổ lệnh của dự án chỉ lấy mẫu mỗi 5 giây và gom theo bucket 1 USD (BTC), còn khối lượng khớp cộng cả ô thời gian, nên trên dữ liệu thật hàng nghìn ô vượt ngưỡng chỉ vì dòng lệnh bình thường. Vì vậy API chỉ giữ 40 ô có khối lượng khớp lớn nhất. Bookmap suy luận tương tự nhưng dùng dữ liệu sổ lệnh đầy đủ từng lệnh (MBO); ở đây không có.
 - Chưa làm: gom chấm kiểu "Smart", đặt lệnh và phát hiện lệnh stop, cột volume và delta theo mức giá ở mép phải gắn với heatmap (đã có VPVR riêng), thanh trượt thật thay cho ô chọn.
+
+
+### Cải thiện giao diện (dễ dùng hơn)
+
+Header từ ba hàng ô chọn xuống một hàng; gom tính năng orderflow vào bảng "Chỉ báo" có mẫu dựng sẵn, công tắc, thanh trượt và mô tả; nút phân đoạn cho khung thời gian và bố cục; thanh vẽ dùng biểu tượng. Trên điện thoại (390 px) vùng biểu đồ chiếm hơn một nửa màn hình thay vì khoảng một phần ba; ô chọn múi giờ bị ẩn ở màn hình hẹp (giá trị đã lưu vẫn dùng). Chưa làm: phím tắt, kéo thả sắp xếp danh sách theo dõi, bảng chọn symbol có tìm kiếm (danh sách VN100 dài 100 mã vẫn là ô chọn thường).
