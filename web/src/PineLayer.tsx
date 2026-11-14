@@ -47,6 +47,18 @@ export default function PineLayer({ result, chart, candles, version }: Props) {
     }
     if (!overlay && result.plots.length > 0) c.panes()[pane]?.setStretchFactor(0.25)
 
+    // bgcolor: cột cao hết vùng giá, nằm trên thang giá riêng (ẩn) để không làm méo thang giá của nến
+    if (overlay) {
+      for (const bg of result.bgcolors) {
+        const data = result.times.flatMap((ms, i) => (bg.colors[i] ? [{ time: t(ms), value: 1, color: bg.colors[i] as string }] : []))
+        if (data.length === 0) continue
+        const s = c.addSeries(HistogramSeries, { priceScaleId: 'pine-bg', priceLineVisible: false, lastValueVisible: false, base: 0 }, 0)
+        c.priceScale('pine-bg').applyOptions({ scaleMargins: { top: 0, bottom: 0 }, visible: false })
+        s.setData(data)
+        series.push(s)
+      }
+    }
+
     const markers: SeriesMarker<Time>[] = []
     for (const sh of result.shapes) {
       sh.values.forEach((on, i) => {

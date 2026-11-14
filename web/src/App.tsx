@@ -66,6 +66,7 @@ export default function App() {
     try { const j = JSON.parse(localStorage.getItem('cells') ?? '[]'); return Array.isArray(j) ? j : [] } catch { return [] }
   })
   const sync = useRef(new SyncBus())
+  const [dragOver, setDragOver] = useState<string | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [replay, setReplay] = useState<number | null>(null)
@@ -154,7 +155,20 @@ export default function App() {
         <h2>Theo dõi</h2>
         <ul>
           {watch.map((s) => (
-            <li key={s} className={s === symbol ? 'on' : ''}>
+            <li key={s} className={`${s === symbol ? 'on' : ''} ${dragOver === s ? 'over' : ''}`} draggable
+              onDragStart={(e) => { e.dataTransfer.setData('text/plain', s); e.dataTransfer.effectAllowed = 'move' }}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(s) }}
+              onDragLeave={() => setDragOver((d) => (d === s ? null : d))}
+              onDrop={(e) => {
+                e.preventDefault()
+                setDragOver(null)
+                const from = e.dataTransfer.getData('text/plain')
+                if (!from || from === s || !watch.includes(from)) return
+                const next = watch.filter((x) => x !== from)
+                next.splice(next.indexOf(s), 0, from)
+                void update(next)
+              }}>
+              <span className="grip" aria-hidden="true" title="Kéo để sắp xếp">⋮⋮</span>
               <button className="sym" onClick={() => choose(s)} aria-current={s === symbol}>{s}</button>
               <button className="x" onClick={() => remove(s)} aria-label={`Bỏ ${s}`} disabled={watch.length <= 1}>×</button>
             </li>

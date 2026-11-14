@@ -98,7 +98,7 @@ Không có khoá SSI FastConnect, nên dùng hai endpoint công khai không có 
 - **Backtest** là bản tối giản: lệnh đặt ở nến i khớp ở giá mở của nến i+1, một vị thế ròng, không pyramiding, phí theo phần trăm. Không có trượt giá, `strategy.exit`, stop/limit. Bộ test so với mô phỏng viết tay trên 600 nến (số lệnh và lãi ròng khớp 1e-9).
 - **Đối chiếu với pandas không làm được**: pandas cài được nhưng Windows Application Control chặn DLL của nó trên máy này (`DLL load failed ... blocked`), nên đã gỡ. Thay bằng: SMA, stdev, highest, lowest đối chiếu với hàm cửa sổ của DuckDB; EMA, RMA, RSI, ATR, MACD đối chiếu với bản cài đặt thuần Python viết riêng theo công thức (khởi tạo bằng SMA như Pine). Sai số cho phép 1e-9 tương đối; thực tế khớp hơn thế.
 - **Editor là ô văn bản**, chưa phải Monaco: chưa có tô màu cú pháp hay gợi ý. Ctrl+Enter chạy lại. Mã lưu trong trình duyệt.
-- **`bgcolor` chưa được vẽ trên biểu đồ** (engine vẫn trả dữ liệu). Marker của `plotshape` chỉ vẽ cho script overlay.
+- **`bgcolor`** được vẽ thành cột mờ cao hết vùng giá trên một thang giá ẩn (chỉ cho script overlay). Marker của `plotshape` cũng chỉ vẽ cho script overlay.
 - Script không đúng ngữ nghĩa Pine ở một số chỗ: gọi `ta.*` trong nhánh `if` cho kết quả sai (giống Pine); biến khai báo trong khối `if` lộ ra cả hàm bao ngoài.
 
 ### Phase 9: công cụ vẽ, layout, alert, replay, backtest (2026-11-15)
@@ -133,7 +133,7 @@ Nguồn tham khảo: kết quả tìm kiếm về Bookmap (heatmap, volume dots,
 
 ### Cải thiện giao diện (dễ dùng hơn)
 
-Header từ ba hàng ô chọn xuống một hàng; gom tính năng orderflow vào bảng "Chỉ báo" có mẫu dựng sẵn, công tắc, thanh trượt và mô tả; nút phân đoạn cho khung thời gian và bố cục; thanh vẽ dùng biểu tượng. Trên điện thoại (390 px) vùng biểu đồ chiếm hơn một nửa màn hình thay vì khoảng một phần ba; ô chọn múi giờ bị ẩn ở màn hình hẹp (giá trị đã lưu vẫn dùng). Đã thêm sau đó: hộp tìm symbol (`/`, `Ctrl+K`) và phím tắt (`[` `]`, `T`, `?`). Chưa làm: kéo thả sắp xếp danh sách theo dõi.
+Header từ ba hàng ô chọn xuống một hàng; gom tính năng orderflow vào bảng "Chỉ báo" có mẫu dựng sẵn, công tắc, thanh trượt và mô tả; nút phân đoạn cho khung thời gian và bố cục; thanh vẽ dùng biểu tượng. Trên điện thoại (390 px) vùng biểu đồ chiếm hơn một nửa màn hình thay vì khoảng một phần ba; ô chọn múi giờ bị ẩn ở màn hình hẹp (giá trị đã lưu vẫn dùng). Đã thêm sau đó: hộp tìm symbol (`/`, `Ctrl+K`) và phím tắt (`[` `]`, `T`, `?`). Danh sách theo dõi kéo thả để sắp xếp được (lưu vào SQLite).
 
 
 ### Gộp nóng file con trong ngày
