@@ -1,13 +1,14 @@
 import { useEffect, useRef, type MutableRefObject } from 'react'
 import type { IChartApi, ISeriesApi, Time } from 'lightweight-charts'
 import { fetchFootprint } from './api'
-import { imbalance, profileStats, tfMs, type Bar, type Cell } from './logic'
+import { heatColor, imbalance, profileStats, stackedImbalance, tfMs, type Bar, type Cell } from './logic'
 
 type Props = {
   on: boolean
   symbol: string
   tf: string
   ratio: number
+  fpMode: 'bidask' | 'delta' | 'volume' | 'profile'
   dark: boolean
   chart: MutableRefObject<IChartApi | null>
   candles: MutableRefObject<ISeriesApi<'Candlestick'> | null>
@@ -20,7 +21,7 @@ const MIN_BAR_PX = 44
 const fmt = (v: number) => (v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2))
 
 /** Lớp canvas vẽ ô footprint lên trên biểu đồ. Chỉ vẽ khi nến đủ rộng và đủ cao để đọc. */
-export default function Footprint({ on, symbol, tf, ratio, dark, chart, candles, bars, version }: Props) {
+export default function Footprint({ on, symbol, tf, ratio, fpMode, dark, chart, candles, bars, version }: Props) {
   const cv = useRef<HTMLCanvasElement>(null)
   const data = useRef<{ key: string; bucket: number; mult: number; cells: Map<number, Cell[]> } | null>(null)
 
@@ -113,7 +114,7 @@ export default function Footprint({ on, symbol, tf, ratio, dark, chart, candles,
       }
       const r = g.ts.getVisibleLogicalRange()
       const n = bars.current.length
-      const newSig = `${r?.from}|${r?.to}|${g.s.priceToCoordinate(0)}|${g.s.priceToCoordinate(1000)}|${n}|${data.current?.key}|${ratio}|${dark}`
+      const newSig = `${r?.from}|${r?.to}|${g.s.priceToCoordinate(0)}|${g.s.priceToCoordinate(1000)}|${n}|${data.current?.key}|${ratio}|${fpMode}|${dark}`
       if (newSig === sig) return
       sig = newSig
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -125,35 +126,94 @@ export default function Footprint({ on, symbol, tf, ratio, dark, chart, candles,
       const half = g.spacing * 0.46
       const step = d.bucket
       const yTop = (p: number) => g.s.priceToCoordinate(p + step)
-      ctx.font = '10px system-ui, sans-serif'
       ctx.textBaseline = 'middle'
+      const ink = dark ? '#d1d4dc' : '#1b2430'
+      const UP = '38,166,154'
+      const DN = '239,83,80'
       for (const b of bars.current) {
         const x = g.ts.timeToCoordinate(b.time as Time)
         if (x === null || x + half < 0 || x - half > plotW) continue
         const cells = (d.cells.get(b.time) ?? []).sort((p, q) => p.price - q.price)
         if (cells.length === 0) continue
         const stats = profileStats(cells)
+        const maxVol = Math.max(...cells.map((k) => k.buy + k.sell))
+        const maxDelta = Math.max(...cells.map((k) => Math.abs(k.buy - k.sell)), 1e-9)
+        const stack = stackedImbalance(cells, step, ratio)
+        let lowY = -Infinity
         cells.forEach((cell, i) => {
           const yt = yTop(cell.price)
           const yb = g.s.priceToCoordinate(cell.price)
           if (yt === null || yb === null) return
           const top = Math.min(yt, yb)
           const ht = Math.abs(yb - yt)
+          lowY = Math.max(lowY, top + ht)
           const side = imbalance(cells, i, step, ratio)
           const isPoc = stats?.poc === cell.price
-          ctx.fillStyle = side === 'buy' ? 'rgba(38,166,154,.55)' : side === 'sell' ? 'rgba(239,83,80,.55)' : dark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.04)'
-          ctx.fillRect(x - half, top + 0.5, half * 2, Math.max(1, ht - 1))
+          const delta = cell.buy - cell.sell
+          const vol = cell.buy + cell.sell
+          // nền ô theo kiểu hiển thị
+          if (fpMode === 'bidask') {
+            ctx.fillStyle = side === 'buy' ? `rgba(${UP},.55)` : side === 'sell' ? `rgba(${DN},.55)` : dark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.04)'
+            ctx.fillRect(x - half, top + 0.5, half * 2, Math.max(1, ht - 1))
+          } else if (fpMode === 'delta') {
+            const a = 0.12 + 0.6 * (Math.abs(delta) / maxDelta)
+            ctx.fillStyle = delta >= 0 ? `rgba(${UP},${a})` : `rgba(${DN},${a})`
+            ctx.fillRect(x - half, top + 0.5, half * 2, Math.max(1, ht - 1))
+          } else if (fpMode === 'volume') {
+            const [R, G, B, A] = heatColor(vol / maxVol)
+            ctx.fillStyle = `rgba(${R | 0},${G | 0},${B | 0},${(A * 0.8).toFixed(2)})`
+            ctx.fillRect(x - half, top + 0.5, half * 2, Math.max(1, ht - 1))
+          } else {
+            // profile: thanh ngang hai phía từ tâm nến, dài theo khối lượng mua (phải) và bán (trái)
+            const lenB = (cell.buy / maxVol) * half
+            const lenS = (cell.sell / maxVol) * half
+            ctx.fillStyle = `rgba(${UP},.6)`
+            ctx.fillRect(x, top + 1, lenB, Math.max(1, ht - 2))
+            ctx.fillStyle = `rgba(${DN},.6)`
+            ctx.fillRect(x - lenS, top + 1, lenS, Math.max(1, ht - 2))
+          }
           if (isPoc) {
             ctx.strokeStyle = '#f0b90b'
             ctx.lineWidth = 1.5
             ctx.strokeRect(x - half, top + 0.5, half * 2, Math.max(1, ht - 1))
           }
-          ctx.fillStyle = dark ? '#d1d4dc' : '#1b2430'
-          ctx.textAlign = 'right'
-          ctx.fillText(fmt(cell.sell), x - 3, top + ht / 2)
-          ctx.textAlign = 'left'
-          ctx.fillText(fmt(cell.buy), x + 3, top + ht / 2)
+          // chữ tự co theo chiều cao ô (như Deep Print): quá nhỏ thì bỏ chữ
+          const fs = Math.max(7, Math.min(13, ht * 0.75))
+          if (ht < 8) return
+          ctx.font = `${fs.toFixed(1)}px system-ui, sans-serif`
+          ctx.fillStyle = ink
+          if (fpMode === 'bidask' || fpMode === 'profile') {
+            ctx.textAlign = 'right'
+            ctx.fillText(fmt(cell.sell), x - 3, top + ht / 2)
+            ctx.textAlign = 'left'
+            ctx.fillText(fmt(cell.buy), x + 3, top + ht / 2)
+          } else {
+            ctx.textAlign = 'center'
+            ctx.fillText(fmt(fpMode === 'delta' ? delta : vol), x, top + ht / 2)
+          }
         })
+        // stacked imbalance: khung đậm ở mép nến phía có imbalance liên tiếp
+        if (stack) {
+          const y1 = g.s.priceToCoordinate(stack.from)
+          const y2 = g.s.priceToCoordinate(stack.to + step)
+          if (y1 !== null && y2 !== null) {
+            ctx.strokeStyle = stack.side === 'buy' ? `rgb(${UP})` : `rgb(${DN})`
+            ctx.lineWidth = 3
+            const xe = stack.side === 'buy' ? x + half + 1 : x - half - 1
+            ctx.beginPath(); ctx.moveTo(xe, Math.min(y1, y2)); ctx.lineTo(xe, Math.max(y1, y2)); ctx.stroke()
+          }
+        }
+        // thống kê dưới nến: delta và khối lượng của cả nến
+        if (lowY > -Infinity && g.spacing >= 56) {
+          const dl = cells.reduce((a, k) => a + k.buy - k.sell, 0)
+          const tv = cells.reduce((a, k) => a + k.buy + k.sell, 0)
+          ctx.font = '10px system-ui, sans-serif'
+          ctx.textAlign = 'center'
+          ctx.fillStyle = dl >= 0 ? `rgb(${UP})` : `rgb(${DN})`
+          ctx.fillText(`Δ ${dl >= 0 ? '+' : ''}${fmt(dl)}`, x, lowY + 9)
+          ctx.fillStyle = ink
+          ctx.fillText(`V ${fmt(tv)}`, x, lowY + 20)
+        }
       }
     }
 
@@ -167,7 +227,7 @@ export default function Footprint({ on, symbol, tf, ratio, dark, chart, candles,
       ctrl?.abort()
       ctx.clearRect(0, 0, canvas.width, canvas.height)
     }
-  }, [on, symbol, tf, ratio, dark, chart, candles, bars, version])
+  }, [on, symbol, tf, ratio, fpMode, dark, chart, candles, bars, version])
 
   return <canvas ref={cv} className="fp-canvas" aria-hidden="true" />
 }

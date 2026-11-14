@@ -113,3 +113,11 @@ Không có khoá SSI FastConnect, nên dùng hai endpoint công khai không có 
 ### Khung tuần và tháng
 
 Thêm `1w` (tuần, bắt đầu thứ Hai 00:00 UTC) và `1M` (tháng dương lịch, bắt đầu ngày 1 00:00 UTC), gộp từ nến 1 phút trong DuckDB. Ranh giới theo lịch, không chia đều từ epoch (chia đều thì tuần bắt đầu thứ Năm). Nến tuần/tháng đang chạy cập nhật theo lệnh khớp trực tiếp với cùng ranh giới. Không hỗ trợ `2M`, `2w`. Footprint không hỗ trợ hai khung này. Ngày tính theo UTC nên tuần của cổ phiếu VN (phiên 02:00-08:00 UTC) vẫn đúng.
+
+
+### Thiết kế orderflow theo DeepCharts
+
+Nguồn tham khảo: trang trợ giúp DeepDom về heatmap và ghi chú bản v15.6 của DeepCharts. Không có ảnh chụp hay đặc tả màu chính thức, nên mã màu và tỉ lệ là của dự án, chỉ giữ thứ tự thang màu và ý tưởng.
+- Đã làm: thang heatmap đen, xanh dương, trắng, vàng, cam, đỏ; kiểu màu mua (xanh lá) và bán (tím); thang tự chuẩn hoá theo phân vị 99; footprint có kiểu Bid x Ask, Delta, Volume, Profile; chữ tự co; thống kê delta và volume dưới nến; stacked imbalance; ký hiệu lệnh lớn đặc và rỗng.
+- Chưa làm: DOM ladder (thiếu dữ liệu sổ lệnh tức thời trên giao diện), nhiều cột footprint cạnh nhau (Multi Column), phân biệt thanh khoản mới và thanh khoản tồn tại lâu, ký hiệu hình vuông và hình thoi của Deep Trades (cần dữ liệu MBO để biết lệnh chờ hay lệnh chủ động; Binance chỉ có aggTrade), Imbalance Horizontal, FVG.
+- Lệnh lớn của DeepCharts phân loại bằng MBO. Ở đây vòng đặc nghĩa là cụm chỉ có một aggTrade, vòng rỗng là nhiều aggTrade trong cùng ô thời gian và giá, nên không tương đương hoàn toàn.

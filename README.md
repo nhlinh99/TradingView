@@ -27,13 +27,23 @@ Sơ đồ tương tác của kế hoạch: mở `plan-viewer/dist/plan.html` b�
 
 Ảnh chụp từ bản chạy thật, dữ liệu thật của máy này (2026-11-14). Chế độ tối là mặc định theo hệ thống; có nút đổi sang sáng.
 
-**Footprint** (BTCUSDT 1 phút): ô `bán x mua` theo từng mức giá, màu theo imbalance chéo (ngưỡng chỉnh được 2:1 đến 5:1), viền vàng là POC, kèm pane volume, delta và CVD.
+Phần orderflow bám theo thiết kế của [DeepCharts](https://www.deepcharts.com) (Deep Print, DeepDom, Deep Trades), dựa trên tài liệu công khai của họ: thang màu heatmap, kiểu footprint, ký hiệu lệnh lớn. Dữ liệu và công thức là của dự án này, không sao chép mã hay tài sản của DeepCharts.
 
-![Footprint](docs/screenshots/footprint.png)
+**Footprint** (BTCUSDT 1 phút), kiểu Bid x Ask: ô `bán x mua` theo từng mức giá, màu theo imbalance chéo (ngưỡng 2:1 đến 5:1), viền vàng là POC, vạch đậm ở mép nến là stacked imbalance (từ 3 mức liên tiếp), dòng `Δ` và `V` dưới mỗi nến cho delta và volume của cả nến. Chữ co theo chiều cao ô. Có thêm kiểu Delta, Volume và Profile.
 
-**Heatmap thanh khoản** dưới nến, cộng bong bóng lệnh khớp lớn (BTCUSDT 1 phút). Vạch vàng ngang là các lệnh chờ lớn tồn tại lâu.
+![Footprint Bid x Ask](docs/screenshots/footprint.png)
 
-![Heatmap](docs/screenshots/heatmap.png)
+Kiểu **Profile**: thanh ngang hai phía từ tâm nến, dài theo khối lượng bán (trái) và mua (phải).
+
+![Footprint Profile](docs/screenshots/footprint-profile.png)
+
+**Heatmap thanh khoản** dưới nến, thang cường độ như DeepDom: đen, xanh dương, trắng, vàng, cam, đỏ (nhiều nhất), chuẩn hoá theo phân vị 99 của đoạn đang xem nên tự co giãn theo thị trường. Kèm bong bóng lệnh lớn kiểu Deep Trades: vòng đặc là một lệnh lớn đơn lẻ, vòng rỗng là nhiều lệnh nhỏ cộng lại; xanh là mua chủ động, đỏ là bán chủ động.
+
+![Heatmap cường độ](docs/screenshots/heatmap.png)
+
+Kiểu màu **Mua/Bán**: lệnh mua chờ màu xanh lá, lệnh bán chờ màu tím.
+
+![Heatmap mua bán](docs/screenshots/heatmap-side.png)
 
 **GEX BTC** từ options Deribit: histogram theo strike, gamma flip, call wall, put wall, kèm nhãn tuổi dữ liệu và OI trễ.
 

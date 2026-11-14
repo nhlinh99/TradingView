@@ -186,18 +186,35 @@ export function timeToIndex(times: number[], tSec: number, stepSec: number): num
   return lo + (tSec - times[lo]) / (times[hi] - times[lo])
 }
 
+type RGB = [number, number, number]
+
+function ramp(stops: [number, RGB][], x: number): RGB {
+  for (let k = 1; k < stops.length; k++) {
+    if (x <= stops[k][0]) {
+      const [x0, a] = stops[k - 1]
+      const [x1, b] = stops[k]
+      const f = (x - x0) / (x1 - x0)
+      return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f]
+    }
+  }
+  return stops[stops.length - 1][1]
+}
+
+// Thang cường độ kiểu DeepDom của DeepCharts: đen (ít) -> xanh dương -> trắng -> vàng -> cam -> đỏ (nhiều nhất).
+const INTENSITY_STOPS: [number, RGB][] = [
+  [0, [0, 0, 0]], [0.2, [20, 40, 170]], [0.5, [255, 255, 255]], [0.72, [255, 235, 59]], [0.88, [255, 152, 0]], [1, [244, 67, 54]],
+]
+// Kiểu theo phía: lệnh mua chờ màu xanh lá, lệnh bán chờ màu tím.
+const BID_STOPS: [number, RGB][] = [[0, [0, 0, 0]], [0.5, [0, 120, 70]], [1, [140, 255, 200]]]
+const ASK_STOPS: [number, RGB][] = [[0, [0, 0, 0]], [0.5, [110, 50, 190]], [1, [235, 190, 255]]]
+
 /** Màu ô heatmap: v = thanh khoản / phân vị 99 (có thể lớn hơn 1, sẽ bị cắt). Trả về [r,g,b,a]. */
-export function heatColor(v: number): [number, number, number, number] {
+export function heatColor(v: number, side?: 'bid' | 'ask'): [number, number, number, number] {
   const x = Math.min(1, Math.max(0, v))
   if (x === 0) return [0, 0, 0, 0]
-  const s = Math.pow(x, 0.7)
-  const stops: [number, number, number][] = [[24, 40, 140], [180, 50, 170], [255, 235, 90]]
-  const k = s * 2
-  const i = Math.min(1, Math.floor(k))
-  const f = k - i
-  const a = stops[i]
-  const b = stops[i + 1]
-  return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f, 0.15 + 0.8 * s]
+  const s = Math.pow(x, 0.5)
+  const [r, g, b] = ramp(side === 'bid' ? BID_STOPS : side === 'ask' ? ASK_STOPS : INTENSITY_STOPS, s)
+  return [r, g, b, 0.3 + 0.65 * s]
 }
 
 /** Ngược của timeToIndex: thời điểm (giây) ứng với chỉ số thập phân idx trên trục nến. */
@@ -222,4 +239,22 @@ export function distToSegment(px: number, py: number, ax: number, ay: number, bx
   const len2 = dx * dx + dy * dy
   const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2))
   return Math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+}
+
+/** Số mức imbalance chéo liên tiếp dài nhất trong một nến (stacked imbalance). Từ 3 trở lên thường được coi là vùng quan trọng. */
+export function stackedImbalance(cells: Cell[], step: number, ratio: number): { side: 'buy' | 'sell'; from: number; to: number } | null {
+  const sorted = [...cells].sort((a, b) => a.price - b.price)
+  let best: { side: 'buy' | 'sell'; from: number; to: number } | null = null
+  let run: { side: 'buy' | 'sell'; from: number; to: number } | null = null
+  sorted.forEach((c, i) => {
+    const side = imbalance(sorted, i, step, ratio)
+    if (side && run && run.side === side && Math.abs(c.price - run.to - step) < step / 2) {
+      run.to = c.price
+    } else {
+      run = side ? { side, from: c.price, to: c.price } : null
+    }
+    if (run && (!best || run.to - run.from > best.to - best.from)) best = { ...run }
+  })
+  const b = best as { side: 'buy' | 'sell'; from: number; to: number } | null
+  return b && Math.round((b.to - b.from) / step) + 1 >= 3 ? b : null
 }

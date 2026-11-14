@@ -5,6 +5,7 @@ import { heatColor, tfMs, timeToIndex, type Bar } from './logic'
 
 type Props = {
   on: boolean
+  mode: 'intensity' | 'side'
   symbol: string
   tf: string
   chart: MutableRefObject<IChartApi | null>
@@ -16,7 +17,7 @@ type Props = {
 const CELL_PX = 4
 
 /** Heatmap thanh khoản vẽ DƯỚI nến (canvas nằm sau biểu đồ; nền biểu đồ được đặt trong suốt). */
-export default function Heatmap({ on, symbol, tf, chart, candles, bars, version }: Props) {
+export default function Heatmap({ on, mode, symbol, tf, chart, candles, bars, version }: Props) {
   const cv = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -101,7 +102,7 @@ export default function Heatmap({ on, symbol, tf, chart, candles, bars, version 
         sig = ''
       }
       const r = c.timeScale().getVisibleLogicalRange()
-      const newSig = `${r?.from}|${r?.to}|${s.priceToCoordinate(0)}|${s.priceToCoordinate(1000)}|${bars.current.length}|${rows.length}`
+      const newSig = `${r?.from}|${r?.to}|${s.priceToCoordinate(0)}|${s.priceToCoordinate(1000)}|${bars.current.length}|${rows.length}|${mode}`
       if (newSig === sig) return
       sig = newSig
       void load()
@@ -133,7 +134,7 @@ export default function Heatmap({ on, symbol, tf, chart, candles, bars, version 
         const yt = s.priceToCoordinate(price + bucket)
         const yb = s.priceToCoordinate(price)
         if (yt === null || yb === null) continue
-        const [R, G, B, A] = heatColor((bid + ask) / scale)
+        const [R, G, B, A] = mode === 'side' ? heatColor(Math.max(bid, ask) / scale, bid >= ask ? 'bid' : 'ask') : heatColor((bid + ask) / scale)
         if (A === 0) continue
         ctx.fillStyle = `rgba(${R | 0},${G | 0},${B | 0},${A.toFixed(2)})`
         const top = Math.min(yt, yb)
@@ -149,7 +150,7 @@ export default function Heatmap({ on, symbol, tf, chart, candles, bars, version 
       ctrl?.abort()
       ctx.clearRect(0, 0, canvas.width, canvas.height)
     }
-  }, [on, symbol, tf, chart, candles, bars, version])
+  }, [on, mode, symbol, tf, chart, candles, bars, version])
 
   return <canvas ref={cv} className="heat-canvas" aria-hidden="true" />
 }

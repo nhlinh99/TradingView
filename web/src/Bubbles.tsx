@@ -97,17 +97,20 @@ export default function Bubbles({ on, symbol, tf, chart, candles, bars, version 
       const xOf = (idx: number) => xa + (idx - a) * (xb - xa)
       const plotW = w - c.priceScale('right').width()
       const max = Math.max(...rows.map((x) => x[2] as number))
-      for (const [t, price, q, side] of rows) {
+      for (const [t, price, q, side, n] of rows) {
         const x = xOf(timeToIndex(times, ((t as number) + tb / 2) / 1000, step))
         const y = s.priceToCoordinate(price as number)
         if (y === null || x < 0 || x > plotW) continue
         const rad = Math.max(3, Math.sqrt((q as number) / max) * MAX_R)
+        // kiểu Deep Trades: vòng đặc = một lệnh lớn đơn lẻ; vòng rỗng = nhiều lệnh nhỏ cộng lại
+        const solid = Number(n) === 1
+        const rgb = side === 'buy' ? '38,166,154' : '239,83,80'
         ctx.beginPath()
         ctx.arc(x, y, rad, 0, Math.PI * 2)
-        ctx.fillStyle = side === 'buy' ? 'rgba(38,166,154,.45)' : 'rgba(239,83,80,.45)'
+        ctx.fillStyle = solid ? `rgba(${rgb},.8)` : `rgba(${rgb},.12)`
         ctx.fill()
-        ctx.strokeStyle = side === 'buy' ? 'rgba(38,166,154,.95)' : 'rgba(239,83,80,.95)'
-        ctx.lineWidth = 1
+        ctx.strokeStyle = `rgba(${rgb},.95)`
+        ctx.lineWidth = solid ? 1 : 2
         ctx.stroke()
       }
     }

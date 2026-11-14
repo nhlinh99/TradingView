@@ -23,7 +23,7 @@ const PALETTE = {
 }
 const volColor = (b: Bar, up: string, down: string) => (b.close >= b.open ? up + '88' : down + '88')
 
-export type Flow = { delta: boolean; cvd: 'off' | 'none' | 'day'; footprint: boolean; vpvr: boolean; heatmap: boolean; bubbles: boolean; gex: boolean; ratio: number }
+export type Flow = { delta: boolean; cvd: 'off' | 'none' | 'day'; footprint: boolean; vpvr: boolean; heatmap: boolean; bubbles: boolean; gex: boolean; ratio: number; heatMode: 'intensity' | 'side'; fpMode: 'bidask' | 'delta' | 'volume' | 'profile' }
 type Props = { symbol: string; tf: string; tz: string; flow: Flow; pine: PineResult | null; replay: number | null; onTotal: (n: number) => void; sync?: SyncBus; cellId?: number; theme: 'light' | 'dark'; onState: (s: StreamState) => void }
 type Legend = { time: number; bar: Bar } | null
 
@@ -284,14 +284,14 @@ export default function Chart({ symbol, tf, tz, flow, pine, replay, onTotal, syn
   const b = legend?.bar
   return (
     <div className="chart-wrap">
-      <Heatmap on={flow.heatmap} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
+      <Heatmap on={flow.heatmap} mode={flow.heatMode} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
       <div ref={box} className="chart" data-testid="chart" />
       <Bubbles on={flow.bubbles} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
       <Drawings symbol={symbol} tf={tf} dark={theme === 'dark'} chart={chartRef} candles={candles} bars={bars} />
       <PineLayer result={pine} chart={chartRef} candles={candles} version={version} />
       <Gex on={flow.gex} symbol={symbol} dark={theme === 'dark'} chart={chartRef} candles={candles} />
       <Profile on={flow.vpvr} symbol={symbol} tf={tf} dark={theme === 'dark'} chart={chartRef} candles={candles} bars={bars} version={version} />
-      <Footprint on={flow.footprint} symbol={symbol} tf={tf} ratio={flow.ratio} dark={theme === 'dark'}
+      <Footprint on={flow.footprint} symbol={symbol} tf={tf} ratio={flow.ratio} fpMode={flow.fpMode} dark={theme === 'dark'}
         chart={chartRef} candles={candles} bars={bars} version={version} />
       <div className="legend" aria-live="off">
         {b ? (

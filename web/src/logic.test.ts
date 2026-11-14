@@ -170,3 +170,31 @@ test('week and month timeframes: names, bucket boundaries, live trades', () => {
   assert.equal(bars[0].time, ms('2026-11-09T00:00:00Z') / 1000)
   assert.equal(bars[0].high, 110)
 })
+
+import { stackedImbalance } from './logic.ts'
+
+test('heatColor ramp: black to red, side tints, alpha grows', () => {
+  const lo = heatColor(0.02)
+  const hi = heatColor(1)
+  assert.ok(hi[0] > 200 && hi[1] < 100 && hi[2] < 100)               // cao nhất: đỏ
+  assert.ok(lo[0] < 40 && lo[1] < 40)                                // thấp: gần đen/xanh
+  const mid = heatColor(0.27)                                         // quanh giữa thang: trắng (cả ba kênh cao)
+  assert.ok(mid[0] > 200 && mid[1] > 200 && mid[2] > 200)
+  const bid = heatColor(0.8, 'bid')
+  const ask = heatColor(0.8, 'ask')
+  assert.ok(bid[1] > bid[0] && bid[1] > bid[2])                       // xanh lá
+  assert.ok(ask[2] > ask[1] && ask[0] > ask[1])                       // tím
+  assert.ok(heatColor(1)[3] > heatColor(0.1)[3])
+})
+
+test('stackedImbalance needs 3 consecutive same-side diagonal imbalances', () => {
+  // buy imbalance ở p nếu buy[p] >= 3 * sell[p-1]
+  const cells = [
+    { price: 100, buy: 1, sell: 1 }, { price: 101, buy: 4, sell: 1 }, { price: 102, buy: 4, sell: 1 },
+    { price: 103, buy: 4, sell: 1 }, { price: 104, buy: 1, sell: 5 },
+  ]
+  const r = stackedImbalance(cells, 1, 3)
+  assert.deepEqual(r, { side: 'buy', from: 101, to: 103 })
+  assert.equal(stackedImbalance(cells.slice(0, 3), 1, 3), null)   // chỉ 2 mức liên tiếp
+  assert.equal(stackedImbalance([], 1, 3), null)
+})

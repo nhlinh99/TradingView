@@ -68,5 +68,5 @@ def test_bubbles_top_clusters(data_root):
     r = client.get("/api/bubbles", params={"symbol": "BTCUSDT", "from": T0, "to": T0 + 60_000, "tbucket": 10_000, "top": 2})
     assert r.status_code == 200
     rows = r.json()["rows"]
-    assert rows == [[T0, 67000.0, 5.0, "buy"], [T0, 67001.0, 3.0, "sell"]]
+    assert rows == [[T0, 67000.0, 5.0, "buy", 2], [T0, 67001.0, 3.0, "sell", 1]]   # n: số lệnh gộp trong cụm
     assert client.get("/api/bubbles", params={"symbol": "BTCUSDT", "from": T0, "to": T0}).status_code == 400

@@ -44,10 +44,12 @@ export default function App() {
     heatmap: pref('heatmap', '0', ['0', '1']) === '1',
     vpvr: pref('vpvr', '0', ['0', '1']) === '1',
     ratio: Number(pref('ratio', '3', ['2', '3', '4', '5'])),
+    heatMode: pref('heatMode', 'intensity', ['intensity', 'side']) as Flow['heatMode'],
+    fpMode: pref('fpMode', 'bidask', ['bidask', 'delta', 'volume', 'profile']) as Flow['fpMode'],
   }))
   const setF = (patch: Partial<Flow>) => setFlow((f) => {
     const n = { ...f, ...patch }
-    savePref('delta', n.delta ? '1' : '0'); savePref('cvd', n.cvd); savePref('footprint', n.footprint ? '1' : '0'); savePref('ratio', String(n.ratio)); savePref('vpvr', n.vpvr ? '1' : '0'); savePref('heatmap', n.heatmap ? '1' : '0'); savePref('bubbles', n.bubbles ? '1' : '0'); savePref('gex', n.gex ? '1' : '0')
+    savePref('delta', n.delta ? '1' : '0'); savePref('cvd', n.cvd); savePref('footprint', n.footprint ? '1' : '0'); savePref('ratio', String(n.ratio)); savePref('vpvr', n.vpvr ? '1' : '0'); savePref('heatmap', n.heatmap ? '1' : '0'); savePref('bubbles', n.bubbles ? '1' : '0'); savePref('gex', n.gex ? '1' : '0'); savePref('heatMode', n.heatMode); savePref('fpMode', n.fpMode)
     return n
   })
   const [layout, setLayout] = useState(() => Number(pref('layout', '1', ['1', '2', '4'])))
@@ -156,6 +158,20 @@ export default function App() {
                 <option value="off">Tắt</option><option value="none">Liên tục</option><option value="day">Reset theo ngày</option>
               </select>
             </label>
+            {flow.footprint && (
+              <label>Kiểu
+                <select value={flow.fpMode} onChange={(e) => setF({ fpMode: e.target.value as Flow['fpMode'] })} aria-label="Kiểu footprint">
+                  <option value="bidask">Bid x Ask</option><option value="delta">Delta</option><option value="volume">Volume</option><option value="profile">Profile</option>
+                </select>
+              </label>
+            )}
+            {flow.heatmap && (
+              <label>Màu heatmap
+                <select value={flow.heatMode} onChange={(e) => setF({ heatMode: e.target.value as Flow['heatMode'] })} aria-label="Màu heatmap">
+                  <option value="intensity">Cường độ</option><option value="side">Mua/Bán</option>
+                </select>
+              </label>
+            )}
             {flow.footprint && (
               <label>Imbalance
                 <select value={flow.ratio} onChange={(e) => setF({ ratio: Number(e.target.value) })} aria-label="Ngưỡng imbalance">

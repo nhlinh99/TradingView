@@ -85,7 +85,10 @@ def heatmap_endpoint(
 
 
 def get_bubbles(symbol: str, start_ms: int, end_ms: int, tbucket_ms: int, top: int) -> dict:
-    """Các cụm lệnh khớp lớn nhất (mua/bán chủ động) trong khoảng, gom theo ô thời gian và mức giá."""
+    """Các cụm lệnh khớp lớn nhất (mua/bán chủ động) trong khoảng, gom theo ô thời gian và mức giá.
+
+    Mỗi dòng: [ts, price, qty, side, n]. n là số lệnh khớp gộp (aggTrade) trong cụm: n = 1 là một lệnh lớn đơn lẻ, n > 1 là
+    nhiều lệnh nhỏ cộng lại. Giao diện vẽ vòng đặc cho n = 1 và vòng rỗng cho n > 1 (kiểu Deep Trades của DeepCharts)."""
     try:
         cfg = store.symbol_config(symbol)
     except (ValueError, KeyError) as e:
@@ -100,12 +103,12 @@ def get_bubbles(symbol: str, start_ms: int, end_ms: int, tbucket_ms: int, top: i
         con = duckdb.connect()
         try:
             data = con.execute(
-                f"SELECT (ts // {tbucket_ms}) * {tbucket_ms} AS t, (p // {base}) * {base} AS p, m, sum(q::DOUBLE) AS q "
+                f"SELECT (ts // {tbucket_ms}) * {tbucket_ms} AS t, (p // {base}) * {base} AS p, m, sum(q::DOUBLE) AS q, count(*) AS n "
                 f"FROM ({ticks}) GROUP BY 1, 2, 3 ORDER BY q DESC LIMIT {int(top)}"
             ).fetchall()
         finally:
             con.close()
-        rows = [[t, round(p * cfg["tick"], 10), round(q, 6), "sell" if m else "buy"] for t, p, m, q in sorted(data)]
+        rows = [[t, round(p * cfg["tick"], 10), round(q, 6), "sell" if m else "buy", n] for t, p, m, q, n in sorted(data)]
     return {"symbol": symbol, "from": start_ms, "to": end_ms, "tbucket": tbucket_ms,
             "bucket": round(base * cfg["tick"], 10), "rows": rows}
 
