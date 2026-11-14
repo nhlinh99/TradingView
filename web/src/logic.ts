@@ -184,3 +184,27 @@ export function heatColor(v: number): [number, number, number, number] {
   const b = stops[i + 1]
   return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f, 0.15 + 0.8 * s]
 }
+
+/** Ngược của timeToIndex: thời điểm (giây) ứng với chỉ số thập phân idx trên trục nến. */
+export function indexToTime(times: number[], idx: number, stepSec: number): number {
+  const n = times.length
+  if (n === 0) return 0
+  if (idx <= 0) return times[0] + idx * stepSec
+  if (idx >= n - 1) return times[n - 1] + (idx - (n - 1)) * stepSec
+  const lo = Math.floor(idx)
+  return times[lo] + (idx - lo) * (times[lo + 1] - times[lo])
+}
+
+export type DrawKind = 'trend' | 'hline' | 'rect' | 'fib' | 'text'
+export type DrawPoint = { time: number; price: number }
+export type Drawing = { id: number; symbol: string; kind: DrawKind; payload: { points: DrawPoint[]; color?: string; text?: string } }
+export const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
+
+/** Khoảng cách (px) từ điểm (px,py) tới đoạn thẳng a-b. */
+export function distToSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax
+  const dy = by - ay
+  const len2 = dx * dx + dy * dy
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2))
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+}

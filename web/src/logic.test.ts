@@ -132,3 +132,18 @@ test('heatColor clamps and is monotone in alpha', () => {
   assert.ok(heatColor(0.9)[3] > heatColor(0.2)[3])
   assert.equal(heatColor(-1)[3], 0)
 })
+
+import { distToSegment, indexToTime } from './logic.ts'
+
+test('indexToTime inverts timeToIndex, including gaps and extrapolation', () => {
+  const t = [0, 60, 120, 300]
+  for (const x of [0, 60, 90, 210, 300, 360, -60]) assert.ok(Math.abs(indexToTime(t, timeToIndex(t, x, 60), 60) - x) < 1e-9, String(x))
+  assert.equal(indexToTime(t, 5, 60), 420)
+  assert.equal(indexToTime([], 3, 60), 0)
+})
+
+test('distToSegment', () => {
+  assert.equal(distToSegment(5, 5, 0, 0, 10, 0), 5)
+  assert.equal(distToSegment(-3, 4, 0, 0, 10, 0), 5)   // gần đầu mút
+  assert.equal(distToSegment(1, 1, 2, 2, 2, 2), Math.SQRT2) // đoạn suy biến thành điểm
+})

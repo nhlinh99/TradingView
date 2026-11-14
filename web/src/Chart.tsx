@@ -10,6 +10,7 @@ import Heatmap from './Heatmap'
 import Bubbles from './Bubbles'
 import Gex from './Gex'
 import PineLayer from './PineLayer'
+import Drawings from './Drawings'
 import {
   applyTrade, cvdSeries, delta, barFromRow, decimalsFromTick, formatTime, formatVolume, mergeOlder, tfMs, tickLabel,
   type Bar, type Trade,
@@ -241,6 +242,7 @@ export default function Chart({ symbol, tf, tz, flow, pine, theme, onState }: Pr
       <Heatmap on={flow.heatmap} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
       <div ref={box} className="chart" data-testid="chart" />
       <Bubbles on={flow.bubbles} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
+      <Drawings symbol={symbol} tf={tf} dark={theme === 'dark'} chart={chartRef} candles={candles} bars={bars} />
       <PineLayer result={pine} chart={chartRef} candles={candles} version={version} />
       <Gex on={flow.gex} symbol={symbol} dark={theme === 'dark'} chart={chartRef} candles={candles} />
       <Profile on={flow.vpvr} symbol={symbol} tf={tf} dark={theme === 'dark'} chart={chartRef} candles={candles} bars={bars} version={version} />
