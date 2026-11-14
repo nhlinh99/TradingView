@@ -104,3 +104,10 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--focus); ou
 .pine-stats.trades th { text-align: left; padding-right: 10px; color: var(--mute); font-weight: 500; }
 .pine-stats .up { color: var(--ok); } .pine-stats .down { color: var(--bad); }
 .pine-inputs input[type='date'] { padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+
+.replaybar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 12px; border-bottom: 1px solid var(--line); background: var(--chip); }
+.replaybar button { padding: 2px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); cursor: pointer; }
+.replaybar button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.replaybar input[type='range'] { flex: 1; min-width: 120px; }
+.replaybar select { padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.replaybar .chk { display: inline-flex; align-items: center; gap: 4px; color: var(--mute); }

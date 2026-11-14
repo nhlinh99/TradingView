@@ -23,10 +23,10 @@ const PALETTE = {
 const volColor = (b: Bar, up: string, down: string) => (b.close >= b.open ? up + '88' : down + '88')
 
 export type Flow = { delta: boolean; cvd: 'off' | 'none' | 'day'; footprint: boolean; vpvr: boolean; heatmap: boolean; bubbles: boolean; gex: boolean; ratio: number }
-type Props = { symbol: string; tf: string; tz: string; flow: Flow; pine: PineResult | null; theme: 'light' | 'dark'; onState: (s: StreamState) => void }
+type Props = { symbol: string; tf: string; tz: string; flow: Flow; pine: PineResult | null; replay: number | null; onTotal: (n: number) => void; theme: 'light' | 'dark'; onState: (s: StreamState) => void }
 type Legend = { time: number; bar: Bar } | null
 
-export default function Chart({ symbol, tf, tz, flow, pine, theme, onState }: Props) {
+export default function Chart({ symbol, tf, tz, flow, pine, replay, onTotal, theme, onState }: Props) {
   const box = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candles = useRef<ISeriesApi<'Candlestick'> | null>(null)
@@ -39,6 +39,13 @@ export default function Chart({ symbol, tf, tz, flow, pine, theme, onState }: Pr
   const flowRef = useRef(flow)
   flowRef.current = flow
   const [version, setVersion] = useState(0)
+  const replayRef = useRef(replay)
+  replayRef.current = replay
+  const fullRef = useRef<Bar[]>([])
+  const paintRef = useRef<(all: Bar[], fit: boolean) => void>(() => {})
+  const reloadRef = useRef<() => void>(() => {})
+  const onTotalRef = useRef(onTotal)
+  onTotalRef.current = onTotal
   const [legend, setLegend] = useState<Legend>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -118,6 +125,22 @@ export default function Chart({ symbol, tf, tz, flow, pine, theme, onState }: Pr
     refreshFlow()
   }, [flow.delta, flow.cvd, refreshFlow])
 
+  // phát lại: cắt dãy nến hiện có tại vị trí `replay`; thoát phát lại thì nạp lại nến mới nhất
+  const wasReplay = useRef(false)
+  useEffect(() => {
+    const full = fullRef.current
+    if (replay === null) {
+      if (wasReplay.current) { wasReplay.current = false; reloadRef.current() }
+      return
+    }
+    if (full.length === 0) return
+    const first = !wasReplay.current
+    wasReplay.current = true
+    bars.current = full.slice(0, Math.max(2, Math.min(replay, full.length)))
+    paintRef.current(bars.current, false)
+    if (first) chartRef.current?.timeScale().scrollToRealTime()
+  }, [replay])
+
   // đổi giao diện sáng/tối
   useEffect(() => {
     const P = PALETTE[theme]
@@ -162,6 +185,7 @@ export default function Chart({ symbol, tf, tz, flow, pine, theme, onState }: Pr
       setVersion((v) => v + 1)
     }
     const apply = (t: Trade) => {
+      if (replayRef.current !== null) return // đang phát lại: không trộn lệnh khớp trực tiếp vào
       if (lastId !== null && t.id <= lastId) return // đã nằm trong nến tải về
       lastId = t.id
       const b = applyTrade(bars.current, step, t)
@@ -180,7 +204,9 @@ export default function Chart({ symbol, tf, tz, flow, pine, theme, onState }: Pr
         if (my !== seq) return
         const dec = decimalsFromTick(j.tick)
         candles.current?.applyOptions({ priceFormat: { type: 'price', precision: dec, minMove: j.tick } })
-        bars.current = j.bars.map(barFromRow)
+        fullRef.current = j.bars.map(barFromRow)
+        onTotalRef.current(fullRef.current.length)
+        bars.current = replayRef.current === null ? fullRef.current : fullRef.current.slice(0, Math.max(2, Math.min(replayRef.current, fullRef.current.length)))
         lastId = j.last_trade_id
         const first = my === 1
         paint(bars.current, first)
@@ -195,6 +221,8 @@ export default function Chart({ symbol, tf, tz, flow, pine, theme, onState }: Pr
       }
     }
 
+    paintRef.current = paint
+    reloadRef.current = () => void load()
     bars.current = []
     candles.current?.setData([])
     volume.current?.setData([])
@@ -209,7 +237,7 @@ export default function Chart({ symbol, tf, tz, flow, pine, theme, onState }: Pr
     const onRange = async () => {
       const chart = chartRef.current
       const range = chart?.timeScale().getVisibleLogicalRange()
-      if (!chart || !range || olderBusy || !ready || bars.current.length === 0 || range.from > 20) return
+      if (!chart || !range || olderBusy || !ready || bars.current.length === 0 || range.from > 20 || replayRef.current !== null) return
       olderBusy = true
       try {
         const j = await fetchBars(symbol, tf, 1000, bars.current[0].time * 1000, ctrl.signal)

@@ -49,6 +49,10 @@ export default function App() {
     savePref('delta', n.delta ? '1' : '0'); savePref('cvd', n.cvd); savePref('footprint', n.footprint ? '1' : '0'); savePref('ratio', String(n.ratio)); savePref('vpvr', n.vpvr ? '1' : '0'); savePref('heatmap', n.heatmap ? '1' : '0'); savePref('bubbles', n.bubbles ? '1' : '0'); savePref('gex', n.gex ? '1' : '0')
     return n
   })
+  const [replay, setReplay] = useState<number | null>(null)
+  const [total, setTotal] = useState(0)
+  const [playing, setPlaying] = useState(false)
+  const [speed, setSpeed] = useState(2)
   const [pine, setPine] = useState<PineResult | null>(null)
   const [alertsOpen, setAlertsOpen] = useState(() => pref('alertsOpen', '0', ['0', '1']) === '1')
   const [pineOpen, setPineOpen] = useState(() => pref('pineOpen', '0', ['0', '1']) === '1')
@@ -67,7 +71,13 @@ export default function App() {
   }, [])
 
   useEffect(() => { document.documentElement.dataset.theme = theme }, [theme])
-  useEffect(() => { setPine(null) }, [symbol, tf]) // kết quả Pine chỉ đúng với symbol và khung đã chạy
+  useEffect(() => { setPine(null); setReplay(null); setPlaying(false) }, [symbol, tf])
+  useEffect(() => {
+    if (!playing || replay === null) return
+    const t = window.setInterval(() => setReplay((r) => (r === null ? r : Math.min(total, r + 1))), 1000 / speed)
+    return () => window.clearInterval(t)
+  }, [playing, speed, total, replay === null])
+  useEffect(() => { if (replay !== null && replay >= total) setPlaying(false) }, [replay, total]) // kết quả Pine chỉ đúng với symbol và khung đã chạy
   const choose = (s: string) => { setSymbol(s); savePref('symbol', s) }
   const update = async (next: string[]) => {
     try {
@@ -141,6 +151,7 @@ export default function App() {
               </label>
             )}
           </div>
+          <button className="themebtn" aria-pressed={replay !== null} onClick={() => { setPlaying(false); setReplay((r) => (r === null ? Math.max(2, total - 100) : null)) }}>Replay</button>
           <button className="themebtn" aria-pressed={alertsOpen} onClick={() => { const n = !alertsOpen; setAlertsOpen(n); savePref('alertsOpen', n ? '1' : '0') }}>Cảnh báo</button>
           <button className="themebtn" aria-pressed={pineOpen} onClick={() => { const n = !pineOpen; setPineOpen(n); savePref('pineOpen', n ? '1' : '0') }}>Pine</button>
           <button className="themebtn" aria-label="Đổi giao diện sáng/tối"
@@ -149,13 +160,29 @@ export default function App() {
           </button>
           <span className={`live ${state}`} role="status" data-testid="stream-state">{STATE_LABEL[state]}</span>
         </header>
+        {replay !== null && (
+          <div className="replaybar" role="group" aria-label="Phát lại nến">
+            <b>Replay</b>
+            <button onClick={() => setReplay((r) => Math.max(2, (r ?? 2) - 1))} aria-label="Lùi một nến">◀</button>
+            <button className={playing ? 'on' : ''} onClick={() => setPlaying((p) => !p)} aria-pressed={playing}>{playing ? 'Tạm dừng' : 'Phát'}</button>
+            <button onClick={() => setReplay((r) => Math.min(total, (r ?? 2) + 1))} aria-label="Tiến một nến">▶</button>
+            <input type="range" aria-label="Vị trí phát lại" min={2} max={Math.max(2, total)} value={replay} onChange={(e) => setReplay(Number(e.target.value))} />
+            <span className="mute">{replay}/{total} nến</span>
+            <label className="chk">Tốc độ
+              <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>
+                {[1, 2, 5, 10, 30].map((s) => <option key={s} value={s}>{s} nến/giây</option>)}
+              </select>
+            </label>
+            <button onClick={() => { setReplay(null); setPlaying(false) }}>Thoát</button>
+          </div>
+        )}
         {symbol.startsWith('XAU') && (
           <p className="srcnote">Volume và orderflow của hợp đồng Binance (XAUUSDT, tính theo oz), không phải COMEX. Cuối tuần thị trường gốc nghỉ nhưng hợp đồng vẫn khớp lệnh.</p>
         )}
         {all.find((s) => s.symbol === symbol)?.source === 'vn' && (
           <p className="srcnote">Cổ phiếu VN100 (HOSE), nến từ VNDirect, giá nghìn đồng, đã điều chỉnh. Chưa có phía mua/bán nên delta và CVD bằng 0; không có tick, chỉ có khung từ 1 phút.</p>
         )}
-        {symbol && <Chart symbol={symbol} tf={tf} tz={tz} flow={flow} pine={pine} theme={theme} onState={onState} />}
+        {symbol && <Chart symbol={symbol} tf={tf} tz={tz} flow={flow} pine={pine} replay={replay} onTotal={setTotal} theme={theme} onState={onState} />}
         {err && <p className="status bad" role="alert">{err}</p>}
         {alertsOpen && symbol && <AlertsPanel symbol={symbol} lastPrice={null} />}
         {pineOpen && symbol && <PinePanel key={`${symbol}|${tf}`} symbol={symbol} tf={tf} onResult={setPine} />}
