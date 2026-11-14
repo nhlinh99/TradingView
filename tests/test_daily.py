@@ -72,3 +72,26 @@ def test_main_exits_nonzero_on_failure(calls, monkeypatch):
     with pytest.raises(SystemExit) as e:
         daily.main()
     assert e.value.code == 1
+
+
+def test_vn_bars_step_runs_per_symbol_and_isolates_failures(monkeypatch):
+    from collector import daily, vn
+    from common import store
+
+    monkeypatch.setattr(store, "vn100_symbols", lambda: ["VNM", "FPT"])
+
+    class C:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    monkeypatch.setattr(vn, "make_client", lambda: C())
+
+    def fake(client, symbol, *a, **k):
+        if symbol == "VNM":
+            raise RuntimeError("mạng lỗi")
+        return {"bars": 1}
+
+    monkeypatch.setattr(vn, "sync_bars", fake)
+    rep = daily.run([], do_compact=False, vn_bars=True)
+    assert [s[:2] for s in rep["steps"]] == [("vn-bars", "FPT")]
+    assert len(rep["failures"]) == 1 and "VNM" in rep["failures"][0]

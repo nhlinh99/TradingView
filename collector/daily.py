@@ -22,7 +22,7 @@ import logging
 import tomllib
 from datetime import datetime, timedelta, timezone
 
-from collector import backfill, compact, klines
+from collector import backfill, compact, klines, vn
 from common import store
 
 log = logging.getLogger("collector.daily")
@@ -35,7 +35,7 @@ def configured_symbols() -> list[str]:
         return list(tomllib.load(f))
 
 
-def run(symbols: list[str], backfill_days: int = 3, do_compact: bool = True) -> dict:
+def run(symbols: list[str], backfill_days: int = 3, do_compact: bool = True, vn_bars: bool = False) -> dict:
     """Trả về {"failures": [...], "steps": [(bước, symbol, kết quả)]}."""
     report: dict = {"failures": [], "steps": []}
     yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
@@ -55,6 +55,10 @@ def run(symbols: list[str], backfill_days: int = 3, do_compact: bool = True) -> 
         for dataset in BACKFILL_DATASETS:
             step(f"backfill-{dataset}", symbol,
                  lambda s=symbol, d=dataset: {k: v for k, v in backfill.backfill(s, d, start, yesterday).items() if k != "days"})
+    if vn_bars:
+        with vn.make_client() as client:
+            for symbol in store.vn100_symbols():
+                step("vn-bars", symbol, lambda s=symbol: vn.sync_bars(client, s))
     if do_compact:
         step("compact", "*", lambda: compact.compact_all())
     return report
@@ -65,10 +69,11 @@ def main() -> None:
     ap.add_argument("--symbols", help="phân tách bằng dấu phẩy. Mặc định: mọi symbol trong config/symbols.toml")
     ap.add_argument("--backfill-days", type=int, default=3)
     ap.add_argument("--skip-compact", action="store_true")
+    ap.add_argument("--vn", action="store_true", help="nạp thêm nến 1 phút của VN100 (cần config/vn100.json)")
     a = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     symbols = [s.strip().upper() for s in a.symbols.split(",")] if a.symbols else configured_symbols()
-    report = run(symbols, a.backfill_days, not a.skip_compact)
+    report = run(symbols, a.backfill_days, not a.skip_compact, a.vn)
     if report["failures"]:
         log.error("có %d bước lỗi:\n  %s", len(report["failures"]), "\n  ".join(report["failures"]))
         raise SystemExit(1)
