@@ -36,12 +36,13 @@ export default function App() {
     delta: pref('delta', '0', ['0', '1']) === '1',
     cvd: pref('cvd', 'off', ['off', 'none', 'day']) as Flow['cvd'],
     footprint: pref('footprint', '0', ['0', '1']) === '1',
+    heatmap: pref('heatmap', '0', ['0', '1']) === '1',
     vpvr: pref('vpvr', '0', ['0', '1']) === '1',
     ratio: Number(pref('ratio', '3', ['2', '3', '4', '5'])),
   }))
   const setF = (patch: Partial<Flow>) => setFlow((f) => {
     const n = { ...f, ...patch }
-    savePref('delta', n.delta ? '1' : '0'); savePref('cvd', n.cvd); savePref('footprint', n.footprint ? '1' : '0'); savePref('ratio', String(n.ratio)); savePref('vpvr', n.vpvr ? '1' : '0')
+    savePref('delta', n.delta ? '1' : '0'); savePref('cvd', n.cvd); savePref('footprint', n.footprint ? '1' : '0'); savePref('ratio', String(n.ratio)); savePref('vpvr', n.vpvr ? '1' : '0'); savePref('heatmap', n.heatmap ? '1' : '0')
     return n
   })
   const [state, setState] = useState<StreamState>('connecting')
@@ -114,6 +115,7 @@ export default function App() {
           </label>
           <div className="opts" role="group" aria-label="Orderflow">
             <label><input type="checkbox" checked={flow.footprint} onChange={(e) => setF({ footprint: e.target.checked })} />Footprint</label>
+            <label><input type="checkbox" checked={flow.heatmap} onChange={(e) => setF({ heatmap: e.target.checked })} />Heatmap</label>
             <label><input type="checkbox" checked={flow.vpvr} onChange={(e) => setF({ vpvr: e.target.checked })} />VPVR</label>
             <label><input type="checkbox" checked={flow.delta} onChange={(e) => setF({ delta: e.target.checked })} />Delta</label>
             <label>CVD

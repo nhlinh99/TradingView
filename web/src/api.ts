@@ -93,3 +93,9 @@ export function fetchProfile(symbol: string, from: number, to: number, mult: num
   const q = new URLSearchParams({ symbol, from: String(from), to: String(to), mult: String(mult) })
   return json<ProfileResponse>(`/api/profile?${q}`, { signal })
 }
+
+export type HeatmapResponse = { symbol: string; from: number; to: number; tbucket: number; bucket: number; scale: number; rows: number[][] }
+export function fetchHeatmap(symbol: string, from: number, to: number, tbucket: number, mult: number, signal?: AbortSignal) {
+  const q = new URLSearchParams({ symbol, from: String(from), to: String(to), tbucket: String(tbucket), mult: String(mult) })
+  return json<HeatmapResponse>(`/api/heatmap?${q}`, { signal })
+}

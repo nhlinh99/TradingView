@@ -6,6 +6,7 @@ import {
 import { fetchBars, openStream, type StreamState } from './api'
 import Footprint from './Footprint'
 import Profile from './Profile'
+import Heatmap from './Heatmap'
 import {
   applyTrade, cvdSeries, delta, barFromRow, decimalsFromTick, formatTime, formatVolume, mergeOlder, tfMs, tickLabel,
   type Bar, type Trade,
@@ -17,7 +18,7 @@ const PALETTE = {
 }
 const volColor = (b: Bar, up: string, down: string) => (b.close >= b.open ? up + '88' : down + '88')
 
-export type Flow = { delta: boolean; cvd: 'off' | 'none' | 'day'; footprint: boolean; vpvr: boolean; ratio: number }
+export type Flow = { delta: boolean; cvd: 'off' | 'none' | 'day'; footprint: boolean; vpvr: boolean; heatmap: boolean; ratio: number }
 type Props = { symbol: string; tf: string; tz: string; flow: Flow; theme: 'light' | 'dark'; onState: (s: StreamState) => void }
 type Legend = { time: number; bar: Bar } | null
 
@@ -117,14 +118,14 @@ export default function Chart({ symbol, tf, tz, flow, theme, onState }: Props) {
   useEffect(() => {
     const P = PALETTE[theme]
     chartRef.current?.applyOptions({
-      layout: { background: { type: ColorType.Solid, color: P.bg }, textColor: P.text, panes: { separatorColor: P.line } },
+      layout: { background: { type: ColorType.Solid, color: flow.heatmap ? 'rgba(0,0,0,0)' : P.bg }, textColor: P.text, panes: { separatorColor: P.line } },
       grid: { vertLines: { color: P.grid }, horzLines: { color: P.grid } },
       rightPriceScale: { borderColor: P.line }, timeScale: { borderColor: P.line },
     })
     candles.current?.applyOptions({ upColor: flow.footprint ? 'transparent' : P.up, downColor: flow.footprint ? 'transparent' : P.down, borderUpColor: P.up, borderDownColor: P.down, wickUpColor: P.up, wickDownColor: P.down })
     volume.current?.setData(bars.current.map((b) => ({ time: b.time as UTCTimestamp, value: b.volume, color: volColor(b, P.up, P.down) })))
     refreshRef.current()
-  }, [theme, flow.footprint])
+  }, [theme, flow.footprint, flow.heatmap])
 
   // đổi múi giờ: vẽ lại nhãn
   useEffect(() => {
@@ -152,6 +153,7 @@ export default function Chart({ symbol, tf, tz, flow, theme, onState }: Props) {
       candles.current?.setData(all.map((b) => ({ time: b.time as UTCTimestamp, open: b.open, high: b.high, low: b.low, close: b.close })))
       volume.current?.setData(all.map((b) => ({ time: b.time as UTCTimestamp, value: b.volume, color: volColor(b, PALETTE[themeRef.current].up, PALETTE[themeRef.current].down) })))
       if (fit) chartRef.current?.timeScale().fitContent()
+      if (import.meta.env.DEV) (window as unknown as { __tvBars?: Bar[] }).__tvBars = bars.current
       refreshRef.current()
       setVersion((v) => v + 1)
     }
@@ -233,6 +235,7 @@ export default function Chart({ symbol, tf, tz, flow, theme, onState }: Props) {
   const b = legend?.bar
   return (
     <div className="chart-wrap">
+      <Heatmap on={flow.heatmap} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
       <div ref={box} className="chart" data-testid="chart" />
       <Profile on={flow.vpvr} symbol={symbol} tf={tf} dark={theme === 'dark'} chart={chartRef} candles={candles} bars={bars} version={version} />
       <Footprint on={flow.footprint} symbol={symbol} tf={tf} ratio={flow.ratio} dark={theme === 'dark'}

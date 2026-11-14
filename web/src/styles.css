@@ -58,3 +58,7 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--focus); ou
 .opts label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
 .opts input[type='number'] { width: 52px; padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
 .opts select { padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+
+.heat-canvas { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.chart-wrap { background: var(--bg); }
+.chart { z-index: 1; }

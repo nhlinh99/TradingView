@@ -113,3 +113,22 @@ test('profile POC and value area', () => {
   assert.ok(p.val <= 102 && p.vah >= 102)
   assert.equal(profileStats([]), null)
 })
+
+import { heatColor, timeToIndex } from './logic.ts'
+
+test('timeToIndex interpolates, extrapolates, handles gaps', () => {
+  const t = [0, 60, 120, 300] // khuyết 180 và 240
+  assert.equal(timeToIndex(t, 60, 60), 1)
+  assert.equal(timeToIndex(t, 90, 60), 1.5)
+  assert.equal(timeToIndex(t, 210, 60), 2.5) // trong khoảng trống: nội suy giữa hai nến kề
+  assert.equal(timeToIndex(t, -60, 60), -1)
+  assert.equal(timeToIndex(t, 360, 60), 4)
+  assert.equal(timeToIndex([], 5, 60), 0)
+})
+
+test('heatColor clamps and is monotone in alpha', () => {
+  assert.deepEqual(heatColor(0), [0, 0, 0, 0])
+  assert.equal(heatColor(5)[3], heatColor(1)[3])
+  assert.ok(heatColor(0.9)[3] > heatColor(0.2)[3])
+  assert.equal(heatColor(-1)[3], 0)
+})

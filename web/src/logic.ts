@@ -152,3 +152,35 @@ export function profileStats(cells: Cell[], share = 0.7): { poc: number; vah: nu
   }
   return { poc: rows[poc].price, vah: rows[hi].price, val: rows[lo].price }
 }
+
+// ---------- heatmap ----------
+
+/** Chỉ số (thập phân) của thời điểm tSec trên trục nến; nến i có tâm ở i. Nội suy tuyến tính giữa các nến. */
+export function timeToIndex(times: number[], tSec: number, stepSec: number): number {
+  const n = times.length
+  if (n === 0) return 0
+  if (tSec <= times[0]) return (tSec - times[0]) / stepSec
+  if (tSec >= times[n - 1]) return n - 1 + (tSec - times[n - 1]) / stepSec
+  let lo = 0
+  let hi = n - 1
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1
+    if (times[mid] <= tSec) lo = mid
+    else hi = mid
+  }
+  return lo + (tSec - times[lo]) / (times[hi] - times[lo])
+}
+
+/** Màu ô heatmap: v = thanh khoản / phân vị 99 (có thể lớn hơn 1, sẽ bị cắt). Trả về [r,g,b,a]. */
+export function heatColor(v: number): [number, number, number, number] {
+  const x = Math.min(1, Math.max(0, v))
+  if (x === 0) return [0, 0, 0, 0]
+  const s = Math.pow(x, 0.7)
+  const stops: [number, number, number][] = [[24, 40, 140], [180, 50, 170], [255, 235, 90]]
+  const k = s * 2
+  const i = Math.min(1, Math.floor(k))
+  const f = k - i
+  const a = stops[i]
+  const b = stops[i + 1]
+  return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f, 0.15 + 0.8 * s]
+}
