@@ -1,12 +1,28 @@
 # tick: bước giá nhỏ nhất. Giá lưu dạng số nguyên = round(giá / tick).
 # Giá trị lấy từ /fapi/v1/exchangeInfo ngày 14/11/2026.
+#
+# Sổ lệnh (heatmap), do collector/live_book.py đọc:
+#   book_window_pct: ghi các bucket trong ±x% quanh giá giữa. Đo ngày 14/11/2026: snapshot REST 1000 mức
+#                    chỉ phủ ±0,207% (BTC) và ±0,364% (vàng). Mức ngoài dải đó chỉ được biết khi nó thay đổi,
+#                    nên cửa sổ phải nhỏ hơn dải đó và snapshot lại thường xuyên (book_resync_s).
+#   book_bucket:     độ rộng bucket giá (theo đơn vị giá, phải là bội của tick)
+#   book_interval_s: chụp sổ lệnh mỗi bao nhiêu giây
+#   book_resync_s:   lấy snapshot REST mới để sửa sai lệch và cho dải bám theo giá
 
 [BTCUSDT]
 source = "binance_futures"
 tick = 0.1
 qty_step = 0.001
+book_window_pct = 0.15
+book_bucket = 1.0
+book_interval_s = 5
+book_resync_s = 60
 
 [XAUUSDT]
 source = "binance_futures"
 tick = 0.01
 qty_step = 0.001
+book_window_pct = 0.30
+book_bucket = 0.1
+book_interval_s = 5
+book_resync_s = 60
