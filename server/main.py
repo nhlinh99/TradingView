@@ -5,8 +5,10 @@ import duckdb
 from fastapi import FastAPI
 
 from common import store
+from server import bars_api
 
 app = FastAPI(title="tv-local")
+app.include_router(bars_api.router)
 
 
 @app.get("/health")
