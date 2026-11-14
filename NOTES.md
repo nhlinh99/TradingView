@@ -134,3 +134,8 @@ Nguồn tham khảo: kết quả tìm kiếm về Bookmap (heatmap, volume dots,
 ### Cải thiện giao diện (dễ dùng hơn)
 
 Header từ ba hàng ô chọn xuống một hàng; gom tính năng orderflow vào bảng "Chỉ báo" có mẫu dựng sẵn, công tắc, thanh trượt và mô tả; nút phân đoạn cho khung thời gian và bố cục; thanh vẽ dùng biểu tượng. Trên điện thoại (390 px) vùng biểu đồ chiếm hơn một nửa màn hình thay vì khoảng một phần ba; ô chọn múi giờ bị ẩn ở màn hình hẹp (giá trị đã lưu vẫn dùng). Chưa làm: phím tắt, kéo thả sắp xếp danh sách theo dõi, bảng chọn symbol có tìm kiếm (danh sách VN100 dài 100 mã vẫn là ô chọn thường).
+
+
+### Gộp nóng file con trong ngày
+
+Mỗi collector ghi một file con mỗi 60 giây, nên cuối ngày mỗi symbol có hàng trăm file và truy vấn chậm đi (một lần tải biểu đồ từng mất khoảng 15 giây khi có hơn 1000 file con của hôm nay). `python -m collector.hotmerge` (đã thêm vào `run-collectors.ps1`) gộp file con của NGÀY HÔM NAY mỗi 30 phút khi có từ 40 file; `python -m collector.compact --hot` chạy một lần. Gộp an toàn khi collector đang chạy: chỉ gộp các file có mặt lúc bắt đầu và chỉ xoá đúng các file đó. Chạy thử trên dữ liệu thật: 1072 file con còn 31.

@@ -213,3 +213,26 @@ def test_under_limit_deletes_nothing(data_root):
     put_ticks(RECENT, make_ticks(RECENT))
     s = compact.compact_all(NOW)
     assert s["limit_deleted_files"] == 0
+
+
+def test_merge_hot_merges_todays_parts_and_keeps_new_ones(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+    from collector import compact
+    from common import store
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "tv-data"))
+    now = datetime(2026, 11, 14, 12, 0, tzinfo=timezone.utc)
+    day = now.date()
+    t0 = int(datetime(2026, 11, 14, tzinfo=timezone.utc).timestamp() * 1000)
+    for i in range(45):
+        store.write_partition("ticks", "BTCUSDT", day, [(t0 + i * 1000, 100 + i, 670000 + i, 1.0, False)], part=f"p{100 + i}")
+    store.write_partition("ticks", "XAUUSDT", day, [(t0, 1, 38000, 1.0, True)], part="p1")      # ít file: không động tới
+    before = store.read("ticks", "BTCUSDT")
+    assert compact.merge_hot(now, min_files=40) == 45
+    files = store.day_files("ticks", "BTCUSDT", day)
+    assert files == [store.partition_path("ticks", "BTCUSDT", day)]
+    assert store.read("ticks", "BTCUSDT") == before                                              # dữ liệu y nguyên
+    assert len(store.day_files("ticks", "XAUUSDT", day)) == 1 and not store.day_files("ticks", "XAUUSDT", day)[0].name.endswith("date=2026-11-14.parquet")
+    # collector ghi thêm file con sau khi gộp: lần sau gộp tiếp, không mất dòng nào
+    store.write_partition("ticks", "BTCUSDT", day, [(t0 + 99_000, 999, 670999, 2.0, True)], part="p999")
+    assert compact.merge_hot(now, min_files=2) == 2
+    assert len(store.read("ticks", "BTCUSDT")) == 46

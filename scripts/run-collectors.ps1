@@ -21,6 +21,7 @@ $jobs = [ordered]@{
   book   = @('-m', 'collector.live_book', '--symbols', $Symbols)
   deribit = @('-m', 'collector.deribit')
   alerts = @('-m', 'collector.alerts')
+  hotmerge = @('-m', 'collector.hotmerge')
   vnbook = @('-m', 'collector.vn_book')   # tu dong chi ghi trong gio giao dich HOSE
 }
 $procs = @{}

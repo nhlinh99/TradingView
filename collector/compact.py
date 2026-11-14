@@ -238,6 +238,29 @@ def enforce_limit(max_gb: float, dry: bool, stats: dict) -> None:
         stats["warnings"] += 1
 
 
+# ---------- gộp nóng: file con của ngày đang chạy ----------
+
+HOT_KINDS = ("ticks", "book", "bookdepth", "options", "vn_book")
+
+
+def merge_hot(now: datetime | None = None, min_files: int = 40) -> int:
+    """Gộp các file con của NGÀY HÔM NAY khi đã có từ `min_files` file trở lên. Trả về số file con đã gộp.
+
+    Collector ghi một file con mỗi 60 giây nên cuối ngày mỗi symbol có hàng trăm file, làm truy vấn chậm (mỗi yêu cầu phải mở
+    từng file). An toàn khi collector đang chạy: merge_day chỉ gộp các file có mặt lúc bắt đầu, ghi bản gộp ra file tạm rồi
+    thay file chuẩn, chỉ xoá đúng các file đã gộp; file con mới sinh ra trong lúc đó được giữ nguyên.
+    """
+    day = (now or datetime.now(timezone.utc)).date()
+    merged = 0
+    for kind in HOT_KINDS:
+        for symbol in _symbols(kind):
+            files = store.day_files(kind, symbol, day)
+            if len(files) >= min_files:
+                store.merge_day(kind, symbol, day)
+                merged += len(files)
+    return merged
+
+
 # ---------- chạy ----------
 
 def compact_all(now: datetime | None = None, dry_run: bool = False, only_symbol: str | None = None) -> dict:
@@ -262,8 +285,12 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dry-run", action="store_true", help="chỉ in việc sẽ làm")
     ap.add_argument("--symbol")
+    ap.add_argument("--hot", action="store_true", help="chỉ gộp file con của ngày hôm nay (an toàn khi collector đang chạy)")
     a = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    if a.hot:
+        log.info("đã gộp %d file con của hôm nay", merge_hot(min_files=2))
+        return
     s = compact_all(dry_run=a.dry_run, only_symbol=a.symbol)
     log.info("xong: %s", s)
 
