@@ -135,17 +135,29 @@ def open_gaps(symbol: str) -> list[tuple[int, int]]:
 
 
 def fill_gap(symbol: str, from_id: int, to_id: int, client: httpx.Client, pause: float = 0.6,
-             chunk_rows: int = 100_000, sleep=time.sleep) -> int:
-    """Lấp khoảng hở [from_id, to_id] bằng REST. Trả về số dòng đã ghi. Lỗi mạng: để gap ở trạng thái open."""
+             chunk_rows: int = 100_000, sleep=time.sleep, progress: dict | None = None) -> int:
+    """Lấp khoảng hở [from_id, to_id] bằng REST. Trả về số dòng đã ghi.
+
+    progress: dict do người gọi giữ giữa các lần thử. Sau mỗi đoạn đã ghi, progress["next"] là id kế tiếp
+    cần lấy, nên lần thử lại tiếp tục từ đó thay vì tải lại từ đầu. Lỗi: ném ra, gap vẫn ở trạng thái open.
+    """
+    progress = progress if progress is not None else {}
+    cursor = progress.get("next", from_id)
+    total = progress.get("rows", 0)
     buf: list[tuple] = []
-    total = 0
-    for t in binance.iter_agg_trades(client, symbol, from_id, to_id, pause=pause, sleep=sleep):
+
+    def commit() -> None:
+        nonlocal buf, total
+        total += write_ticks(symbol, buf)
+        progress["next"], progress["rows"] = buf[-1][1] + 1, total
+        buf = []
+
+    for t in binance.iter_agg_trades(client, symbol, cursor, to_id, pause=pause, sleep=sleep):
         buf.append(binance.agg_trade_to_tick(symbol, t))
         if len(buf) >= chunk_rows:
-            total += write_ticks(symbol, buf)
-            buf = []
+            commit()
     if buf:
-        total += write_ticks(symbol, buf)
+        commit()
     finish_gap(symbol, from_id, total)
     return total
 
@@ -168,19 +180,30 @@ class TradeCollector:
         self.last_id: int | None = None
         self.received = 0
         self.reconnects = 0
+        self.fill_attempts = 8
+        self.fill_retry_base = 5.0
+        self._stop = threading.Event()
         self._fills: list[threading.Thread] = []
 
     # -- khoảng hở --
     def _start_fill(self, from_id: int, to_id: int) -> None:
         def work():
-            client = self.client_factory()
-            try:
-                n = fill_gap(self.symbol, from_id, to_id, client, pause=self.rest_pause)
-                log.info("%s lấp khoảng hở %d..%d: %d dòng", self.symbol, from_id, to_id, n)
-            except Exception:
-                log.exception("%s lấp khoảng hở %d..%d lỗi; để trạng thái open, sẽ thử lại khi khởi động", self.symbol, from_id, to_id)
-            finally:
-                client.close()
+            progress: dict = {}
+            for attempt in range(self.fill_attempts):
+                client = self.client_factory()
+                try:
+                    n = fill_gap(self.symbol, from_id, to_id, client, pause=self.rest_pause, progress=progress)
+                    log.info("%s lấp khoảng hở %d..%d: %d dòng", self.symbol, from_id, to_id, n)
+                    return
+                except Exception:
+                    log.exception("%s lấp khoảng hở %d..%d lỗi (lần %d/%d), đã có %d dòng",
+                                  self.symbol, from_id, to_id, attempt + 1, self.fill_attempts, progress.get("rows", 0))
+                finally:
+                    client.close()
+                if self._stop.wait(min(self.fill_retry_base * 2 ** attempt, 120.0)):
+                    return  # đang dừng: để gap ở trạng thái open, lần khởi động sau sẽ tiếp tục
+            log.error("%s bỏ cuộc lấp khoảng hở %d..%d sau %d lần. Còn open, khởi động lại để thử tiếp.",
+                      self.symbol, from_id, to_id, self.fill_attempts)
         t = threading.Thread(target=work, name=f"fill-{self.symbol}-{from_id}", daemon=True)
         t.start()
         self._fills.append(t)
@@ -229,6 +252,7 @@ class TradeCollector:
             self.on_message(raw)
 
     def run(self, stop: threading.Event) -> None:
+        self._stop = stop
         self.last_id = last_stored_id(self.symbol)
         for f, t in open_gaps(self.symbol):
             log.info("%s tiếp tục lấp khoảng hở %d..%d", self.symbol, f, t)

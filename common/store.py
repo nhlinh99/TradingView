@@ -108,9 +108,33 @@ def _check(kind: str, symbol: str) -> None:
 
 # ---------- giá dạng số nguyên ----------
 
+_SYMBOLS_FILE = ROOT / "config" / "symbols.toml"
+_symbols_cache: tuple[int, dict] | None = None   # (mtime_ns, nội dung)
+
+
+def _load_symbols() -> dict:
+    """Đọc config/symbols.toml, giữ bản nhớ đệm và chỉ đọc lại khi file đổi.
+
+    to_int_price chạy cho từng tick, nên không được mở file mỗi lần. Nếu file đang bị khoá
+    (OneDrive, trình soạn thảo) mà đã có bản nhớ đệm thì dùng bản đó thay vì làm sập luồng.
+    """
+    global _symbols_cache
+    try:
+        mtime = _SYMBOLS_FILE.stat().st_mtime_ns
+        if _symbols_cache is not None and _symbols_cache[0] == mtime:
+            return _symbols_cache[1]
+        with open(_SYMBOLS_FILE, "rb") as f:
+            cfg = tomllib.load(f)
+        _symbols_cache = (mtime, cfg)
+        return cfg
+    except OSError:
+        if _symbols_cache is not None:
+            return _symbols_cache[1]
+        raise
+
+
 def symbol_config(symbol: str) -> dict:
-    with open(ROOT / "config" / "symbols.toml", "rb") as f:
-        cfg = tomllib.load(f)
+    cfg = _load_symbols()
     if symbol not in cfg:
         raise KeyError(f"{symbol} chưa có trong config/symbols.toml")
     return cfg[symbol]
