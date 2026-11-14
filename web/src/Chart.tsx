@@ -9,14 +9,16 @@ import {
   type Bar, type Trade,
 } from './logic'
 
-const UP = '#0b8f5b'
-const DOWN = '#d1362f'
-const volColor = (b: Bar) => (b.close >= b.open ? UP + '88' : DOWN + '88')
+const PALETTE = {
+  light: { bg: '#ffffff', text: '#1b2430', line: '#d9e0ea', grid: '#eef1f5', up: '#0b8f5b', down: '#d1362f' },
+  dark: { bg: '#131722', text: '#d1d4dc', line: '#2a2e39', grid: '#1e222d', up: '#26a69a', down: '#ef5350' },
+}
+const volColor = (b: Bar, up: string, down: string) => (b.close >= b.open ? up + '88' : down + '88')
 
-type Props = { symbol: string; tf: string; tz: string; onState: (s: StreamState) => void }
+type Props = { symbol: string; tf: string; tz: string; theme: 'light' | 'dark'; onState: (s: StreamState) => void }
 type Legend = { time: number; bar: Bar } | null
 
-export default function Chart({ symbol, tf, tz, onState }: Props) {
+export default function Chart({ symbol, tf, tz, theme, onState }: Props) {
   const box = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candles = useRef<ISeriesApi<'Candlestick'> | null>(null)
@@ -27,26 +29,29 @@ export default function Chart({ symbol, tf, tz, onState }: Props) {
   const [legend, setLegend] = useState<Legend>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const themeRef = useRef(theme)
+  themeRef.current = theme
   tzRef.current = tz
   tfRef.current = tfMs(tf)
 
   // tạo biểu đồ một lần
   useEffect(() => {
     const el = box.current!
+    const P = PALETTE[themeRef.current]
     const chart = createChart(el, {
       autoSize: true,
-      layout: { background: { type: ColorType.Solid, color: '#ffffff' }, textColor: '#1b2430', panes: { separatorColor: '#d9e0ea' } },
-      grid: { vertLines: { color: '#eef1f5' }, horzLines: { color: '#eef1f5' } },
+      layout: { background: { type: ColorType.Solid, color: P.bg }, textColor: P.text, panes: { separatorColor: P.line } },
+      grid: { vertLines: { color: P.grid }, horzLines: { color: P.grid } },
       crosshair: { mode: CrosshairMode.Normal },
-      rightPriceScale: { borderColor: '#d9e0ea' },
+      rightPriceScale: { borderColor: P.line },
       timeScale: {
-        borderColor: '#d9e0ea', timeVisible: true, secondsVisible: false,
+        borderColor: P.line, timeVisible: true, secondsVisible: false,
         tickMarkFormatter: (t: UTCTimestamp) => tickLabel(t, tzRef.current, tfRef.current),
       },
       localization: { timeFormatter: (t: UTCTimestamp) => formatTime(t, tzRef.current, true) },
     })
     const c = chart.addSeries(CandlestickSeries, {
-      upColor: UP, downColor: DOWN, borderUpColor: UP, borderDownColor: DOWN, wickUpColor: UP, wickDownColor: DOWN,
+      upColor: P.up, downColor: P.down, borderUpColor: P.up, borderDownColor: P.down, wickUpColor: P.up, wickDownColor: P.down,
     })
     const v = chart.addSeries(HistogramSeries, { priceFormat: { type: 'volume' }, priceLineVisible: false }, 1)
     chart.panes()[1]?.setStretchFactor(0.25)
@@ -64,6 +69,18 @@ export default function Chart({ symbol, tf, tz, onState }: Props) {
       chartRef.current = candles.current = volume.current = null
     }
   }, [])
+
+  // đổi giao diện sáng/tối
+  useEffect(() => {
+    const P = PALETTE[theme]
+    chartRef.current?.applyOptions({
+      layout: { background: { type: ColorType.Solid, color: P.bg }, textColor: P.text, panes: { separatorColor: P.line } },
+      grid: { vertLines: { color: P.grid }, horzLines: { color: P.grid } },
+      rightPriceScale: { borderColor: P.line }, timeScale: { borderColor: P.line },
+    })
+    candles.current?.applyOptions({ upColor: P.up, downColor: P.down, borderUpColor: P.up, borderDownColor: P.down, wickUpColor: P.up, wickDownColor: P.down })
+    volume.current?.setData(bars.current.map((b) => ({ time: b.time as UTCTimestamp, value: b.volume, color: volColor(b, P.up, P.down) })))
+  }, [theme])
 
   // đổi múi giờ: vẽ lại nhãn
   useEffect(() => {
@@ -84,7 +101,7 @@ export default function Chart({ symbol, tf, tz, onState }: Props) {
 
     const paint = (all: Bar[], fit: boolean) => {
       candles.current?.setData(all.map((b) => ({ time: b.time as UTCTimestamp, open: b.open, high: b.high, low: b.low, close: b.close })))
-      volume.current?.setData(all.map((b) => ({ time: b.time as UTCTimestamp, value: b.volume, color: volColor(b) })))
+      volume.current?.setData(all.map((b) => ({ time: b.time as UTCTimestamp, value: b.volume, color: volColor(b, PALETTE[themeRef.current].up, PALETTE[themeRef.current].down) })))
       if (fit) chartRef.current?.timeScale().fitContent()
     }
     const apply = (t: Trade) => {
@@ -93,7 +110,7 @@ export default function Chart({ symbol, tf, tz, onState }: Props) {
       const b = applyTrade(bars.current, step, t)
       if (!b) return
       candles.current?.update({ time: b.time as UTCTimestamp, open: b.open, high: b.high, low: b.low, close: b.close })
-      volume.current?.update({ time: b.time as UTCTimestamp, value: b.volume, color: volColor(b) })
+      volume.current?.update({ time: b.time as UTCTimestamp, value: b.volume, color: volColor(b, PALETTE[themeRef.current].up, PALETTE[themeRef.current].down) })
     }
     const load = async () => {
       const my = ++seq

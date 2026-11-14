@@ -30,6 +30,8 @@ export default function App() {
   const [symbol, setSymbol] = useState('')
   const [tf, setTf] = useState(() => pref('tf', '1m', TIMEFRAMES))
   const [tz, setTz] = useState(() => pref('tz', 'UTC', TIMEZONES.map((t) => t.id)))
+  const [theme, setTheme] = useState(() =>
+    pref('theme', window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light', ['light', 'dark']) as 'light' | 'dark')
   const [state, setState] = useState<StreamState>('connecting')
   const [err, setErr] = useState<string | null>(null)
 
@@ -44,6 +46,7 @@ export default function App() {
       .catch((e: unknown) => setErr(String(e)))
   }, [])
 
+  useEffect(() => { document.documentElement.dataset.theme = theme }, [theme])
   const choose = (s: string) => { setSymbol(s); savePref('symbol', s) }
   const update = async (next: string[]) => {
     try {
@@ -97,9 +100,13 @@ export default function App() {
               {TIMEZONES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
           </label>
+          <button className="themebtn" aria-label="Đổi giao diện sáng/tối"
+            onClick={() => { const n = theme === 'dark' ? 'light' : 'dark'; setTheme(n); savePref('theme', n) }}>
+            {theme === 'dark' ? 'Sáng' : 'Tối'}
+          </button>
           <span className={`live ${state}`} role="status" data-testid="stream-state">{STATE_LABEL[state]}</span>
         </header>
-        {symbol && <Chart symbol={symbol} tf={tf} tz={tz} onState={onState} />}
+        {symbol && <Chart symbol={symbol} tf={tf} tz={tz} theme={theme} onState={onState} />}
         {err && <p className="status bad" role="alert">{err}</p>}
       </section>
     </div>
