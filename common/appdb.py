@@ -40,6 +40,17 @@ CREATE TABLE IF NOT EXISTS backfill_log (
   loaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (dataset, symbol, day)
 );
+-- Khoảng hở id của aggTrade mà collector trực tiếp phát hiện. status: open | filled | skipped
+-- Lưu ở đây (không chỉ trong bộ nhớ) để khởi động lại vẫn biết khoảng nào còn phải lấp.
+CREATE TABLE IF NOT EXISTS tick_gaps (
+  symbol  TEXT NOT NULL,
+  from_id INTEGER NOT NULL,
+  to_id   INTEGER NOT NULL,
+  status  TEXT NOT NULL DEFAULT 'open',
+  rows    INTEGER,
+  created TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (symbol, from_id)
+);
 """
 
 

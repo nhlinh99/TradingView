@@ -100,10 +100,18 @@ def agg_trade_to_tick(symbol: str, t: dict) -> tuple:
 
 
 def iter_agg_trades(client: httpx.Client, symbol: str, from_id: int, to_id: int | None = None,
-                    limit: int = 1000, sleep=time.sleep) -> Iterator[dict]:
-    """Phát các aggTrade có id >= from_id (và <= to_id nếu có), tăng dần theo id."""
+                    limit: int = 1000, sleep=time.sleep, pause: float = 0.0) -> Iterator[dict]:
+    """Phát các aggTrade có id >= from_id (và <= to_id nếu có), tăng dần theo id.
+
+    pause: giây nghỉ giữa các trang. Mỗi trang aggTrades tốn trọng số 20 trên giới hạn 2400/phút,
+    nên pause=0,6 giữ dưới giới hạn khi lấp khoảng hở dài.
+    """
     cursor = from_id
+    first = True
     while True:
+        if not first and pause:
+            sleep(pause)
+        first = False
         rows = get_json(client, "/fapi/v1/aggTrades", {"symbol": symbol, "fromId": cursor, "limit": limit}, sleep=sleep)
         if not rows:
             return
