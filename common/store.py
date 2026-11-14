@@ -1,17 +1,21 @@
 """Kho dữ liệu Parquet.
 
 Một nơi duy nhất định nghĩa schema, đường dẫn và cách ghi/đọc.
-Đường dẫn: DATA_DIR/<kind>/<symbol>/date=YYYY-MM-DD[.pNNNN].parquet
-Đọc bằng DuckDB qua glob `date=*.parquet`.
+Đường dẫn: DATA_DIR/<kind>/<symbol>/date=YYYY-MM-DD[.p<part>].parquet
+  - `date=YYYY-MM-DD.parquet`  : file chuẩn của ngày (backfill hoặc kết quả gộp)
+  - `date=YYYY-MM-DD.p<part>.parquet` : file con do collector ghi trong ngày
+Đọc bằng DuckDB qua glob `date=*.parquet`. Dữ liệu trùng (backfill chồng collector) được loại
+khi đọc và khi gộp, dựa vào khoá của từng loại (xem KEYS).
 """
 from __future__ import annotations
 
 import os
 import re
+import time
 import tomllib
 from datetime import date
 from pathlib import Path
-from typing import Sequence
+from typing import Callable, Sequence
 
 import duckdb
 from dotenv import load_dotenv
@@ -19,10 +23,11 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
 
-# Cột đầu tiên của mọi schema phải là `ts` (mili giây UTC). Việc sắp xếp dựa vào nó.
+# Cột `ts` (mili giây UTC) là cột sắp xếp chính của mọi schema.
 SCHEMAS: dict[str, list[tuple[str, str]]] = {
-    # lệnh khớp. p = giá theo tick (số nguyên), q = khối lượng, m = isBuyerMaker (true: taker bán)
-    "ticks": [("ts", "BIGINT"), ("p", "INTEGER"), ("q", "FLOAT"), ("m", "BOOLEAN")],
+    # lệnh khớp gộp. id = aggregate trade id của Binance (duy nhất theo symbol, tăng dần).
+    # p = giá theo tick (số nguyên), q = khối lượng, m = isBuyerMaker (true: taker bán)
+    "ticks": [("ts", "BIGINT"), ("id", "BIGINT"), ("p", "INTEGER"), ("q", "FLOAT"), ("m", "BOOLEAN")],
     # nến. o,h,l,c theo tick. buy_v/sell_v = khối lượng mua/bán chủ động
     "bars": [
         ("ts", "BIGINT"), ("o", "INTEGER"), ("h", "INTEGER"), ("l", "INTEGER"), ("c", "INTEGER"),
@@ -32,8 +37,14 @@ SCHEMAS: dict[str, list[tuple[str, str]]] = {
     "book": [("ts", "BIGINT"), ("p", "INTEGER"), ("bid", "FLOAT"), ("ask", "FLOAT")],
 }
 
+# Khoá duy nhất của từng loại, dùng để loại trùng. Dòng trùng khoá: giữ dòng có ts nhỏ nhất.
+KEYS: dict[str, list[str]] = {"ticks": ["id"], "bars": ["ts"], "book": ["ts", "p"]}
+# Thứ tự sắp xếp khi ghi và đọc (ổn định khi nhiều lệnh cùng mili giây).
+ORDER: dict[str, str] = {"ticks": "ts, id", "bars": "ts", "book": "ts, p"}
+
 INT32_MAX = 2**31 - 1
 _SYMBOL_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+_PART_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
 
 
 class DataDirError(ValueError):
@@ -99,22 +110,59 @@ def from_int_price(symbol: str, p: int) -> float:
     return round(p * tick, 10)
 
 
-# ---------- ghi / đọc ----------
+# ---------- thao tác file có thử lại (Windows khoá file đang mở) ----------
 
-def partition_path(kind: str, symbol: str, day: date, part: int | None = None) -> Path:
+def _retry(fn: Callable[[], None], tries: int = 8) -> None:
+    for i in range(tries):
+        try:
+            fn()
+            return
+        except PermissionError:
+            if i == tries - 1:
+                raise
+            time.sleep(0.05 * (2 ** i))
+
+
+def _replace(src: Path, dst: Path) -> None:
+    _retry(lambda: os.replace(src, dst))
+
+
+def _unlink(path: Path) -> None:
+    _retry(lambda: path.unlink(missing_ok=True))
+
+
+# ---------- ghi ----------
+
+def partition_path(kind: str, symbol: str, day: date, part: int | str | None = None) -> Path:
+    """part=None: file chuẩn của ngày. part=int hoặc str: file con của collector.
+
+    Với collector, dùng giá trị không bao giờ lặp lại giữa các lần chạy (ví dụ id đầu tiên
+    trong file, hoặc mốc thời gian), không dùng bộ đếm bắt đầu lại từ 1 sau mỗi lần khởi động.
+    """
     _check(kind, symbol)
-    suffix = "" if part is None else f".p{part:04d}"
+    if part is None:
+        suffix = ""
+    elif isinstance(part, int):
+        suffix = f".p{part:04d}"
+    else:
+        if not _PART_RE.match(part):
+            raise ValueError(f"part không hợp lệ: {part!r}")
+        suffix = f".p{part}"
     return data_dir() / kind / symbol / f"date={day.isoformat()}{suffix}.parquet"
 
 
+_COPY_OPTS = "(FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 9)"
+
+
 def write_partition(
-    kind: str, symbol: str, day: date, data: Sequence[tuple] | str, part: int | None = None
+    kind: str, symbol: str, day: date, data: Sequence[tuple] | str, part: int | str | None = None
 ) -> Path:
-    """Ghi một file Parquet (zstd mức 9), sắp xếp theo ts.
+    """Ghi một file Parquet (zstd mức 9), sắp xếp theo ORDER[kind].
 
     data: danh sách tuple theo thứ tự cột của SCHEMAS[kind], hoặc một câu SELECT của DuckDB
     (dùng cho khối lượng lớn; chỉ truyền chuỗi do chính code của dự án tạo ra).
-    Ghi ra file `.tmp` rồi đổi tên, nên không bao giờ để lại file nửa vời.
+    Ghi ra file `.tmp` rồi đổi tên, nên không bao giờ để lại file nửa vời. Nếu file đích đang bị
+    tiến trình khác mở, thử lại vài lần.
     Ghi lại cùng (kind, symbol, day, part) sẽ thay thế file cũ.
     """
     cols = SCHEMAS[kind]
@@ -133,11 +181,8 @@ def write_partition(
                 raise ValueError(f"mỗi dòng cần {len(cols)} cột {[c for c, _ in cols]}, gặp {bad[0]!r}")
             if rows:
                 con.executemany(f"INSERT INTO t VALUES ({','.join('?' * len(cols))})", rows)
-        con.execute(
-            f"COPY (SELECT * FROM t ORDER BY ts) TO {_sql_str(tmp)} "
-            "(FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 9)"
-        )
-        os.replace(tmp, final)
+        con.execute(f"COPY (SELECT * FROM t ORDER BY {ORDER[kind]}) TO {_sql_str(tmp)} {_COPY_OPTS}")
+        _replace(tmp, final)
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise
@@ -146,19 +191,92 @@ def write_partition(
     return final
 
 
-def scan_sql(kind: str, symbol: str) -> str:
-    """Biểu thức FROM cho SQL tuỳ ý: SELECT ... FROM <scan_sql> WHERE ..."""
+def day_files(kind: str, symbol: str, day: date) -> list[Path]:
+    """Mọi file của một ngày: file chuẩn và các file con."""
     _check(kind, symbol)
-    return f"read_parquet({_sql_str(data_dir() / kind / symbol / 'date=*.parquet')})"
+    folder = data_dir() / kind / symbol
+    if not folder.exists():
+        return []
+    d = day.isoformat()
+    return sorted(p for p in folder.glob(f"date={d}*.parquet") if p.name == f"date={d}.parquet" or p.name.startswith(f"date={d}.p"))
+
+
+def _dedupe_from(kind: str, from_expr: str) -> str:
+    keys = KEYS.get(kind)
+    if not keys:
+        return f"SELECT * FROM {from_expr}"
+    part = ", ".join(keys)
+    return (
+        f"SELECT * EXCLUDE (_rn) FROM (SELECT *, row_number() OVER (PARTITION BY {part} ORDER BY ts) AS _rn "
+        f"FROM {from_expr}) WHERE _rn = 1"
+    )
+
+
+def merge_day(kind: str, symbol: str, day: date) -> Path | None:
+    """Gộp mọi file của ngày thành một file chuẩn, loại dòng trùng khoá.
+
+    Việc cần thiết vì backfill (cả ngày) và collector (nhiều file con) có thể chồng nhau.
+    Thứ tự an toàn: ghi bản gộp ra file tạm, kiểm tra số dòng, thay file chuẩn, rồi mới xoá
+    file con. Nếu bị ngắt giữa chừng, dữ liệu vẫn đủ và đọc có loại trùng vẫn đúng.
+    Trả về None nếu ngày không có file. Không làm gì nếu chỉ có đúng file chuẩn.
+    """
+    files = day_files(kind, symbol, day)
+    if not files:
+        return None
+    canonical = partition_path(kind, symbol, day)
+    if files == [canonical]:
+        return canonical
+    flist = "[" + ", ".join(_sql_str(f) for f in files) + "]"
+    src = f"read_parquet({flist}, union_by_name=true)"
+    tmp = canonical.with_name(canonical.name + ".tmp")
+    try:
+        con = duckdb.connect()
+        try:
+            merged_sql = _dedupe_from(kind, src)
+            con.execute(f"COPY ({merged_sql} ORDER BY {ORDER[kind]}) TO {_sql_str(tmp)} {_COPY_OPTS}")
+            n_out = con.execute(f"SELECT count(*) FROM read_parquet({_sql_str(tmp)})").fetchall()[0][0]
+            keys = KEYS.get(kind)
+            if keys:
+                n_expected = con.execute(
+                    f"SELECT count(*) FROM (SELECT DISTINCT {', '.join(keys)} FROM {src})"
+                ).fetchall()[0][0]
+                if n_out != n_expected:
+                    raise RuntimeError(f"gộp sai số dòng: {n_out} != {n_expected} ({kind} {symbol} {day})")
+        finally:
+            con.close()  # đóng trước khi thay file, để Windows không giữ khoá
+        _replace(tmp, canonical)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+    for f in files:
+        if f != canonical:
+            _unlink(f)
+    return canonical
+
+
+# ---------- đọc ----------
+
+def scan_sql(kind: str, symbol: str) -> str:
+    """Biểu thức FROM cho SQL tuỳ ý: SELECT ... FROM <scan_sql> WHERE ...
+
+    Không loại trùng. Dùng read() hoặc dedupe_sql() khi cần dữ liệu sạch.
+    """
+    _check(kind, symbol)
+    return f"read_parquet({_sql_str(data_dir() / kind / symbol / 'date=*.parquet')}, union_by_name=true)"
+
+
+def dedupe_sql(kind: str, symbol: str) -> str:
+    """Câu SELECT trả về mọi dòng đã loại trùng khoá. Dùng làm bảng con: FROM (<dedupe_sql>)."""
+    return _dedupe_from(kind, scan_sql(kind, symbol))
 
 
 def read(
     kind: str, symbol: str, start_ms: int | None = None, end_ms: int | None = None,
-    columns: Sequence[str] | None = None,
+    columns: Sequence[str] | None = None, dedupe: bool = True,
 ) -> list[tuple]:
-    """Đọc mọi file của (kind, symbol), lọc ts trong [start_ms, end_ms), sắp theo ts.
+    """Đọc mọi file của (kind, symbol), lọc ts trong [start_ms, end_ms), sắp theo ORDER[kind].
 
-    Chưa loại trùng nếu hai file chồng thời gian. Job gom nén chịu trách nhiệm việc đó.
+    dedupe=True loại dòng trùng khoá (an toàn khi backfill chồng collector chưa được gộp).
     """
     _check(kind, symbol)
     names = [n for n, _ in SCHEMAS[kind]]
@@ -175,10 +293,11 @@ def read(
     if end_ms is not None:
         where.append("ts < ?"); params.append(end_ms)
     sel = ", ".join(columns) if columns else "*"
-    sql = f"SELECT {sel} FROM {scan_sql(kind, symbol)}"
+    base = dedupe_sql(kind, symbol) if dedupe else f"SELECT * FROM {scan_sql(kind, symbol)}"
+    sql = f"SELECT {sel} FROM ({base})"
     if where:
         sql += " WHERE " + " AND ".join(where)
-    sql += " ORDER BY ts"
+    sql += f" ORDER BY {ORDER[kind]}"
     con = duckdb.connect()
     try:
         return con.execute(sql, params).fetchall()

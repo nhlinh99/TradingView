@@ -21,3 +21,7 @@ dev = ["pytest"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+# Test cần mạng (Binance thật) bị bỏ qua mặc định, để lỗi mạng không chặn commit.
+# Chạy chúng:  python -m pytest -m live
+addopts = "-m 'not live'"
+markers = ["live: cần kết nối mạng tới Binance"]

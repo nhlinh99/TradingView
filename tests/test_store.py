@@ -1,3 +1,4 @@
+import os
 import random
 from datetime import date
 from pathlib import Path
@@ -17,19 +18,23 @@ def data_root(tmp_path, monkeypatch):
     return root
 
 
-def make_ticks(n=1000, seed=1):
+def make_ticks(n=1000, seed=1, id0=0):
     rng = random.Random(seed)
-    # q là bội của 0,5 nên float32 biểu diễn chính xác
-    rows = [(BASE_TS + i, 670_000 + (i % 500), (i % 7) * 0.5, i % 2 == 0) for i in range(n)]
+    # q là bội của 0,5 nên float32 biểu diễn chính xác. Cột: ts, id, p, q, m
+    rows = [(BASE_TS + i, id0 + i, 670_000 + (i % 500), (i % 7) * 0.5, i % 2 == 0) for i in range(n)]
     rng.shuffle(rows)
     return rows
+
+
+def by_key(rows):
+    return sorted(rows, key=lambda r: (r[0], r[1]))
 
 
 def test_roundtrip_1000_rows_match_and_sorted(data_root):
     rows = make_ticks()
     store.write_partition("ticks", "BTCUSDT", DAY, rows)
     back = store.read("ticks", "BTCUSDT")
-    assert back == sorted(rows, key=lambda r: r[0])
+    assert back == by_key(rows)
     assert len(back) == 1000
 
 
@@ -40,7 +45,7 @@ def test_no_tmp_file_left_after_write(data_root):
 
 
 def test_failed_write_leaves_no_file(data_root):
-    bad = [(BASE_TS, 1, 1.0)]  # thiếu cột m
+    bad = [(BASE_TS, 1, 1, 1.0)]  # thiếu cột m
     with pytest.raises(ValueError):
         store.write_partition("ticks", "BTCUSDT", DAY, bad)
     folder = data_root / "ticks" / "BTCUSDT"
@@ -52,7 +57,7 @@ def test_failed_write_keeps_previous_file(data_root):
     store.write_partition("ticks", "BTCUSDT", DAY, good)
     with pytest.raises(ValueError):
         store.write_partition("ticks", "BTCUSDT", DAY, [(1, 2)])
-    assert store.read("ticks", "BTCUSDT") == sorted(good, key=lambda r: r[0])
+    assert store.read("ticks", "BTCUSDT") == by_key(good)
 
 
 def test_rewrite_replaces_file(data_root):
@@ -63,15 +68,14 @@ def test_rewrite_replaces_file(data_root):
 
 
 def test_time_range_filter(data_root):
-    rows = make_ticks(100)
-    store.write_partition("ticks", "BTCUSDT", DAY, rows)
+    store.write_partition("ticks", "BTCUSDT", DAY, make_ticks(100))
     got = store.read("ticks", "BTCUSDT", start_ms=BASE_TS + 10, end_ms=BASE_TS + 20)
     assert [r[0] for r in got] == list(range(BASE_TS + 10, BASE_TS + 20))
 
 
 def test_parts_are_read_together(data_root):
     store.write_partition("ticks", "BTCUSDT", DAY, make_ticks(10), part=1)
-    later = [(BASE_TS + 1000 + i, 1, 1.0, True) for i in range(5)]
+    later = [(BASE_TS + 1000 + i, 1000 + i, 1, 1.0, True) for i in range(5)]
     store.write_partition("ticks", "BTCUSDT", DAY, later, part=2)
     got = store.read("ticks", "BTCUSDT")
     assert len(got) == 15
@@ -91,7 +95,7 @@ def test_read_selected_columns(data_root):
 
 
 def test_bulk_write_from_sql(data_root):
-    sql = "SELECT (1700000000000 + i)::BIGINT, 5::INTEGER, 1.5::FLOAT, true FROM range(50000) r(i)"
+    sql = "SELECT (1700000000000 + i)::BIGINT, i::BIGINT, 5::INTEGER, 1.5::FLOAT, true FROM range(50000) r(i)"
     store.write_partition("ticks", "BTCUSDT", DAY, sql)
     assert len(store.read("ticks", "BTCUSDT")) == 50_000
 
@@ -103,9 +107,115 @@ def test_symbol_path_traversal_rejected(data_root):
         store.partition_path("ticks", "a/b", DAY)
 
 
+def test_part_name_validated(data_root):
+    with pytest.raises(ValueError):
+        store.partition_path("ticks", "BTCUSDT", DAY, part="../x")
+    assert store.partition_path("ticks", "BTCUSDT", DAY, part="123456").name == "date=2026-11-10.p123456.parquet"
+    assert store.partition_path("ticks", "BTCUSDT", DAY, part=3).name == "date=2026-11-10.p0003.parquet"
+
+
 def test_unknown_kind_rejected(data_root):
     with pytest.raises(KeyError):
         store.partition_path("nope", "BTCUSDT", DAY)
+
+
+# ---------- trùng lặp và gộp ----------
+
+def test_two_collector_runs_same_day_keep_all_rows(data_root):
+    """Hai lần chạy collector cùng một ngày không ghi đè file của nhau (part theo id đầu tiên)."""
+    run1 = make_ticks(100, id0=0)
+    run2 = make_ticks(100, id0=1000)
+    store.write_partition("ticks", "BTCUSDT", DAY, run1, part=str(min(r[1] for r in run1)))
+    store.write_partition("ticks", "BTCUSDT", DAY, run2, part=str(min(r[1] for r in run2)))
+    assert len(store.read("ticks", "BTCUSDT")) == 200
+
+
+def test_read_dedupes_overlap_between_backfill_and_parts(data_root):
+    full = make_ticks(100)                      # backfill cả ngày: id 0..99
+    store.write_partition("ticks", "BTCUSDT", DAY, full)
+    live = [r for r in make_ticks(100) if r[1] >= 90]  # collector trùng id 90..99
+    store.write_partition("ticks", "BTCUSDT", DAY, live, part="90")
+    assert len(store.read("ticks", "BTCUSDT")) == 100
+    assert len(store.read("ticks", "BTCUSDT", dedupe=False)) == 110
+
+
+def test_merge_day_dedupes_and_removes_parts(data_root):
+    store.write_partition("ticks", "BTCUSDT", DAY, make_ticks(100))
+    live = [r for r in make_ticks(100) if r[1] >= 90] + [(BASE_TS + 500, 500, 1, 1.0, True)]
+    store.write_partition("ticks", "BTCUSDT", DAY, live, part="90")
+    out = store.merge_day("ticks", "BTCUSDT", DAY)
+    assert out == store.partition_path("ticks", "BTCUSDT", DAY)
+    names = sorted(p.name for p in (data_root / "ticks" / "BTCUSDT").iterdir())
+    assert names == ["date=2026-11-10.parquet"]
+    rows = store.read("ticks", "BTCUSDT", dedupe=False)
+    assert len(rows) == 101 and len({r[1] for r in rows}) == 101
+
+
+def test_merge_day_without_canonical_file(data_root):
+    store.write_partition("ticks", "BTCUSDT", DAY, make_ticks(10, id0=0), part="0")
+    store.write_partition("ticks", "BTCUSDT", DAY, make_ticks(10, id0=10), part="10")
+    store.merge_day("ticks", "BTCUSDT", DAY)
+    assert [p.name for p in (data_root / "ticks" / "BTCUSDT").iterdir()] == ["date=2026-11-10.parquet"]
+    assert len(store.read("ticks", "BTCUSDT", dedupe=False)) == 20
+
+
+def test_merge_day_noop_cases(data_root):
+    assert store.merge_day("ticks", "BTCUSDT", DAY) is None
+    store.write_partition("ticks", "BTCUSDT", DAY, make_ticks(5))
+    before = (data_root / "ticks" / "BTCUSDT" / "date=2026-11-10.parquet").stat().st_mtime_ns
+    store.merge_day("ticks", "BTCUSDT", DAY)
+    assert (data_root / "ticks" / "BTCUSDT" / "date=2026-11-10.parquet").stat().st_mtime_ns == before
+
+
+def test_merge_does_not_touch_other_days(data_root):
+    store.write_partition("ticks", "BTCUSDT", DAY, make_ticks(5), part="a")
+    other = date(2026, 11, 11)
+    store.write_partition("ticks", "BTCUSDT", other, make_ticks(5, id0=100), part="b")
+    store.merge_day("ticks", "BTCUSDT", DAY)
+    names = sorted(p.name for p in (data_root / "ticks" / "BTCUSDT").iterdir())
+    assert names == ["date=2026-11-10.parquet", "date=2026-11-11.pb.parquet"]
+
+
+def test_bars_dedupe_by_ts_and_book_by_ts_and_price(data_root):
+    bar = (BASE_TS, 1, 2, 1, 2, 3.0, 1.0, 2.0)
+    store.write_partition("bars", "BTCUSDT", DAY, [bar], part="a")
+    store.write_partition("bars", "BTCUSDT", DAY, [bar, (BASE_TS + 60000, 2, 3, 2, 3, 1.0, 1.0, 0.0)], part="b")
+    assert len(store.read("bars", "BTCUSDT")) == 2
+    b1 = (BASE_TS, 100, 1.0, 2.0)
+    b2 = (BASE_TS, 101, 1.0, 2.0)
+    store.write_partition("book", "BTCUSDT", DAY, [b1, b2], part="a")
+    store.write_partition("book", "BTCUSDT", DAY, [b1], part="b")
+    assert len(store.read("book", "BTCUSDT")) == 2
+
+
+# ---------- Windows khoá file ----------
+
+def test_replace_retries_on_permission_error(data_root, monkeypatch):
+    calls = {"n": 0}
+    real = os.replace
+
+    def flaky(src, dst):
+        calls["n"] += 1
+        if calls["n"] <= 2:
+            raise PermissionError("file đang được mở")
+        return real(src, dst)
+
+    monkeypatch.setattr(store.os, "replace", flaky)
+    monkeypatch.setattr(store.time, "sleep", lambda s: None)
+    store.write_partition("ticks", "BTCUSDT", DAY, make_ticks(5))
+    assert calls["n"] == 3
+    assert len(store.read("ticks", "BTCUSDT")) == 5
+
+
+def test_replace_gives_up_after_many_failures(data_root, monkeypatch):
+    def always(src, dst):
+        raise PermissionError("khoá")
+
+    monkeypatch.setattr(store.os, "replace", always)
+    monkeypatch.setattr(store.time, "sleep", lambda s: None)
+    with pytest.raises(PermissionError):
+        store.write_partition("ticks", "BTCUSDT", DAY, make_ticks(5))
+    assert [p for p in (data_root / "ticks" / "BTCUSDT").iterdir()] == []  # không còn file tạm
 
 
 # ---------- DATA_DIR ----------
@@ -140,7 +250,6 @@ def test_real_env_data_dir_is_outside_onedrive():
 
     values = dotenv_values(store.ROOT / ".env")
     assert "DATA_DIR" in values, ".env thiếu DATA_DIR"
-    import os
     old = os.environ.get("DATA_DIR")
     os.environ["DATA_DIR"] = values["DATA_DIR"]
     try:
