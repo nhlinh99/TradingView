@@ -350,6 +350,12 @@ class Parser:
         return ExprStmt(e, line=line)
 
     GENERIC = {"array", "map", "matrix"}
+    QUALIFIERS = {"series", "simple", "const", "input"}
+
+    def skip_qualifiers(self) -> None:
+        """`series int x`, `simple float y`: bỏ qualifier đứng trước kiểu."""
+        while self.cur.kind == "ID" and self.cur.value in self.QUALIFIERS and self.peek().kind == "ID" and self.peek(2).kind == "ID":
+            self.p += 1
 
     def type_len(self) -> int:
         """Số token của tiền tố kiểu (`float`, `box[]`, `array<float>`, `chart.point`, tên kiểu của người dùng) nếu ngay sau là một
@@ -494,6 +500,7 @@ class Parser:
         self.eat_op("(")
         params = []
         while not self.is_op(")"):
+            self.skip_qualifiers()
             self.p += self.type_len()
             pn = self.name()
             default = None

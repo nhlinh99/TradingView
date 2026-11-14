@@ -94,6 +94,20 @@ export default function PineObjects({ result, tf, chart, candles, bars, version 
           ctx.beginPath(); ctx.moveTo(x1, ya1); ctx.lineTo(x2, ya2); ctx.lineTo(x2, yb2); ctx.lineTo(x1, yb1); ctx.closePath(); ctx.fill()
         }
       }
+      for (const pl of objs.polylines ?? []) {
+        const pts = pl.points.flatMap((pt) => {
+          const y = pt.price === null ? null : yOf(pt.price)
+          let idx = pt.index
+          if (idx === null && pt.time !== null) idx = rtimes.findIndex((t) => t * 1000 >= (pt.time as number)) // time (ms) -> chỉ số nến gần nhất phía sau
+          return y === null || idx === null || idx < 0 ? [] : [{ x: xOf(idx), y }]
+        })
+        if (pts.length < 2) continue
+        ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y)
+        for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y)
+        if (pl.closed) ctx.closePath()
+        if (pl.fill_color) { ctx.fillStyle = css(pl.fill_color, 'transparent'); ctx.fill() }
+        ctx.strokeStyle = css(pl.line_color, '#888'); ctx.lineWidth = Number(pl.line_width) || 1; ctx.setLineDash(DASH[String(pl.line_style)] ?? []); ctx.stroke(); ctx.setLineDash([])
+      }
       for (const b of objs.boxes) {
         const x1 = xOf(b.left as number); const x2 = xOf(b.right as number)
         const y1 = yOf(b.top as number); const y2 = yOf(b.bottom as number)

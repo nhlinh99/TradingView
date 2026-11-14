@@ -14,7 +14,8 @@ NAN = float("nan")
 MAX_OBJECTS = 500          # như max_lines_count, max_labels_count, max_boxes_count mặc định của Pine
 
 I.CONSTS.update({
-    **{f"display.{k}": k for k in ("all", "none", "pane", "data_window", "price_scale", "status_line")},
+    "display.none": 0, "display.pane": 1, "display.data_window": 2, "display.price_scale": 4, "display.status_line": 8, "display.all": 15,
+    "display.pine_screener": 16,
     **{f"position.{k}": k for k in ("top_left", "top_center", "top_right", "middle_left", "middle_center", "middle_right",
                                     "bottom_left", "bottom_center", "bottom_right")},
     **{f"label.style_{k}": k for k in ("label_up", "label_down", "label_left", "label_right", "label_center", "label_lower_left",
@@ -28,6 +29,8 @@ I.CONSTS.update({
     **{f"alert.freq_{k}": k for k in ("all", "once_per_bar", "once_per_bar_close")},
     **{f"size.{k}": k for k in ("auto",)},
     "format.mintick": "mintick", "format.price": "price", "format.volume": "volume",
+    **{f"earnings.{k}": k for k in ("actual", "estimate", "standardized")}, **{f"dividends.{k}": k for k in ("gross", "net")},
+    **{f"splits.{k}": k for k in ("numerator", "denominator")}, "barmerge.lookahead_off": False,
     "barstate.isrealtime": False, "barstate.ishistory": True, "barstate.isnew": True, "barstate.isconfirmed": True,
 })
 
@@ -240,18 +243,74 @@ def _store(it, kind):
     return lst
 
 
+def time_to_index(it, t) -> float:
+    """Chỉ số nến (có thể thập phân, âm hoặc vượt nến cuối) ứng với thời điểm t (ms)."""
+    import bisect
+    if isna(t):
+        return NAN
+    ts = it.bars.time
+    if not ts:
+        return NAN
+    if t >= ts[-1]:
+        return (len(ts) - 1) + (t - ts[-1]) / it.tf_ms
+    if t <= ts[0]:
+        return (t - ts[0]) / it.tf_ms
+    j = bisect.bisect_right(ts, t) - 1
+    return j + (t - ts[j]) / (ts[j + 1] - ts[j])
+
+
+def _is_point(x) -> bool:
+    return isinstance(x, dict) and x.get("_k") == "point"
+
+
+def point_xy(it, p: dict, xloc: str = "bar_index"):
+    """(x theo chỉ số nến, giá) của một chart.point; ưu tiên `index`, không có thì đổi từ `time`."""
+    x = p.get("index")
+    if x is None or isna(x):
+        x = time_to_index(it, p.get("time"))
+    return x, p.get("price")
+
+
+XFIELDS = {"line": ("x1", "x2"), "label": ("x",), "box": ("left", "right")}
+
+
 def _make(kind, fields):
-    """fields: danh sách (tên tham số theo thứ tự vị trí, mặc định)."""
+    """fields: danh sách (tên tham số theo thứ tự vị trí, mặc định). Nhận cả dạng toạ độ lẻ lẫn dạng chart.point."""
     def f(it, node, args, kw):
+        args = list(args)
+        npts = {"line": 2, "box": 2, "label": 1}[kind]
+        if args and _is_point(args[0]):
+            coords = []
+            for p in args[:npts]:
+                coords.extend(point_xy(it, p))
+            args = coords + args[npts:]
+        for nm in ("first_point", "top_left", "point"):          # tên tham số của dạng chart.point khi truyền theo tên
+            if nm in kw and _is_point(kw[nm]):
+                kw = dict(kw)
+                args = list(point_xy(it, kw.pop(nm))) + args
         o = {"_k": kind, "dead": False}
         for i, (name, default) in enumerate(fields):
             o[name] = A(args, kw, i, name, default)
+        if o.get("xloc") == "bar_time":
+            for xf in XFIELDS[kind]:
+                o[xf] = time_to_index(it, o[xf])
         o["bar"] = it.i
         lst = it.objs[{"line": "lines", "label": "labels", "box": "boxes"}[kind]]
         lst.append(o)
         if len(lst) > MAX_OBJECTS * 4:           # giữ bộ nhớ có giới hạn: bỏ các đối tượng đã xoá lâu nhất
             lst[:] = [x for x in lst if not x["dead"]][-MAX_OBJECTS:]
         return o
+    return f
+
+
+def _point_setter(*fields):
+    """set_first_point(p) -> ghi (x, y) của chart.point vào hai trường."""
+    def f(it, node, args, kw):
+        o, p = args[0], args[1]
+        if isinstance(o, dict) and _is_point(p):
+            x, y = point_xy(it, p)
+            o[fields[0]], o[fields[1]] = x, y
+        return NAN
     return f
 
 
@@ -356,6 +415,355 @@ def _cast(fn):
     return f
 
 
+def f_timestamp(it, node, args, kw):
+    """timestamp("2024-01-01 00:00") hoặc timestamp(năm, tháng, ngày, giờ, phút, giây); trả về mili giây UTC (múi giờ sàn bỏ qua)."""
+    import datetime as dt
+    if args and isinstance(args[0], str):
+        s = args[0].strip().replace("T", " ")
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+            try:
+                return float(dt.datetime.strptime(s[:19], fmt).replace(tzinfo=dt.timezone.utc).timestamp() * 1000)
+            except ValueError:
+                continue
+        return NAN
+    vals = [int(I._num(x)) for x in args[:6]] + [0] * (6 - len(args[:6]))
+    y, m, d = vals[0], max(1, vals[1] or 1), max(1, vals[2] or 1)
+    try:
+        return float(dt.datetime(y, m, d, vals[3], vals[4], vals[5], tzinfo=dt.timezone.utc).timestamp() * 1000)
+    except ValueError:
+        return NAN
+
+
+def tf_in_seconds(it, node, args, kw):
+    tf = args[0] if args else it.tf
+    return float(I.tf_to_ms(tf) // 1000)
+
+
+def tf_change(it, node, args, kw):
+    """timeframe.change(tf): đúng ở nến đầu của mỗi kỳ hạn tf (theo lịch cho D/W/M, theo bội chia đều cho còn lại)."""
+    tf = args[0] if args else it.tf
+    t = float(it.bars.time[it.i] + it.tz)
+    prev = float(it.bars.time[it.i - 1] + it.tz) if it.i > 0 else None
+    if prev is None:
+        return True
+    tfs = str(tf).upper()
+    if tfs in ("D", "1D"):
+        return t // 86_400_000 != prev // 86_400_000
+    if tfs in ("W", "1W"):
+        return ((t // 86_400_000 + 3) // 7) != ((prev // 86_400_000 + 3) // 7)
+    if tfs in ("M", "1M"):
+        import datetime as dt
+        a, b = dt.datetime.fromtimestamp(t / 1000, dt.timezone.utc), dt.datetime.fromtimestamp(prev / 1000, dt.timezone.utc)
+        return (a.year, a.month) != (b.year, b.month)
+    step = I.tf_to_ms(tf)
+    return t // step != prev // step
+
+
+def cp_new(it, node, args, kw):
+    return {"_k": "point", "time": A(args, kw, 0, "time", NAN), "index": A(args, kw, 1, "index", NAN), "price": A(args, kw, 2, "price", NAN)}
+
+
+def cp_from_index(it, node, args, kw):
+    return {"_k": "point", "time": NAN, "index": A(args, kw, 0, "index", NAN), "price": A(args, kw, 1, "price", NAN)}
+
+
+def cp_from_time(it, node, args, kw):
+    return {"_k": "point", "time": A(args, kw, 0, "time", NAN), "index": NAN, "price": A(args, kw, 1, "price", NAN)}
+
+
+def cp_now(it, node, args, kw):
+    return {"_k": "point", "time": float(it.bars.time[it.i]), "index": float(it.i), "price": A(args, kw, 0, "price", NAN)}
+
+
+def poly_new(it, node, args, kw):
+    pts = [p for p in _arr(A(args, kw, 0, "points", [])) if isinstance(p, dict)]
+    o = {"_k": "polyline", "dead": False, "points": [{"index": p.get("index"), "time": p.get("time"), "price": p.get("price")} for p in pts],
+         "curved": bool(kw.get("curved", False)), "closed": bool(kw.get("closed", False)), "line_color": kw.get("line_color"),
+         "fill_color": kw.get("fill_color"), "line_style": kw.get("line_style", "solid"), "line_width": kw.get("line_width", 1)}
+    it.objs.setdefault("polylines", []).append(o)
+    return o
+
+
+def f_plotcandle(it, node, args, kw):
+    """plotcandle/plotbar: vẽ nến riêng (thường để tô lại màu nến của biểu đồ)."""
+    rec = it.candles.get(node.id)
+    if rec is None:
+        rec = it.candles[node.id] = {"title": kw.get("title", ""), "ohlc": [None] * it.n, "color": [None] * it.n,
+                                     "wick": [None] * it.n, "border": [None] * it.n, "bar": node.id}
+    vals = [I._num(A(args, kw, k, nm)) for k, nm in enumerate(("open", "high", "low", "close"))]
+    if not any(isna(v) for v in vals):
+        rec["ohlc"][it.i] = vals
+        rec["color"][it.i] = I._col(kw.get("color"))
+        rec["wick"][it.i] = I._col(kw.get("wickcolor", kw.get("color")))
+        rec["border"][it.i] = I._col(kw.get("bordercolor", kw.get("color")))
+    return NAN
+
+
+def f_plotchar(it, node, args, kw):
+    """plotchar(series, char=..., location=...): ghi thành marker có chữ."""
+    v = A(args, kw, 0, "series")
+    p = it.shapes.get(node.id)
+    if p is None:
+        p = it.shapes[node.id] = {"title": A(args, kw, 1, "title", None) or f"Char {len(it.shapes)}", "shape": "circle",
+                                  "location": A(args, kw, 3, "location", "abovebar"), "size": kw.get("size", "small"),
+                                  "text": str(A(args, kw, 2, "char", kw.get("text", ""))), "values": [False] * it.n, "colors": [None] * it.n}
+    p["values"][it.i] = I._truthy(v) and not isna(v)
+    p["colors"][it.i] = I._col(kw.get("color"))
+    return NAN
+
+
+def f_plotarrow(it, node, args, kw):
+    v = I._num(A(args, kw, 0, "series"))
+    up = I._truthy(v) and v > 0
+    dn = I._truthy(v) and v < 0
+    for suffix, on, shape, loc, key in (("up", up, "arrowup", "belowbar", "colorup"), ("down", dn, "arrowdown", "abovebar", "colordown")):
+        k = (node.id, suffix)
+        p = it.shapes.get(k)
+        if p is None:
+            p = it.shapes[k] = {"title": f"Arrow {suffix}", "shape": shape, "location": loc, "size": "small", "text": "",
+                                "values": [False] * it.n, "colors": [None] * it.n}
+        p["values"][it.i] = on
+        p["colors"][it.i] = I._col(kw.get(key))
+    return NAN
+
+
+def a_indexof(it, node, args, kw):
+    a = _arr(args[0])
+    try:
+        return float(a.index(args[1]))
+    except ValueError:
+        return -1.0
+
+
+def a_lastindexof(it, node, args, kw):
+    a = _arr(args[0])
+    for i in range(len(a) - 1, -1, -1):
+        if a[i] == args[1]:
+            return float(i)
+    return -1.0
+
+
+def a_slice(it, node, args, kw):
+    a = _arr(args[0])
+    return a[int(args[1]):int(args[2])]          # Pine: chỉ số cuối không gồm
+
+
+def a_sort(it, node, args, kw):
+    a = _arr(args[0])
+    desc = str(A(args, kw, 1, "order", "ascending")) == "descending"
+    a.sort(key=lambda x: (isna(x), x), reverse=desc)
+    return NAN
+
+
+def a_median(it, node, args, kw):
+    v = sorted(_nums(_arr(args[0])))
+    if not v:
+        return NAN
+    m = len(v) // 2
+    return v[m] if len(v) % 2 else (v[m - 1] + v[m]) / 2
+
+
+def a_stdev(it, node, args, kw):
+    v = _nums(_arr(args[0]))
+    if not v:
+        return NAN
+    mu = sum(v) / len(v)
+    return math.sqrt(sum((x - mu) ** 2 for x in v) / len(v))
+
+
+def a_fill(it, node, args, kw):
+    a = _arr(args[0])
+    lo = int(A(args, kw, 2, "index_from", 0))
+    hi = int(A(args, kw, 3, "index_to", len(a)))
+    for i in range(lo, hi):
+        a[i] = args[1]
+    return NAN
+
+
+# ---------------- chỉ báo bổ sung ----------------
+
+class Supertrend:
+    """ta.supertrend(factor, atrPeriod) -> [giá trị, hướng]; hướng -1 là xu hướng tăng, 1 là xu hướng giảm (như Pine)."""
+
+    def __init__(self, factor: float, n: int):
+        from .ta import make_rma, true_range
+        self.f, self.r, self.tr = factor, make_rma(n), true_range
+        self.pc = self.pl = self.pu = self.pst = None
+
+    def update(self, h: float, l: float, c: float):
+        trv = self.tr(h, l, self.pc)
+        atr = self.r.update(trv)
+        src = (h + l) / 2
+        if isna(atr):
+            self.pc = c
+            return [NAN, NAN]
+        lower, upper = src - self.f * atr, src + self.f * atr
+        if self.pl is not None:
+            lower = lower if (lower > self.pl or self.pc < self.pl) else self.pl
+            upper = upper if (upper < self.pu or self.pc > self.pu) else self.pu
+        if self.pst is None:
+            direction = 1
+        elif self.pst == self.pu:
+            direction = -1 if c > upper else 1
+        else:
+            direction = 1 if c < lower else -1
+        st = lower if direction == -1 else upper
+        self.pl, self.pu, self.pst, self.pc = lower, upper, st, c
+        return [st, float(direction)]
+
+
+class Sar:
+    def __init__(self, start: float, inc: float, mx: float):
+        self.start, self.inc, self.mx = start, inc, mx
+        self.prev = None
+        self.sar = self.ep = self.af = None
+        self.up = True
+
+    def update(self, h: float, l: float):
+        if self.prev is None:
+            self.prev = (h, l)
+            return NAN
+        ph, pl = self.prev
+        if self.sar is None:
+            self.up = h >= ph
+            self.sar = pl if self.up else ph
+            self.ep = h if self.up else l
+            self.af = self.start
+        else:
+            self.sar = self.sar + self.af * (self.ep - self.sar)
+            if self.up:
+                self.sar = min(self.sar, pl, self.prev[1])
+                if l < self.sar:
+                    self.up, self.sar, self.ep, self.af = False, self.ep, l, self.start
+                elif h > self.ep:
+                    self.ep, self.af = h, min(self.af + self.inc, self.mx)
+            else:
+                self.sar = max(self.sar, ph, self.prev[0])
+                if h > self.sar:
+                    self.up, self.sar, self.ep, self.af = True, self.ep, h, self.start
+                elif l < self.ep:
+                    self.ep, self.af = l, min(self.af + self.inc, self.mx)
+        self.prev = (h, l)
+        return self.sar
+
+
+def ta_supertrend(it, node, args, kw):
+    f, n = I._num(A(args, kw, 0, "factor")), int(A(args, kw, 1, "atrPeriod"))
+    b, i = it.bars, it.i
+    return it.state(node, lambda: Supertrend(f, n)).update(b.high[i], b.low[i], b.close[i])
+
+
+def ta_sar(it, node, args, kw):
+    s, inc, mx = (I._num(A(args, kw, k, nm)) for k, nm in enumerate(("start", "inc", "max")))
+    return it.state(node, lambda: Sar(s, inc, mx)).update(it.bars.high[it.i], it.bars.low[it.i])
+
+
+def _extreme_bars(hi: bool):
+    def f(it, node, args, kw):
+        if len(args) == 1 and "length" not in kw and "source" not in kw:      # ta.highestbars(length): nguồn mặc định là high/low
+            args = [it.builtin_series("high" if hi else "low"), args[0]]
+        elif "length" in kw and "source" not in kw and not args:
+            args = [it.builtin_series("high" if hi else "low")]
+        src = A(args, kw, 0, "source")
+        n = int(A(args, kw, 1, "length"))
+        from collections import deque
+        st = it.state(node, lambda: deque(maxlen=n))
+        st.append(NAN if isna(src) else float(src))
+        if len(st) < n or any(isna(v) for v in st):
+            return NAN
+        vals = list(st)
+        best = max(vals) if hi else min(vals)
+        k = max(i for i, v in enumerate(vals) if v == best)       # lần gần nhất
+        return float(k - (n - 1))
+    return f
+
+
+def tv_aroon(it, node, args, kw):
+    n = int(A(args, kw, 0, "length"))
+    b, i = it.bars, it.i
+    if i < n:
+        return [NAN, NAN]
+    hs, ls = b.high[i - n:i + 1], b.low[i - n:i + 1]
+    hi_off = max(k for k, v in enumerate(hs) if v == max(hs)) - n      # <= 0
+    lo_off = max(k for k, v in enumerate(ls) if v == min(ls)) - n
+    return [100.0 * (n + hi_off) / n, 100.0 * (n + lo_off) / n]
+
+
+def ta_cross(it, node, args, kw):
+    a, b = I._num(args[0]), I._num(args[1])
+    st = it.state(node, lambda: [None])
+    prev = st[0]
+    st[0] = (a, b)
+    if prev is None or any(isna(v) for v in (a, b, *prev)):
+        return False
+    return (a > b) != (prev[0] > prev[1]) and a != b
+
+
+def runtime_error(it, node, args, kw):
+    raise I.PineRuntimeError(str(args[0]) if args else "runtime.error", node.line)
+
+
+def pc_ltf(it, node, args, kw):
+    """PineCoders lower_tf.ltf: chọn khung thấp hơn khung biểu đồ để lấy dữ liệu trong nến. Chế độ tự động: khoảng 1/15 khung biểu đồ, tối thiểu 1 phút."""
+    ms = it.tf_ms
+    if ms <= 60_000:
+        raise I.PineRuntimeError("Không có dữ liệu trong nến ở khung nhỏ hơn 1 phút (nguồn chỉ có nến 1 phút trở lên)", node.line)
+    target = ms / 15
+    for m in (1, 3, 5, 15, 30, 60, 240):
+        if m * 60_000 >= target:
+            return str(m)
+    return "240"
+
+
+def pc_formatted(it, node, args, kw):
+    ms = I._num(args[0])
+    for lim, name in ((86_400_000, "day"), (3_600_000, "hour"), (60_000, "minute"), (1000, "second")):
+        if ms >= lim:
+            n = ms / lim
+            n = int(n) if float(n).is_integer() else round(n, 1)
+            return f"{n} {name}{'' if n == 1 else 's'}"
+    return f"{int(ms)} ms"
+
+
+def sec_lower(it, node_call, sym, tf, expr_node):
+    """request.security_lower_tf: giá trị của biểu thức ở từng nến khung thấp nằm trong nến hiện tại (mảng, hoặc tuple các mảng)."""
+    import bisect
+    key = (node_call.id, it.stack)
+    c = it.sec_cache.get(key)
+    if c is None:
+        if it.provider is None:
+            raise I.PineRuntimeError("request.security_lower_tf cần nguồn dữ liệu (provider)", node_call.line)
+        other = it.provider(sym or it.symbol, tf)
+        if other is None or len(other) == 0:
+            raise I.PineRuntimeError(f"không có dữ liệu khung {tf} cho {sym}", node_call.line)
+        sub = I.Interp(it.ast, other, symbol=sym or it.symbol, tf=tf, tz_offset_ms=it.tz, provider=it.provider, inputs=it.input_overrides,
+                       external=it.external, syminfo_type=it.syminfo_type, ast=it.ast, tick=it.tick, chart_bg=it.chart_bg)
+        sub.funcs, sub.types, sub.aliases = it.funcs, it.types, it.aliases
+        sub.vars = {k: v for k, v in it.vars.items() if not isinstance(v, list)}
+        sub.persist = set(sub.vars)
+        c = it.sec_cache[key] = (sub.run_expr(expr_node), list(other.time))
+    vals, times = c
+    t0 = it.bars.time[it.i]
+    lo, hi = bisect.bisect_left(times, t0), bisect.bisect_left(times, t0 + it.tf_ms)
+    seg = vals[lo:hi]
+    if seg and isinstance(seg[0], list):
+        return [[row[k] for row in seg] for k in range(len(seg[0]))]
+    if not seg:
+        tup = next((v for v in vals if isinstance(v, list)), None)
+        if tup is not None:                 # biểu thức trả về tuple nhưng nến này chưa có dữ liệu khung thấp: mỗi phần tử là mảng rỗng
+            return [[] for _ in tup]
+    return list(seg)
+
+
+def lazy_security_lower(it, n):
+    pos = [e for nm, e in n.args if nm is None]
+    kw = {nm: e for nm, e in n.args if nm is not None}
+    sym = it.eval(pos[0] if pos else kw["symbol"])
+    tf = it.eval(pos[1] if len(pos) > 1 else kw["timeframe"])
+    expr = pos[2] if len(pos) > 2 else kw["expression"]
+    return sec_lower(it, n, str(sym), str(tf), expr)
+
+
 def register() -> None:
     B = I.BUILTINS
     for kind, d in (("float", NAN), ("int", NAN), ("string", ""), ("bool", False), ("color", None), ("line", NAN), ("label", NAN),
@@ -364,7 +772,10 @@ def register() -> None:
     B["array.new"] = _new(NAN)
     B.update({
         "array.get": a_get, "array.set": a_set, "array.push": a_push, "array.pop": a_pop, "array.remove": a_remove,
-        "array.insert": a_insert, "array.clear": a_clear, "array.size": lambda it, n, a, k: float(len(_arr(a[0]))),
+        "array.insert": a_insert, "array.clear": a_clear, "array.indexof": a_indexof, "array.lastindexof": a_lastindexof, "array.copy": lambda it, n, a, k: list(_arr(a[0])),
+        "array.slice": a_slice, "array.sort": a_sort, "array.reverse": lambda it, n, a, k: (_arr(a[0]).reverse(), NAN)[1],
+        "array.concat": lambda it, n, a, k: (_arr(a[0]).extend(_arr(a[1])), a[0])[1], "array.median": a_median, "array.stdev": a_stdev,
+        "array.fill": a_fill, "array.abs": lambda it, n, a, k: [abs(x) if not isna(x) else x for x in _arr(a[0])], "array.range": _stat(lambda v: max(v) - min(v)), "color": lambda it, n, a, k: a[0], "array.shift": lambda it, n, a, k: _arr(a[0]).pop(0) if _arr(a[0]) else NAN, "array.unshift": lambda it, n, a, k: (_arr(a[0]).insert(0, a[1]), NAN)[1], "array.size": lambda it, n, a, k: float(len(_arr(a[0]))),
         "array.includes": lambda it, n, a, k: a[1] in _arr(a[0]),
         "array.sum": _stat(sum), "array.avg": _stat(lambda v: sum(v) / len(v)), "array.max": _stat(max), "array.min": _stat(min),
         "array.first": lambda it, n, a, k: _arr(a[0])[0], "array.last": lambda it, n, a, k: _arr(a[0])[-1],
@@ -381,7 +792,20 @@ def register() -> None:
                                  ("bgcolor", None), ("text", ""))),
         "table.new": t_new, "table.cell": t_cell, "table.merge_cells": t_merge, "table.delete": _delete,
         "line.delete": _delete, "label.delete": _delete, "box.delete": _delete,
-        "alert": f_alert, "fill": f_fill, "barcolor": f_barcolor, "ta.cum": ta_cum, "ta.dmi": ta_dmi,
+        "request.earnings": lambda it, n, a, k: NAN, "request.dividends": lambda it, n, a, k: NAN, "request.splits": lambda it, n, a, k: NAN,
+        "request.economic": lambda it, n, a, k: NAN, "request.quandl": lambda it, n, a, k: NAN,
+        "timeframe.in_seconds": tf_in_seconds, "timeframe.change": tf_change, "chart.point.new": cp_new, "chart.point.from_index": cp_from_index, "chart.point.from_time": cp_from_time, "chart.point.now": cp_now,
+        "polyline.new": poly_new, "polyline.delete": _delete, "array.from": lambda it, n, a, k: list(a),
+        "plotcandle": f_plotcandle, "plotbar": f_plotcandle, "plotchar": f_plotchar, "plotarrow": f_plotarrow,
+        "ta.supertrend": ta_supertrend, "ta.sar": ta_sar, "ta.highestbars": _extreme_bars(True), "ta.lowestbars": _extreme_bars(False),
+        "ta.cross": ta_cross, "runtime.error": runtime_error,
+        "PineCoders/lower_tf.ltf": pc_ltf, "PineCoders/Time.formattedNoOfPeriods": pc_formatted, "TradingView/ta.aroon": tv_aroon,
+        "PineCoders/VisibleChart.leftBarIndex": lambda it, n, a, k: 0.0,
+        "PineCoders/VisibleChart.rightBarIndex": lambda it, n, a, k: float(it.n - 1),
+        "PineCoders/VisibleChart.barIsVisible": lambda it, n, a, k: True,
+        "PineCoders/VisibleChart.isLastVisibleBar": lambda it, n, a, k: it.i == it.n - 1,
+        "PineCoders/VisibleChart.bars": lambda it, n, a, k: float(it.n),
+        "timestamp": f_timestamp, "alert": f_alert, "fill": f_fill, "barcolor": f_barcolor, "ta.cum": ta_cum, "ta.dmi": ta_dmi,
         "int": _cast(lambda x: float(int(x))), "float": _cast(float), "str": lambda it, n, a, k: fmt_value(a[0], None, it.tick),
         "bool": lambda it, n, a, k: I._truthy(a[0]),
     })
@@ -390,6 +814,11 @@ def register() -> None:
                       ("box", ("left", "top", "right", "bottom", "border_color", "border_width", "border_style", "bgcolor", "text"))):
         for f in fields:
             B[f"{k}.set_{f}"] = _setter(f)
+    B["line.set_first_point"] = _point_setter("x1", "y1")
+    B["line.set_second_point"] = _point_setter("x2", "y2")
+    B["label.set_point"] = _point_setter("x", "y")
+    B["box.set_top_left_point"] = _point_setter("left", "top")
+    B["box.set_bottom_right_point"] = _point_setter("right", "bottom")
     B["line.set_xy1"] = _setxy("x1", "y1")
     B["line.set_xy2"] = _setxy("x2", "y2")
     B["label.set_xy"] = _setxy("x", "y")
@@ -414,3 +843,4 @@ def register() -> None:
 
 
 register()
+I.LAZY["request.security_lower_tf"] = lazy_security_lower

@@ -69,6 +69,11 @@ Kiểu màu **Mua/Bán**: lệnh mua chờ màu xanh lá, lệnh bán chờ màu
 
 ![Quản lý chỉ báo](docs/screenshots/indicators-manager.png)
 
+**Ichimoku Future, Volume Profile Total và Institutional Level (SMC)**: ba script Pine thật chạy trên engine; mây Ichimoku dịch về tương lai, volume profile nằm ở lề phải, order block cùng nhãn cấu trúc thị trường.
+
+![Volume profile](docs/screenshots/pine-volume-profile.png)
+![SMC](docs/screenshots/pine-smc.png)
+
 **Script Pine thật dài 1720 dòng** (Viprasol Liquidity Trail Matrix, Pine v6): băng trail, nhãn đảo chiều, tín hiệu retest, đường entry/SL/TP, volume profile của đoạn xu hướng và bảng dashboard, chạy trên engine của dự án.
 
 ![Pine Viprasol](docs/screenshots/pine-viprasol.png)

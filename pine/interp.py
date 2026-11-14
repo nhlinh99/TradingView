@@ -26,6 +26,14 @@ NAN = float("nan")
 isna = T.isna
 
 
+def _rgb_dark(c) -> bool:
+    h = str(c).lstrip('#')
+    try:
+        return int(h[0:2], 16) < 128
+    except ValueError:
+        return True
+
+
 ZERO_ARG_LIB: set = set()     # thành viên thư viện được dùng như thuộc tính (không có dấu ngoặc), ví dụ chart.left_visible_bar_time
 
 
@@ -84,9 +92,9 @@ COLORS = {
 }
 
 
-def color_new(c: str | None, transp: float) -> str | None:
-    if c is None:
-        return None
+def color_new(c, transp: float) -> str | None:
+    if c is None or not isinstance(c, str):
+        return None             # na (NaN) hoặc giá trị không phải màu
     base = c[:7]
     a = 0 if isna(transp) else max(0, min(255, round(255 * (100 - transp) / 100)))
     return f"{base}{a:02X}"
@@ -178,6 +186,7 @@ class Interp:
         self.objs = {"lines": [], "labels": [], "boxes": [], "tables": []}
         self.alert_events: list = []
         self.fills: dict = {}
+        self.candles: dict = {}
         self.barcolors: dict = {}
         self.tick = tick
         self.chart_bg = chart_bg
@@ -267,11 +276,14 @@ class Interp:
                 raise PineRuntimeError("for ... in cần một mảng", s.line)
             sc = self.scope()
             out = NAN
-            for idx, item in enumerate(list(seq)):
+            idx = 0
+            while idx < len(seq):          # kích thước được xét lại mỗi vòng: xoá phần tử trong vòng lặp không gây lỗi chỉ số
+                item = seq[idx]
                 if isinstance(s.var, list):          # for [i, x] in mảng
                     sc[s.var[0]], sc[s.var[1]] = float(idx), item
                 else:
                     sc[s.var] = item
+                idx += 1
                 try:
                     out = self.exec_block(s.body)
                 except _Break:
@@ -319,6 +331,15 @@ class Interp:
                 sc[nm] = v
             return vals
         name = s.target
+        if s.var and self.locals:
+            # `var` trong hàm người dùng: khởi tạo một lần cho mỗi vị trí gọi, giữ giá trị giữa các lần gọi
+            key = (s.id, self.stack)
+            st = self.states.get(key)
+            if st is None:
+                st = self.states[key] = {"v": self.eval(s.value)}
+            sc[name] = st["v"]
+            sc.setdefault("__pvars__", {})[name] = key
+            return st["v"]
         if s.var:
             if name in self.persist and not self.locals:
                 return sc.get(name, NAN)
@@ -452,9 +473,23 @@ class Interp:
             return (b.open[i] + b.high[i] + b.low[i] + b.close[i]) / 4
         if name == "hlcc4":
             return (b.high[i] + b.low[i] + 2 * b.close[i]) / 4
+        if name == "last_bar_index":
+            return float(self.n - 1)
+        if name == "last_bar_time":
+            return float(b.time[-1])
+        if name == "time_close":
+            return float(b.time[i] + self.tf_ms)
+        if name == "timenow":
+            return float(b.time[-1] + self.tf_ms)
+        if name in ("hour", "minute", "second", "dayofmonth", "dayofweek", "month", "year", "weekofyear"):
+            import datetime as dt
+            d = dt.datetime.fromtimestamp((b.time[i] + self.tz) / 1000, dt.timezone.utc)
+            return float({"hour": d.hour, "minute": d.minute, "second": d.second, "dayofmonth": d.day, "month": d.month, "year": d.year,
+                          "dayofweek": (d.isoweekday() % 7) + 1, "weekofyear": d.isocalendar()[1]}[name])   # dayofweek: 1 = Chủ nhật như Pine
         raise KeyError(name)
 
-    SERIES = {"open", "high", "low", "close", "volume", "time", "bar_index", "hl2", "hlc3", "ohlc4", "hlcc4"}
+    SERIES = {"open", "high", "low", "close", "volume", "time", "bar_index", "hl2", "hlc3", "ohlc4", "hlcc4", "last_bar_index",
+              "last_bar_time", "time_close", "timenow", "hour", "minute", "second", "dayofmonth", "dayofweek", "month", "year", "weekofyear"}
 
     def lookup(self, name: str, line: int = 0):
         if self.locals and name in self.locals[-1]:
@@ -514,8 +549,29 @@ class Interp:
             return self.tf
         if d == "timeframe.multiplier":
             return float(self.tf_ms // 60_000)
+        if d.startswith("timeframe.is"):
+            ms = self.tf_ms
+            flags = {"isseconds": ms < 60_000, "isminutes": 60_000 <= ms < 3_600_000 or (ms % 3_600_000 == 0 and ms < 86_400_000),
+                     "isintraday": ms < 86_400_000, "isdaily": ms == 86_400_000, "isweekly": ms == 7 * 86_400_000,
+                     "ismonthly": ms >= 28 * 86_400_000, "isdwm": ms >= 86_400_000, "isticks": False}
+            if d[len("timeframe."):] in flags:
+                return flags[d[len("timeframe."):]]
+        if d == "syminfo.currency":
+            return "USD" if self.syminfo_type != "stock" else "VND"
+        if d in ("syminfo.prefix", "syminfo.root", "syminfo.description"):
+            return self.symbol
+        if d.startswith("session.is"):
+            return True
         if d == "chart.bg_color":
             return self.chart_bg
+        if d == "chart.fg_color":
+            return "#D1D4DC" if _rgb_dark(self.chart_bg) else "#131722"
+        if d == "chart.left_visible_bar_time":
+            return float(self.bars.time[0])
+        if d == "chart.right_visible_bar_time":
+            return float(self.bars.time[-1])
+        if d in ("chart.is_standard", "chart.is_heikinashi") or d.startswith("chart.is_"):
+            return d == "chart.is_standard"
         if d == "syminfo.mintick":
             return self.tick
         if d == "syminfo.type":
@@ -528,7 +584,7 @@ class Interp:
             return self.strategy.position_size
         if d == "strategy.equity":
             return self.strategy.equity_now()
-        if d == "barstate.islast":
+        if d in ("barstate.islast", "barstate.islastconfirmedhistory"):
             return self.i == self.n - 1
         if d == "barstate.isfirst":
             return self.i == 0
@@ -574,6 +630,23 @@ class Interp:
             return self.call_user(self.funcs[d], n)
         if d is not None and d.endswith(".new") and d[:-4] in self.types:
             return self.construct(self.types[d[:-4]], n)
+        # cú pháp gọi như phương thức: arr.size(), arr.push(x), ln.set_x1(...), s.length()
+        if isinstance(n.func, Attr) and self.root_is_variable(n.func):
+            obj = self.eval(n.func.obj)
+            if isna(obj) and n.func.name == "delete":
+                return NAN            # xoá một đối tượng na: Pine bỏ qua
+            ns = ("array" if isinstance(obj, list) else "str" if isinstance(obj, str)
+                  else obj.get("_k") if isinstance(obj, dict) and "_k" in obj else None)
+            fn = BUILTINS.get(f"{ns}.{n.func.name}") if ns else None
+            if fn is not None:
+                args = [obj] + [self.eval(e) for nm, e in n.args if nm is None]
+                kw = {nm: self.eval(e) for nm, e in n.args if nm is not None}
+                try:
+                    return fn(self, n, args, kw)
+                except PineRuntimeError:
+                    raise
+                except (TypeError, ValueError, IndexError) as e:
+                    raise PineRuntimeError(f"{ns}.{n.func.name}: tham số không hợp lệ ({e})", n.line) from e
         if d is None:
             raise PineRuntimeError("gọi hàm không hỗ trợ", n.line)
         root = d.split(".")[0]
@@ -632,6 +705,8 @@ class Interp:
         try:
             return self.exec_block(node.body)
         finally:
+            for nm, key in scope.get("__pvars__", {}).items():      # ghi lại biến `var` cục bộ để lần gọi sau thấy giá trị mới
+                self.states[key]["v"] = scope[nm]
             self.stack = saved
             self.locals.pop()
 
@@ -865,7 +940,19 @@ def make_input(kind: str):
 
 
 def input_generic(it, node, args, kw):
-    return make_input("float")(it, node, args, kw)
+    """`input(defval, ...)` kiểu cũ: suy ra kiểu từ giá trị mặc định (bool, số, màu, chuỗi)."""
+    d = A(args, kw, 0, "defval", None)
+    if isinstance(d, bool):
+        kind = "bool"
+    elif isinstance(d, str):
+        kind = "color" if d.startswith("#") else "string"
+    elif isinstance(d, (int, float)) and not isna(d):
+        kind = "int" if float(d).is_integer() and "step" not in kw and not isinstance(d, float) else "float"
+    else:
+        kind = "float"
+    if kind == "float" and isinstance(d, float) and d.is_integer() and "step" not in kw:
+        kind = "int" if "minval" in kw and float(kw["minval"]).is_integer() and ("maxval" not in kw or float(kw["maxval"]).is_integer()) else "float"
+    return make_input(kind)(it, node, args, kw)
 
 
 # ---- đầu ra ----
@@ -981,7 +1068,7 @@ def _sec_series(it, n: Call, sym, tf, expr_node, lookahead: bool):
         d_ms = tf_to_ms(tf) if tf else it.tf_ms
         sub = Interp(it.ast, other, symbol=sym or it.symbol, tf=tf or it.tf, tz_offset_ms=it.tz, provider=it.provider,
                      inputs=it.input_overrides, external=it.external, syminfo_type=it.syminfo_type, ast=it.ast)
-        sub.funcs = it.funcs
+        sub.funcs, sub.types, sub.aliases = it.funcs, it.types, it.aliases
         sub.vars = {k: v for k, v in it.vars.items() if not isinstance(v, (list,))}
         sub.persist = set(sub.vars)   # hằng của chương trình chính (ví dụ độ dài từ input) phải sống qua mọi nến
         vals = sub.run_expr(expr_node)
@@ -1164,7 +1251,7 @@ BUILTINS: dict[str, Callable] = {
     "color.new": f_color_new, "color.rgb": f_color_rgb,
     "input": input_generic, "input.int": make_input("int"), "input.float": make_input("float"), "input.bool": make_input("bool"),
     "input.string": make_input("string"), "input.symbol": make_input("symbol"), "input.timeframe": make_input("timeframe"),
-    "input.source": make_input("source"), "input.color": make_input("color"), "input.session": make_input("session"),
+    "input.source": make_input("source"), "input.color": make_input("color"), "input.session": make_input("session"), "input.time": make_input("time"), "input.price": make_input("float"),
     "ta.sma": _window_fn("sma"), "ta.ema": _ta_window(T.make_ema), "ta.rma": _ta_window(T.make_rma),
     "ta.rsi": _ta_window(T.Rsi), "ta.stdev": _ta_window(T.Stdev),
     "ta.highest": _window_fn("highest"), "ta.lowest": _window_fn("lowest"),

@@ -144,6 +144,20 @@ export default function Chart({ symbol, tf, tz, flow, pines, indLegend, replay, 
     refreshFlow()
   }, [flow.delta, flow.cvd, refreshFlow])
 
+  // chừa lề phải đủ rộng để thấy các đối tượng Pine nằm sau nến cuối (mây Ichimoku, volume profile, đường dự phóng)
+  useEffect(() => {
+    let extra = 0
+    for (const { result: r } of pines) {
+      const n = r.times.length
+      let mx = n - 1 + (r.future_bars ?? 0)
+      for (const b of r.objects?.boxes ?? []) mx = Math.max(mx, Number(b.right), Number(b.left))
+      for (const l of r.objects?.lines ?? []) mx = Math.max(mx, Number(l.x2), Number(l.x1))
+      for (const l of r.objects?.labels ?? []) mx = Math.max(mx, Number(l.x))
+      extra = Math.max(extra, mx - (n - 1))
+    }
+    chartRef.current?.timeScale().applyOptions({ rightOffset: extra > 0 ? Math.min(160, Math.ceil(extra) + 3) : 5 })
+  }, [pines])
+
   // phát lại: cắt dãy nến hiện có tại vị trí `replay`; thoát phát lại thì nạp lại nến mới nhất
   const wasReplay = useRef(false)
   useEffect(() => {

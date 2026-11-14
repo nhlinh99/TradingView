@@ -1,6 +1,6 @@
 import { useEffect, type MutableRefObject } from 'react'
 import {
-  HistogramSeries, LineSeries, LineStyle, createSeriesMarkers,
+  CandlestickSeries, HistogramSeries, LineSeries, LineStyle, createSeriesMarkers,
   type IChartApi, type IPriceLine, type ISeriesApi, type SeriesMarker, type Time, type UTCTimestamp,
 } from 'lightweight-charts'
 import type { PineResult } from './api'
@@ -24,7 +24,7 @@ export default function PineLayer({ result, chart, candles, version }: Props) {
     const c = chart.current
     const main = candles.current
     if (!c || !main || !result) return
-    const series: ISeriesApi<'Line' | 'Histogram'>[] = []
+    const series: ISeriesApi<'Line' | 'Histogram' | 'Candlestick'>[] = []
     const lines: IPriceLine[] = []
     const markerSets: { detach: () => void }[] = []
     const overlay = result.meta.overlay
@@ -59,6 +59,20 @@ export default function PineLayer({ result, chart, candles, version }: Props) {
         if (data.length === 0) continue
         const s = c.addSeries(HistogramSeries, { priceScaleId: 'pine-bg', priceLineVisible: false, lastValueVisible: false, base: 0 }, 0)
         c.priceScale('pine-bg').applyOptions({ scaleMargins: { top: 0, bottom: 0 }, visible: false })
+        s.setData(data)
+        series.push(s)
+      }
+    }
+
+    // plotcandle/plotbar: nến vẽ riêng chồng lên nến của biểu đồ (thường dùng để tô lại màu nến)
+    if (overlay) {
+      for (const cd of result.candles ?? []) {
+        const data = result.times.flatMap((ms, i) => {
+          const v = cd.ohlc[i]
+          return v ? [{ time: t(ms), open: v[0], high: v[1], low: v[2], close: v[3], color: cd.color[i] ?? '#888', wickColor: cd.wick[i] ?? '#888', borderColor: cd.border[i] ?? '#888' }] : []
+        })
+        if (data.length === 0) continue
+        const s = c.addSeries(CandlestickSeries, { priceLineVisible: false, lastValueVisible: false }, 0)
         s.setData(data)
         series.push(s)
       }

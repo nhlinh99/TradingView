@@ -128,9 +128,11 @@ export type PineResult = {
   alerts: { title: string; message: string; bars: number[] }[]
   alert_events?: { bar: number; message: string }[]
   future_bars?: number
+  candles?: { title: string; ohlc: (number[] | null)[]; color: (string | null)[]; wick: (string | null)[]; border: (string | null)[] }[]
   fills?: { a: number; b: number; title: string; colors: (string | null)[] }[]
   objects?: {
     lines: Record<string, unknown>[]; labels: Record<string, unknown>[]; boxes: Record<string, unknown>[]
+    polylines?: { points: { index: number | null; time: number | null; price: number | null }[]; line_color?: string | null; line_width?: number; line_style?: string; closed?: boolean; fill_color?: string | null }[]
     tables: { position: string; rows: number; columns: number; bgcolor?: string | null; border_color?: string | null
       cells: { col: number; row: number; text?: string; text_color?: string; text_size?: string; bgcolor?: string; tooltip?: string }[]; merges: number[][] }[]
   }

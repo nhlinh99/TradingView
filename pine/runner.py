@@ -22,14 +22,21 @@ def _obj(o: dict) -> dict:
 
 
 def _objects(it: Interp) -> dict:
-    live = lambda lst: [_obj(o) for o in lst if not o["dead"]][-500:]
+    def has_coords(o):
+        keys = {"line": ("x1", "y1", "x2", "y2"), "label": ("x", "y"), "box": ("left", "top", "right", "bottom")}.get(o.get("_k"), ())
+        return all(isinstance(o.get(k), (int, float)) and not (isinstance(o.get(k), float) and (math.isnan(o[k]) or math.isinf(o[k]))) for k in keys)
+
+    live = lambda lst: [_obj(o) for o in lst if not o["dead"] and has_coords(o)][-500:]       # bỏ đối tượng chưa có toạ độ (line.new(na, ...))
     tables = []
     for t in it.objs["tables"]:
         if t["dead"]:
             continue
         tables.append({**_obj(t), "cells": [{"col": c, "row": r, **{k: _clean(v) for k, v in cell.items()}} for (c, r), cell in sorted(t["cells"].items())],
                        "merges": [list(m) for m in t["merges"]]})
-    return {"lines": live(it.objs["lines"]), "labels": live(it.objs["labels"]), "boxes": live(it.objs["boxes"]), "tables": tables[-4:]}
+    def poly(o):
+        return {**{k: _clean(v) for k, v in o.items() if k not in ("_k", "dead", "points")}, "points": [{k: _clean(v) for k, v in p.items()} for p in o["points"]]}
+    polys = [poly(o) for o in it.objs.get("polylines", []) if not o["dead"]][-50:]
+    return {"polylines": polys, "lines": live(it.objs["lines"]), "labels": live(it.objs["labels"]), "boxes": live(it.objs["boxes"]), "tables": tables[-4:]}
 
 
 def run_script(source: str, bars: Bars, *, symbol: str = "", tf: str = "1m", tz_offset_ms: int = 0, provider=None,
@@ -48,6 +55,7 @@ def run_script(source: str, bars: Bars, *, symbol: str = "", tf: str = "1m", tz_
              for f in it.fills.values() if f["a"] in plot_ids and f["b"] in plot_ids]
     return {
         "future_bars": it.future_bars,
+        "candles": [{**c, "ohlc": [[_clean(x) for x in v] if v else None for v in c["ohlc"]]} for c in it.candles.values()],
         "fills": fills,
         "meta": it.meta,
         "inputs": list(it.input_defs.values()),
