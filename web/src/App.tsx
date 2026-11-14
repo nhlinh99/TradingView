@@ -1,54 +1,107 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import Chart from './Chart'
+import { fetchSymbols, fetchWatchlist, saveWatchlist, type StreamState, type SymbolInfo } from './api'
+import { TIMEFRAMES, TIMEZONES } from './logic'
 
-type Health = { status: string; duckdb?: string; data_dir?: string; detail?: string }
+// Cài đặt nhỏ của người xem: nhớ trong trình duyệt, không có thì dùng mặc định.
+function pref(key: string, fallback: string, allowed: readonly string[]): string {
+  try {
+    const v = localStorage.getItem(key)
+    return v && allowed.includes(v) ? v : fallback
+  } catch {
+    return fallback
+  }
+}
+function savePref(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    /* bị chặn: bỏ qua */
+  }
+}
+
+const STATE_LABEL: Record<StreamState, string> = {
+  connecting: 'Đang kết nối', connected: 'Trực tiếp', reconnecting: 'Mất kết nối, đang nối lại',
+}
 
 export default function App() {
-  const [health, setHealth] = useState<Health | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [all, setAll] = useState<SymbolInfo[]>([])
+  const [watch, setWatch] = useState<string[]>([])
+  const [symbol, setSymbol] = useState('')
+  const [tf, setTf] = useState(() => pref('tf', '1m', TIMEFRAMES))
+  const [tz, setTz] = useState(() => pref('tz', 'UTC', TIMEZONES.map((t) => t.id)))
+  const [state, setState] = useState<StreamState>('connecting')
+  const [err, setErr] = useState<string | null>(null)
 
   useEffect(() => {
-    const ctrl = new AbortController()
-    fetch('/api/health', { signal: ctrl.signal })
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json() as Promise<Health>
+    Promise.all([fetchSymbols(), fetchWatchlist()])
+      .then(([s, w]) => {
+        setAll(s)
+        setWatch(w)
+        const saved = pref('symbol', w[0] ?? '', w)
+        setSymbol(saved || w[0] || '')
       })
-      .then(setHealth)
-      .catch((e: unknown) => {
-        if (!ctrl.signal.aborted) setError(String(e))
-      })
-    return () => ctrl.abort()
+      .catch((e: unknown) => setErr(String(e)))
   }, [])
 
-  let line: string
-  let cls = 'wait'
-  if (error) {
-    line = `Không gọi được server: ${error}`
-    cls = 'bad'
-  } else if (!health) {
-    line = 'Đang kiểm tra server...'
-  } else if (health.status === 'ok') {
-    line = 'server OK'
-    cls = 'ok'
-  } else {
-    line = `Server lỗi cấu hình: ${health.detail ?? health.status}`
-    cls = 'bad'
+  const choose = (s: string) => { setSymbol(s); savePref('symbol', s) }
+  const update = async (next: string[]) => {
+    try {
+      setWatch(await saveWatchlist(next))
+    } catch (e) {
+      setErr(String(e))
+    }
   }
+  const remove = (s: string) => {
+    const next = watch.filter((x) => x !== s)
+    if (next.length === 0) return // luôn giữ ít nhất một symbol
+    void update(next)
+    if (s === symbol) choose(next[0])
+  }
+  const addable = all.filter((s) => !watch.includes(s.symbol))
+  const onState = useCallback((s: StreamState) => setState(s), [])
+
+  if (err && !symbol) return <main className="page"><p className="status bad" role="alert">Lỗi: {err}</p></main>
 
   return (
-    <main>
-      <h1>Chart cá nhân</h1>
-      <p className={`status ${cls}`} data-testid="server-status" role="status">
-        {line}
-      </p>
-      {health?.status === 'ok' && (
-        <dl>
-          <dt>DuckDB</dt>
-          <dd>{health.duckdb}</dd>
-          <dt>Thư mục dữ liệu</dt>
-          <dd>{health.data_dir}</dd>
-        </dl>
-      )}
-    </main>
+    <div className="app">
+      <aside className="side" aria-label="Danh sách theo dõi">
+        <h2>Theo dõi</h2>
+        <ul>
+          {watch.map((s) => (
+            <li key={s} className={s === symbol ? 'on' : ''}>
+              <button className="sym" onClick={() => choose(s)} aria-current={s === symbol}>{s}</button>
+              <button className="x" onClick={() => remove(s)} aria-label={`Bỏ ${s}`} disabled={watch.length <= 1}>×</button>
+            </li>
+          ))}
+        </ul>
+        {addable.length > 0 && (
+          <select aria-label="Thêm symbol" value="" onChange={(e) => e.target.value && void update([...watch, e.target.value])}>
+            <option value="">+ Thêm symbol</option>
+            {addable.map((s) => <option key={s.symbol} value={s.symbol}>{s.symbol}</option>)}
+          </select>
+        )}
+      </aside>
+
+      <section className="main">
+        <header className="bar">
+          <h1>{symbol || '...'}</h1>
+          <div className="tfs" role="group" aria-label="Khung thời gian">
+            {TIMEFRAMES.map((t) => (
+              <button key={t} className={t === tf ? 'on' : ''} aria-pressed={t === tf}
+                onClick={() => { setTf(t); savePref('tf', t) }}>{t}</button>
+            ))}
+          </div>
+          <label className="tz">Múi giờ
+            <select value={tz} onChange={(e) => { setTz(e.target.value); savePref('tz', e.target.value) }}>
+              {TIMEZONES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+            </select>
+          </label>
+          <span className={`live ${state}`} role="status" data-testid="stream-state">{STATE_LABEL[state]}</span>
+        </header>
+        {symbol && <Chart symbol={symbol} tf={tf} tz={tz} onState={onState} />}
+        {err && <p className="status bad" role="alert">{err}</p>}
+      </section>
+    </div>
   )
 }
