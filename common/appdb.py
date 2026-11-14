@@ -30,6 +30,16 @@ CREATE TABLE IF NOT EXISTS alerts (
   enabled   INTEGER NOT NULL DEFAULT 1,
   created   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+-- Nhật ký backfill: ngày nào của dataset nào đã tải và kiểm checksum xong.
+CREATE TABLE IF NOT EXISTS backfill_log (
+  dataset   TEXT NOT NULL,
+  symbol    TEXT NOT NULL,
+  day       TEXT NOT NULL,         -- YYYY-MM-DD (UTC)
+  rows      INTEGER NOT NULL,
+  sha256    TEXT NOT NULL,
+  loaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (dataset, symbol, day)
+);
 """
 
 

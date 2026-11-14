@@ -35,12 +35,24 @@ SCHEMAS: dict[str, list[tuple[str, str]]] = {
     ],
     # sổ lệnh đã gom bucket giá. p = bucket giá, bid/ask = tổng khối lượng chờ
     "book": [("ts", "BIGINT"), ("p", "INTEGER"), ("bid", "FLOAT"), ("ask", "FLOAT")],
+    # bookDepth của Binance (kho lịch sử, cách 30 giây): độ sâu tích luỹ trong dải ±pct% quanh giá.
+    # pct âm = phía mua, dương = phía bán. depth = khối lượng, notional = giá trị (USDT)
+    "bookdepth": [("ts", "BIGINT"), ("pct", "FLOAT"), ("depth", "FLOAT"), ("notional", "DOUBLE")],
+    # metrics của Binance (mỗi 5 phút): open interest và các tỉ lệ long/short
+    "metrics": [
+        ("ts", "BIGINT"), ("oi", "DOUBLE"), ("oi_value", "DOUBLE"), ("top_ls_count", "FLOAT"),
+        ("top_ls_sum", "FLOAT"), ("ls_count", "FLOAT"), ("taker_ls", "FLOAT"),
+    ],
 }
 
 # Khoá duy nhất của từng loại, dùng để loại trùng. Dòng trùng khoá: giữ dòng có ts nhỏ nhất.
-KEYS: dict[str, list[str]] = {"ticks": ["id"], "bars": ["ts"], "book": ["ts", "p"]}
+KEYS: dict[str, list[str]] = {
+    "ticks": ["id"], "bars": ["ts"], "book": ["ts", "p"], "bookdepth": ["ts", "pct"], "metrics": ["ts"],
+}
 # Thứ tự sắp xếp khi ghi và đọc (ổn định khi nhiều lệnh cùng mili giây).
-ORDER: dict[str, str] = {"ticks": "ts, id", "bars": "ts", "book": "ts, p"}
+ORDER: dict[str, str] = {
+    "ticks": "ts, id", "bars": "ts", "book": "ts, p", "bookdepth": "ts, pct", "metrics": "ts",
+}
 
 INT32_MAX = 2**31 - 1
 _SYMBOL_RE = re.compile(r"^[A-Za-z0-9._-]+$")
