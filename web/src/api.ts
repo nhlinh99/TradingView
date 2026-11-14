@@ -99,3 +99,9 @@ export function fetchHeatmap(symbol: string, from: number, to: number, tbucket: 
   const q = new URLSearchParams({ symbol, from: String(from), to: String(to), tbucket: String(tbucket), mult: String(mult) })
   return json<HeatmapResponse>(`/api/heatmap?${q}`, { signal })
 }
+
+export type BubblesResponse = { symbol: string; from: number; to: number; tbucket: number; bucket: number; rows: (number | string)[][] }
+export function fetchBubbles(symbol: string, from: number, to: number, tbucket: number, top: number, signal?: AbortSignal) {
+  const q = new URLSearchParams({ symbol, from: String(from), to: String(to), tbucket: String(tbucket), top: String(top) })
+  return json<BubblesResponse>(`/api/bubbles?${q}`, { signal })
+}

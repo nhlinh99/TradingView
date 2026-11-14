@@ -82,3 +82,40 @@ def heatmap_endpoint(
     mult: int = Query(1, ge=1, le=100000, description="nhân bucket giá"),
 ) -> dict:
     return get_heatmap(symbol.upper(), from_, to, tbucket, mult)
+
+
+def get_bubbles(symbol: str, start_ms: int, end_ms: int, tbucket_ms: int, top: int) -> dict:
+    """Các cụm lệnh khớp lớn nhất (mua/bán chủ động) trong khoảng, gom theo ô thời gian và mức giá."""
+    try:
+        cfg = store.symbol_config(symbol)
+    except (ValueError, KeyError) as e:
+        raise HTTPException(400, str(e)) from e
+    if end_ms <= start_ms:
+        raise HTTPException(400, "to phải lớn hơn from")
+    tbucket_ms = max(tbucket_ms, 1000)
+    base = round(cfg["book_bucket"] / cfg["tick"])
+    ticks = store.range_select("ticks", symbol, start_ms, end_ms)
+    rows: list[list] = []
+    if ticks:
+        con = duckdb.connect()
+        try:
+            data = con.execute(
+                f"SELECT (ts // {tbucket_ms}) * {tbucket_ms} AS t, (p // {base}) * {base} AS p, m, sum(q::DOUBLE) AS q "
+                f"FROM ({ticks}) GROUP BY 1, 2, 3 ORDER BY q DESC LIMIT {int(top)}"
+            ).fetchall()
+        finally:
+            con.close()
+        rows = [[t, round(p * cfg["tick"], 10), round(q, 6), "sell" if m else "buy"] for t, p, m, q in sorted(data)]
+    return {"symbol": symbol, "from": start_ms, "to": end_ms, "tbucket": tbucket_ms,
+            "bucket": round(base * cfg["tick"], 10), "rows": rows}
+
+
+@router.get("/api/bubbles")
+def bubbles_endpoint(
+    symbol: str,
+    from_: int = Query(..., alias="from"),
+    to: int = Query(...),
+    tbucket: int = Query(10_000, ge=1),
+    top: int = Query(300, ge=1, le=5000),
+) -> dict:
+    return get_bubbles(symbol.upper(), from_, to, tbucket, top)

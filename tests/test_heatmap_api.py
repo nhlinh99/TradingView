@@ -56,3 +56,17 @@ def test_compacted_day_uses_book_1m(data_root):
 def test_bad_requests(data_root):
     assert client.get("/api/heatmap", params={"symbol": "BTCUSDT", "from": T0, "to": T0}).status_code == 400
     assert client.get("/api/heatmap", params={"symbol": "NOPE", "from": T0, "to": T0 + 1}).status_code == 400
+
+
+def test_bubbles_top_clusters(data_root):
+    # id, ts, p, q, m: cụm mua lớn 5 BTC ở 67000.0, cụm bán 3 BTC ở 67001.0, vài lệnh nhỏ
+    ticks = [
+        (T0 + 1000, 1, 670000, 2.0, False), (T0 + 2000, 2, 670003, 3.0, False),
+        (T0 + 3000, 3, 670010, 3.0, True), (T0 + 25_000, 4, 670000, 0.1, True),
+    ]
+    store.write_partition("ticks", "BTCUSDT", DAY, ticks, part="t")
+    r = client.get("/api/bubbles", params={"symbol": "BTCUSDT", "from": T0, "to": T0 + 60_000, "tbucket": 10_000, "top": 2})
+    assert r.status_code == 200
+    rows = r.json()["rows"]
+    assert rows == [[T0, 67000.0, 5.0, "buy"], [T0, 67001.0, 3.0, "sell"]]
+    assert client.get("/api/bubbles", params={"symbol": "BTCUSDT", "from": T0, "to": T0}).status_code == 400

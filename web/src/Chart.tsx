@@ -7,6 +7,7 @@ import { fetchBars, openStream, type StreamState } from './api'
 import Footprint from './Footprint'
 import Profile from './Profile'
 import Heatmap from './Heatmap'
+import Bubbles from './Bubbles'
 import {
   applyTrade, cvdSeries, delta, barFromRow, decimalsFromTick, formatTime, formatVolume, mergeOlder, tfMs, tickLabel,
   type Bar, type Trade,
@@ -18,7 +19,7 @@ const PALETTE = {
 }
 const volColor = (b: Bar, up: string, down: string) => (b.close >= b.open ? up + '88' : down + '88')
 
-export type Flow = { delta: boolean; cvd: 'off' | 'none' | 'day'; footprint: boolean; vpvr: boolean; heatmap: boolean; ratio: number }
+export type Flow = { delta: boolean; cvd: 'off' | 'none' | 'day'; footprint: boolean; vpvr: boolean; heatmap: boolean; bubbles: boolean; ratio: number }
 type Props = { symbol: string; tf: string; tz: string; flow: Flow; theme: 'light' | 'dark'; onState: (s: StreamState) => void }
 type Legend = { time: number; bar: Bar } | null
 
@@ -237,6 +238,7 @@ export default function Chart({ symbol, tf, tz, flow, theme, onState }: Props) {
     <div className="chart-wrap">
       <Heatmap on={flow.heatmap} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
       <div ref={box} className="chart" data-testid="chart" />
+      <Bubbles on={flow.bubbles} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
       <Profile on={flow.vpvr} symbol={symbol} tf={tf} dark={theme === 'dark'} chart={chartRef} candles={candles} bars={bars} version={version} />
       <Footprint on={flow.footprint} symbol={symbol} tf={tf} ratio={flow.ratio} dark={theme === 'dark'}
         chart={chartRef} candles={candles} bars={bars} version={version} />
