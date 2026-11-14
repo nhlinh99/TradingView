@@ -29,6 +29,10 @@ Thanh trên cùng chỉ có một hàng: symbol và trạng thái trực tiếp,
 
 ![Bảng Chỉ báo](docs/screenshots/indicators-menu.png)
 
+**Tìm symbol và phím tắt**: bấm `/` hoặc `Ctrl+K` để tìm theo mã (gõ một phần là lọc, mũi tên chọn, Enter mở; mã chưa theo dõi sẽ được thêm). `[` và `]` đổi khung thời gian, `T` đổi sáng/tối, `?` xem danh sách phím, `Ctrl+Enter` chạy script Pine, `Esc` đóng bảng.
+
+![Tìm symbol](docs/screenshots/symbol-search.png)
+
 Ảnh chụp từ bản chạy thật, dữ liệu thật của máy này (2026-11-14). Chế độ tối là mặc định theo hệ thống; có nút đổi sang sáng.
 
 Phần orderflow bám theo thiết kế của [DeepCharts](https://www.deepcharts.com) (Deep Print, DeepDom, Deep Trades), dựa trên tài liệu công khai của họ: thang màu heatmap, kiểu footprint, ký hiệu lệnh lớn. Dữ liệu và công thức là của dự án này, không sao chép mã hay tài sản của DeepCharts.

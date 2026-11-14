@@ -133,7 +133,7 @@ Nguồn tham khảo: kết quả tìm kiếm về Bookmap (heatmap, volume dots,
 
 ### Cải thiện giao diện (dễ dùng hơn)
 
-Header từ ba hàng ô chọn xuống một hàng; gom tính năng orderflow vào bảng "Chỉ báo" có mẫu dựng sẵn, công tắc, thanh trượt và mô tả; nút phân đoạn cho khung thời gian và bố cục; thanh vẽ dùng biểu tượng. Trên điện thoại (390 px) vùng biểu đồ chiếm hơn một nửa màn hình thay vì khoảng một phần ba; ô chọn múi giờ bị ẩn ở màn hình hẹp (giá trị đã lưu vẫn dùng). Chưa làm: phím tắt, kéo thả sắp xếp danh sách theo dõi, bảng chọn symbol có tìm kiếm (danh sách VN100 dài 100 mã vẫn là ô chọn thường).
+Header từ ba hàng ô chọn xuống một hàng; gom tính năng orderflow vào bảng "Chỉ báo" có mẫu dựng sẵn, công tắc, thanh trượt và mô tả; nút phân đoạn cho khung thời gian và bố cục; thanh vẽ dùng biểu tượng. Trên điện thoại (390 px) vùng biểu đồ chiếm hơn một nửa màn hình thay vì khoảng một phần ba; ô chọn múi giờ bị ẩn ở màn hình hẹp (giá trị đã lưu vẫn dùng). Đã thêm sau đó: hộp tìm symbol (`/`, `Ctrl+K`) và phím tắt (`[` `]`, `T`, `?`). Chưa làm: kéo thả sắp xếp danh sách theo dõi.
 
 
 ### Gộp nóng file con trong ngày

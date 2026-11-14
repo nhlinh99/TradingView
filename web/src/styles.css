@@ -197,3 +197,22 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--focus); ou
   .draw-tools button { width: 28px; height: 28px; }
   .srcnote { font-size: 11px; padding: 2px 8px; }
 }
+
+.addsym { width: 100%; margin-top: 6px; padding: 6px 8px; border: 1px dashed var(--line); border-radius: 8px; background: transparent; color: var(--mute); cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+.addsym:hover { border-color: var(--accent); color: var(--ink); }
+kbd { font: 11px ui-monospace, Consolas, monospace; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--chip); color: var(--ink); }
+.modal { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.45); display: flex; justify-content: center; align-items: flex-start; padding-top: 14vh; }
+.palette { width: min(520px, calc(100vw - 24px)); background: var(--bg); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }
+.palette input { width: 100%; padding: 14px 16px; font-size: 16px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); outline: none; }
+.palette ul { list-style: none; margin: 0; padding: 4px; max-height: 340px; overflow: auto; }
+.palette li { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 8px; cursor: pointer; }
+.palette li.on { background: var(--hover); }
+.palette li.none { color: var(--mute); cursor: default; }
+.palette li .tagrow { margin-left: auto; display: flex; gap: 6px; }
+.palette li em { font-style: normal; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--chip); color: var(--mute); }
+.palette li em.add { background: var(--accent); color: #fff; }
+.palette .hint { margin: 0; padding: 6px 14px 10px; font-size: 12px; color: var(--mute); border-top: 1px solid var(--line); }
+.palette.help { padding: 14px 18px 18px; }
+.palette.help h2 { margin: 0 0 10px; font-size: 16px; }
+.palette.help dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 18px; margin: 0; }
+.palette.help dt { white-space: nowrap; } .palette.help dd { margin: 0; color: var(--mute); }

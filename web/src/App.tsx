@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Chart, { type Flow } from './Chart'
 import PinePanel from './PinePanel'
 import FlowMenu from './FlowMenu'
+import SymbolSearch from './SymbolSearch'
 import AlertsPanel from './AlertsPanel'
 import { SyncBus } from './sync'
 import { fetchSymbols, fetchWatchlist, saveWatchlist, type PineResult, type StreamState, type SymbolInfo } from './api'
@@ -65,6 +66,8 @@ export default function App() {
     try { const j = JSON.parse(localStorage.getItem('cells') ?? '[]'); return Array.isArray(j) ? j : [] } catch { return [] }
   })
   const sync = useRef(new SyncBus())
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const [replay, setReplay] = useState<number | null>(null)
   const [total, setTotal] = useState(0)
   const [playing, setPlaying] = useState(false)
@@ -115,7 +118,32 @@ export default function App() {
     void update(next)
     if (s === symbol) choose(next[0])
   }
-  const addable = all.filter((s) => !watch.includes(s.symbol))
+  const pickSymbol = (s: string) => {
+    if (!watch.includes(s)) void update([...watch, s])
+    choose(s)
+    setSearchOpen(false)
+  }
+  // phím tắt: / hoặc Ctrl+K tìm symbol; [ ] đổi khung; T đổi giao diện; ? xem danh sách phím
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null
+      const typing = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setSearchOpen(true); return }
+      if (typing || e.ctrlKey || e.metaKey || e.altKey) return
+      if (e.key === '/') { e.preventDefault(); setSearchOpen(true) }
+      else if (e.key === '?') { setHelpOpen((v) => !v) }
+      else if (e.key === 'Escape') { setHelpOpen(false) }
+      else if (e.key === '[' || e.key === ']') {
+        const i = TIMEFRAMES.indexOf(tf as (typeof TIMEFRAMES)[number])
+        const n = TIMEFRAMES[Math.max(0, Math.min(TIMEFRAMES.length - 1, i + (e.key === ']' ? 1 : -1)))]
+        setTf(n); savePref('tf', n)
+      } else if (e.key.toLowerCase() === 't') {
+        setTheme((t) => { const n = t === 'dark' ? 'light' : 'dark'; savePref('theme', n); return n })
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [tf])
   const onState = useCallback((s: StreamState) => setState(s), [])
 
   if (err && !symbol) return <main className="page"><p className="status bad" role="alert">Lỗi: {err}</p></main>
@@ -132,12 +160,8 @@ export default function App() {
             </li>
           ))}
         </ul>
-        {addable.length > 0 && (
-          <select aria-label="Thêm symbol" value="" onChange={(e) => e.target.value && void update([...watch, e.target.value])}>
-            <option value="">+ Thêm symbol</option>
-            {addable.map((s) => <option key={s.symbol} value={s.symbol}>{s.symbol}</option>)}
-          </select>
-        )}
+        <button className="addsym" onClick={() => setSearchOpen(true)} title="Tìm hoặc thêm symbol (phím /)">+ Tìm / thêm <kbd>/</kbd></button>
+        <button className="addsym help" onClick={() => setHelpOpen(true)} title="Phím tắt (phím ?)">Phím tắt <kbd>?</kbd></button>
       </aside>
 
       <section className="main">
@@ -221,6 +245,22 @@ export default function App() {
         {alertsOpen && symbol && <AlertsPanel symbol={symbol} lastPrice={null} />}
         {pineOpen && symbol && <PinePanel key={`${symbol}|${tf}`} symbol={symbol} tf={tf} onResult={setPine} />}
       </section>
+      {searchOpen && <SymbolSearch all={all} watch={watch} current={symbol} onPick={pickSymbol} onClose={() => setSearchOpen(false)} />}
+      {helpOpen && (
+        <div className="modal" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setHelpOpen(false) }}>
+          <div className="palette help" role="dialog" aria-label="Phím tắt">
+            <h2>Phím tắt</h2>
+            <dl>
+              <dt><kbd>/</kbd> hoặc <kbd>Ctrl</kbd>+<kbd>K</kbd></dt><dd>Tìm hoặc thêm symbol</dd>
+              <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Khung thời gian nhỏ hơn / lớn hơn</dd>
+              <dt><kbd>T</kbd></dt><dd>Đổi giao diện sáng/tối</dd>
+              <dt><kbd>?</kbd></dt><dd>Mở hoặc đóng bảng này</dd>
+              <dt><kbd>Esc</kbd></dt><dd>Đóng bảng đang mở</dd>
+              <dt><kbd>Ctrl</kbd>+<kbd>Enter</kbd></dt><dd>Chạy script trong ô Pine</dd>
+            </dl>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
