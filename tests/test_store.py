@@ -8,7 +8,7 @@ import pytest
 from common import appdb, store
 
 DAY = date(2026, 11, 10)
-BASE_TS = 1_794_000_000_000
+BASE_TS = 1_794_268_800_000  # 00:00 UTC ngày DAY (10/11/2026)
 
 
 @pytest.fixture()
@@ -95,7 +95,7 @@ def test_read_selected_columns(data_root):
 
 
 def test_bulk_write_from_sql(data_root):
-    sql = "SELECT (1700000000000 + i)::BIGINT, i::BIGINT, 5::INTEGER, 1.5::FLOAT, true FROM range(50000) r(i)"
+    sql = "SELECT (1794268800000 + i)::BIGINT, i::BIGINT, 5::INTEGER, 1.5::FLOAT, true FROM range(50000) r(i)"
     store.write_partition("ticks", "BTCUSDT", DAY, sql)
     assert len(store.read("ticks", "BTCUSDT")) == 50_000
 
@@ -170,7 +170,8 @@ def test_merge_day_noop_cases(data_root):
 def test_merge_does_not_touch_other_days(data_root):
     store.write_partition("ticks", "BTCUSDT", DAY, make_ticks(5), part="a")
     other = date(2026, 11, 11)
-    store.write_partition("ticks", "BTCUSDT", other, make_ticks(5, id0=100), part="b")
+    next_day_rows = [(BASE_TS + 86_400_000 + i, 100 + i, 1, 1.0, True) for i in range(5)]
+    store.write_partition("ticks", "BTCUSDT", other, next_day_rows, part="b")
     store.merge_day("ticks", "BTCUSDT", DAY)
     names = sorted(p.name for p in (data_root / "ticks" / "BTCUSDT").iterdir())
     assert names == ["date=2026-11-10.parquet", "date=2026-11-11.pb.parquet"]
@@ -293,3 +294,42 @@ def test_appdb_init_creates_tables(data_root):
         con.close()
     assert {"watchlist", "layouts", "drawings", "alerts"} <= tables
     appdb.init()  # chạy lại không lỗi
+
+
+# ---------- ts phải nằm trong ngày của file ----------
+
+def test_write_rejects_rows_outside_the_files_day(data_root):
+    inside = (BASE_TS + 5, 1, 1, 1.0, True)
+    next_day = (BASE_TS + 86_400_000, 2, 1, 1.0, True)
+    before = (BASE_TS - 1, 3, 1, 1.0, True)
+    for bad in (next_day, before):
+        with pytest.raises(ValueError, match="ngoài ngày UTC"):
+            store.write_partition("ticks", "BTCUSDT", DAY, [inside, bad])
+    assert not (data_root / "ticks" / "BTCUSDT").exists() or list((data_root / "ticks" / "BTCUSDT").iterdir()) == []
+    store.write_partition("ticks", "BTCUSDT", DAY, [inside, (BASE_TS + 86_400_000 - 1, 4, 1, 1.0, True)])  # đúng biên
+
+
+def test_range_read_only_touches_days_in_range(data_root):
+    d1, d2, d3 = date(2026, 11, 9), date(2026, 11, 10), date(2026, 11, 11)
+    day = 86_400_000
+    # mỗi ngày 5 tick ở đầu ngày, ngày 10 có thêm 3 tick cuối ngày
+    store.write_partition("ticks", "BTCUSDT", d1, [(BASE_TS - day + k, k, 1, 1.0, True) for k in range(5)])
+    store.write_partition("ticks", "BTCUSDT", d2, [(BASE_TS + k, 100 + k, 1, 1.0, True) for k in range(5)]
+                          + [(BASE_TS + day - 3 + k, 150 + k, 1, 1.0, True) for k in range(3)])
+    store.write_partition("ticks", "BTCUSDT", d3, [(BASE_TS + day + k, 200 + k, 1, 1.0, True) for k in range(5)])
+    # trong một ngày
+    assert [r[1] for r in store.read("ticks", "BTCUSDT", BASE_TS, BASE_TS + 3)] == [100, 101, 102]
+    # bắc qua nửa đêm: lấy từ hai file
+    got = store.read("ticks", "BTCUSDT", BASE_TS + day - 2, BASE_TS + day + 2)
+    assert [r[1] for r in got] == [151, 152, 200, 201]
+    # ngoài mọi file
+    assert store.read("ticks", "BTCUSDT", BASE_TS + 10 * day, BASE_TS + 11 * day) == []
+    # không giới hạn: đọc hết
+    assert len(store.read("ticks", "BTCUSDT")) == 5 + 8 + 5
+
+
+def test_range_read_dedupes_within_range(data_root):
+    rows = [(BASE_TS + i, i, 1, 1.0, True) for i in range(10)]
+    store.write_partition("ticks", "BTCUSDT", DAY, rows)
+    store.write_partition("ticks", "BTCUSDT", DAY, rows[4:], part="live")
+    assert len(store.read("ticks", "BTCUSDT", BASE_TS + 2, BASE_TS + 8)) == 6

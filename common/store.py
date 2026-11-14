@@ -224,6 +224,15 @@ def write_partition(
                 raise ValueError(f"mỗi dòng cần {len(cols)} cột {[c for c, _ in cols]}, gặp {bad[0]!r}")
             if rows:
                 con.executemany(f"INSERT INTO t VALUES ({','.join('?' * len(cols))})", rows)
+        # Điều kiện bắt buộc: file `date=D` chỉ chứa dữ liệu của ngày UTC D. range_select dựa vào đó để
+        # chỉ đọc file của các ngày liên quan; nếu sai, truy vấn theo khoảng thời gian sẽ lặng lẽ thiếu dòng.
+        lo, hi = con.execute("SELECT min(ts), max(ts) FROM t").fetchall()[0]
+        if lo is not None:
+            day_start = (day.toordinal() - _EPOCH.toordinal()) * 86_400_000
+            if lo < day_start or hi >= day_start + 86_400_000:
+                raise ValueError(
+                    f"{kind} {symbol}: ts [{lo}, {hi}] nằm ngoài ngày UTC {day} [{day_start}, {day_start + 86_400_000})"
+                )
         con.execute(f"COPY (SELECT * FROM t ORDER BY {ORDER[kind]}) TO {_sql_str(tmp)} {_COPY_OPTS}")
         _replace(tmp, final)
     except BaseException:
@@ -336,6 +345,56 @@ def dedupe_sql(kind: str, symbol: str) -> str:
     return _dedupe_from(kind, scan_sql(kind, symbol))
 
 
+_FILE_DATE_RE = re.compile(r"^date=(\d{4}-\d{2}-\d{2})(\.p[A-Za-z0-9_-]+)?\.parquet$")
+_EPOCH = date(1970, 1, 1)
+
+
+def _ms_to_day(ms: int) -> date:
+    return date.fromordinal(_EPOCH.toordinal() + ms // 86_400_000)
+
+
+def range_select(
+    kind: str, symbol: str, start_ms: int | None = None, end_ms: int | None = None, dedupe: bool = True
+) -> str | None:
+    """Câu SELECT trả về các dòng có ts trong [start_ms, end_ms), hoặc None nếu không có file nào.
+
+    Nhanh hơn dedupe_sql cho khoảng thời gian ngắn vì:
+      - chỉ đọc file của các ngày UTC có thể chứa khoảng đó (tên file mang ngày), và
+      - lọc ts ngay bên trong, trước khi loại trùng. Cửa sổ row_number() không đẩy được bộ lọc không
+        phải khoá phân vùng xuống dưới, nên lọc sau sẽ phải quét và sắp xếp mọi file.
+    Lọc trước khi loại trùng là an toàn: các bản sao của cùng một dòng có cùng ts, nên cả hai
+    cùng nằm trong hoặc cùng nằm ngoài khoảng.
+    """
+    _check(kind, symbol)
+    folder = data_dir() / kind / symbol
+    if not folder.exists():
+        return None
+    d0 = _ms_to_day(start_ms) if start_ms is not None else None
+    d1 = _ms_to_day(end_ms - 1) if end_ms is not None else None
+    files = []
+    for p in sorted(folder.glob("date=*.parquet")):
+        m = _FILE_DATE_RE.match(p.name)
+        if not m:
+            continue
+        d = date.fromisoformat(m.group(1))
+        if (d0 is None or d >= d0) and (d1 is None or d <= d1):
+            files.append(p)
+    if not files:
+        return None
+    flist = "[" + ", ".join(_sql_str(f) for f in files) + "]"
+    conds = []
+    if start_ms is not None:
+        conds.append(f"ts >= {int(start_ms)}")
+    if end_ms is not None:
+        conds.append(f"ts < {int(end_ms)}")
+    inner = f"SELECT * FROM read_parquet({flist}, union_by_name=true)"
+    if conds:
+        inner += " WHERE " + " AND ".join(conds)
+    if not dedupe:
+        return inner
+    return _dedupe_from(kind, f"({inner})")
+
+
 def read(
     kind: str, symbol: str, start_ms: int | None = None, end_ms: int | None = None,
     columns: Sequence[str] | None = None, dedupe: bool = True,
@@ -350,22 +409,13 @@ def read(
         unknown = [c for c in columns if c not in names]
         if unknown:
             raise KeyError(f"cột không có trong schema {kind}: {unknown}")
-    folder = data_dir() / kind / symbol
-    if not folder.exists() or not any(folder.glob("date=*.parquet")):
+    base = range_select(kind, symbol, start_ms, end_ms, dedupe=dedupe)
+    if base is None:
         return []
-    where, params = [], []
-    if start_ms is not None:
-        where.append("ts >= ?"); params.append(start_ms)
-    if end_ms is not None:
-        where.append("ts < ?"); params.append(end_ms)
     sel = ", ".join(columns) if columns else "*"
-    base = dedupe_sql(kind, symbol) if dedupe else f"SELECT * FROM {scan_sql(kind, symbol)}"
-    sql = f"SELECT {sel} FROM ({base})"
-    if where:
-        sql += " WHERE " + " AND ".join(where)
-    sql += f" ORDER BY {ORDER[kind]}"
+    sql = f"SELECT {sel} FROM ({base}) ORDER BY {ORDER[kind]}"
     con = duckdb.connect()
     try:
-        return con.execute(sql, params).fetchall()
+        return con.execute(sql).fetchall()
     finally:
         con.close()

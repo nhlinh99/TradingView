@@ -38,26 +38,21 @@ def bars_from_ticks(
     - Tick trùng id (backfill chồng collector) chỉ tính một lần.
     """
     step = tf_to_ms(tf)
-    folder = store.data_dir() / "ticks" / symbol
-    if not folder.exists() or not any(folder.glob("date=*.parquet")):
+    # chỉ đọc file của các ngày liên quan và lọc ts trước khi loại trùng (xem store.range_select)
+    src = store.range_select("ticks", symbol, start_ms, end_ms)
+    if src is None:
         return []
-    where, params = [], []
-    if start_ms is not None:
-        where.append("ts >= ?"); params.append(start_ms)
-    if end_ms is not None:
-        where.append("ts < ?"); params.append(end_ms)
-    wsql = (" WHERE " + " AND ".join(where)) if where else ""
     sql = f"""
         SELECT (ts // {step}) * {step} AS bar_ts,
                first(p ORDER BY ts, id) AS o, max(p) AS h, min(p) AS l, last(p ORDER BY ts, id) AS c,
                sum(q::DOUBLE) AS v,
                sum(CASE WHEN m THEN 0 ELSE q::DOUBLE END) AS buy_v,
                sum(CASE WHEN m THEN q::DOUBLE ELSE 0 END) AS sell_v
-        FROM ({store.dedupe_sql('ticks', symbol)}){wsql}
+        FROM ({src})
         GROUP BY 1 ORDER BY 1
     """
     con = duckdb.connect()
     try:
-        return con.execute(sql, params).fetchall()
+        return con.execute(sql).fetchall()
     finally:
         con.close()
