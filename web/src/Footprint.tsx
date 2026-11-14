@@ -103,6 +103,7 @@ export default function Footprint({ on, symbol, tf, ratio, dark, chart, candles,
       const w = el.clientWidth
       const h = el.clientHeight
       const dpr = window.devicePixelRatio || 1
+      canvas.style.clipPath = `inset(0 0 ${Math.max(0, h - (c.panes()[0]?.getHeight() ?? h))}px 0)` // chỉ vẽ trong pane giá
       if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
         canvas.width = Math.round(w * dpr)
         canvas.height = Math.round(h * dpr)

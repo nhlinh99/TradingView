@@ -141,6 +141,9 @@ export default function App() {
           </button>
           <span className={`live ${state}`} role="status" data-testid="stream-state">{STATE_LABEL[state]}</span>
         </header>
+        {symbol.startsWith('XAU') && (
+          <p className="srcnote">Volume và orderflow của hợp đồng Binance (XAUUSDT, tính theo oz), không phải COMEX. Cuối tuần thị trường gốc nghỉ nhưng hợp đồng vẫn khớp lệnh.</p>
+        )}
         {symbol && <Chart symbol={symbol} tf={tf} tz={tz} flow={flow} theme={theme} onState={onState} />}
         {err && <p className="status bad" role="alert">{err}</p>}
       </section>

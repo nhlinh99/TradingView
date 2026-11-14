@@ -66,3 +66,4 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--focus); ou
 .gexnote { position: absolute; left: 10px; top: 28px; z-index: 3; font-size: 12px; color: var(--mute); background: var(--veil);
   padding: 2px 8px; border-radius: 6px; pointer-events: none; }
 .gexnote.bad { color: var(--bad); }
+.srcnote { margin: 0; padding: 3px 12px; font-size: 12px; color: var(--mute); border-bottom: 1px solid var(--line); }

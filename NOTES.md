@@ -71,3 +71,12 @@ Thư mục `book` sau 61 phút: BTCUSDT 0,56 MB (59 file part), XAUUSDT 0,31 MB 
 ### Kiểm thử chạy thật (2026-11-14 20:02)
 
 `scripts/run-collectors.ps1`: cả hai collector (trades, book) khởi động, log nằm ở `C:\tv-data\logs`. Kết thúc một tiến trình trades thì script dựng lại tiến trình mới trong vài giây. `python -m collector.daily` chạy xong 9 bước trong 3 giây, thoát mã 0, trong lúc collector vẫn chạy. Mỗi collector hiện hai PID trong danh sách tiến trình vì venv của Python 3.15 có một bộ khởi chạy và một tiến trình con; đó là bình thường. Phase 1 đóng.
+
+### Vàng: XAUUSDT của Binance (kiểm tra 2026-11-14, Phase 6A)
+
+- Hợp đồng: `TRADIFI_PERPETUAL`, `underlyingType` COMMODITY, tick 0,01 USDT, bước khối lượng 0,001. Khối lượng tính theo ounce vàng (1 hợp đồng = 1 oz; lệnh nhỏ nhất 0,001 oz).
+- `/fapi/v1/tradingSchedule` báo nhóm COMMODITY đóng cửa từ thứ Sáu 22:00 đến Chủ nhật 23:00 UTC (NO_TRADING). Nhưng hợp đồng perpetual vẫn khớp lệnh suốt thứ Bảy 14/11: collector ghi 12 triệu tick trong 24 giờ, mọi giờ đều có lệnh. Vậy cuối tuần giá XAUUSDT không bám giá COMEX hay spot vì thị trường gốc nghỉ; đừng dùng nó để so sánh với XAUUSD vào cuối tuần.
+- Chênh lệch với chỉ số của Binance: lúc đo, giá cuối 3878,84, `indexPrice` 3881,10, tức perp thấp hơn chỉ số khoảng 0,06%. Chưa có nguồn miễn phí cho XAUUSD spot để đối chiếu độc lập; khi có Databento (6C) thì so với GC.
+- Dung lượng: khoảng 12 triệu tick/ngày, nhiều hơn BTC trong cùng ngày. Gom nén (`footprint_1m`) vẫn giữ nguyên quy tắc 30 ngày.
+- UI ghi rõ: "Volume và orderflow của hợp đồng Binance, không phải COMEX".
+- Phase 6B (GEX vàng từ options GLD) chưa làm: nguồn miễn phí tự động hoá được chưa kiểm chứng điều khoản sử dụng, và GLD là ETF chứ không phải COMEX. 6C (GC1!, options vàng) cần trả phí Databento, bỏ qua khi chưa có khoá. Cả hai là tuỳ chọn.
