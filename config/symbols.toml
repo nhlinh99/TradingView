@@ -8,11 +8,16 @@
 #   book_bucket:     độ rộng bucket giá (theo đơn vị giá, phải là bội của tick)
 #   book_interval_s: chụp sổ lệnh mỗi bao nhiêu giây
 #   book_resync_s:   lấy snapshot REST mới để sửa sai lệch và cho dải bám theo giá
+#
+# Gom nén (collector/compact.py):
+#   footprint_bucket: độ rộng bucket giá của footprint 1 phút (bội của tick). KHÔNG đổi sau khi đã gom
+#                     dữ liệu, vì các ngày cũ đã gom theo bucket cũ.
 
 [BTCUSDT]
 source = "binance_futures"
 tick = 0.1
 qty_step = 0.001
+footprint_bucket = 1.0
 book_window_pct = 0.15
 book_bucket = 1.0
 book_interval_s = 5
@@ -22,6 +27,7 @@ book_resync_s = 60
 source = "binance_futures"
 tick = 0.01
 qty_step = 0.001
+footprint_bucket = 0.1
 book_window_pct = 0.30
 book_bucket = 0.1
 book_interval_s = 5

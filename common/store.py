@@ -43,15 +43,22 @@ SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("ts", "BIGINT"), ("oi", "DOUBLE"), ("oi_value", "DOUBLE"), ("top_ls_count", "FLOAT"),
         ("top_ls_sum", "FLOAT"), ("ls_count", "FLOAT"), ("taker_ls", "FLOAT"),
     ],
+    # footprint 1 phút: kết quả gom nén của ticks. p = cận dưới bucket giá (đơn vị tick),
+    # buy/sell = khối lượng mua/bán chủ động trong bucket trong phút đó
+    "footprint_1m": [("ts", "BIGINT"), ("p", "INTEGER"), ("buy", "FLOAT"), ("sell", "FLOAT")],
+    # sổ lệnh 1 phút: kết quả gom nén của book (lấy giá trị lớn nhất mỗi bucket trong phút)
+    "book_1m": [("ts", "BIGINT"), ("p", "INTEGER"), ("bid", "FLOAT"), ("ask", "FLOAT")],
 }
 
 # Khoá duy nhất của từng loại, dùng để loại trùng. Dòng trùng khoá: giữ dòng có ts nhỏ nhất.
 KEYS: dict[str, list[str]] = {
     "ticks": ["id"], "bars": ["ts"], "book": ["ts", "p"], "bookdepth": ["ts", "pct"], "metrics": ["ts"],
+    "footprint_1m": ["ts", "p"], "book_1m": ["ts", "p"],
 }
 # Thứ tự sắp xếp khi ghi và đọc (ổn định khi nhiều lệnh cùng mili giây).
 ORDER: dict[str, str] = {
     "ticks": "ts, id", "bars": "ts", "book": "ts, p", "bookdepth": "ts, pct", "metrics": "ts",
+    "footprint_1m": "ts, p", "book_1m": "ts, p",
 }
 
 INT32_MAX = 2**31 - 1
@@ -211,6 +218,29 @@ def day_files(kind: str, symbol: str, day: date) -> list[Path]:
         return []
     d = day.isoformat()
     return sorted(p for p in folder.glob(f"date={d}*.parquet") if p.name == f"date={d}.parquet" or p.name.startswith(f"date={d}.p"))
+
+
+def list_days(kind: str, symbol: str) -> list[date]:
+    """Các ngày có dữ liệu của (kind, symbol), tăng dần."""
+    _check(kind, symbol)
+    folder = data_dir() / kind / symbol
+    if not folder.exists():
+        return []
+    days = set()
+    for p in folder.glob("date=*.parquet"):
+        m = re.match(r"^date=(\d{4}-\d{2}-\d{2})(\.p[A-Za-z0-9_-]+)?\.parquet$", p.name)
+        if m:
+            days.add(date.fromisoformat(m.group(1)))
+    return sorted(days)
+
+
+def day_select(kind: str, symbol: str, day: date) -> str:
+    """Câu SELECT trả về mọi dòng của một ngày, đã loại trùng khoá. Dùng làm bảng con: FROM (<câu này>)."""
+    files = day_files(kind, symbol, day)
+    if not files:
+        raise FileNotFoundError(f"không có file {kind} {symbol} {day}")
+    flist = "[" + ", ".join(_sql_str(f) for f in files) + "]"
+    return _dedupe_from(kind, f"read_parquet({flist}, union_by_name=true)")
 
 
 def _dedupe_from(kind: str, from_expr: str) -> str:
