@@ -46,19 +46,20 @@ Luồng diff gửi cập nhật cho mọi mức giá, nhưng mức ngoài dải 
 
 Đạt mục tiêu dưới 10%. Việc kiểm tra tổng mua và bán từng phút trước khi xoá tick qua trên dữ liệu thật.
 
-### Sổ lệnh tự ghi (mẫu 5 phút, cần đo lại sau ít nhất 1 giờ)
+### Sổ lệnh tự ghi (mẫu 14,4 phút, 173 snapshot; kế hoạch yêu cầu đo sau 1 giờ nên đây là sơ bộ)
 | | BTCUSDT | XAUUSDT |
 |---|---|---|
-| Số bucket mỗi snapshot | khoảng 203 | khoảng 235 |
-| Ngoại suy mỗi ngày, file con theo phút | 14,7 MB | 7,0 MB |
-| Ngoại suy mỗi ngày, đã gộp một file | 11,4 MB | 3,7 MB |
+| Số bucket mỗi snapshot | khoảng 202 | khoảng 235 |
+| Ngoại suy mỗi ngày, file con theo phút | 13,6 MB | 7,0 MB |
+| Ngoại suy mỗi ngày, đã gộp một file | 12,5 MB | 2,5 MB |
 
-Thấp hơn ước tính 15-25 MB trong kế hoạch, nhưng mẫu ngắn và thị trường lúc đó có thể yên. Đo lại: chạy `python -m collector.live_book` ít nhất một giờ, rồi so tổng dung lượng thư mục `book` với thời gian chạy.
+Thấp hơn ước tính 15-25 MB trong kế hoạch, nhưng mẫu chỉ 14 phút ở một thời điểm trong ngày, nên số thật có thể lệch nhiều (lúc biến động mạnh số bucket đổi nhiều hơn và nén kém hơn). Đo lại: chạy `python -m collector.live_book` ít nhất một giờ rồi so dung lượng thư mục `book` với thời gian chạy. Collector sổ lệnh đã chạy 14 lần đồng bộ lại trong 14 phút (mỗi 60 giây một lần) và không có cảnh báo `pu != u`.
 
 ## Việc còn mở
 - Đo lại dung lượng sổ lệnh trên mẫu dài hơn (xem trên).
 - Backfill hàng tháng (`monthly/`) của kho Binance chưa làm. Daily đủ cho 30 ngày, nhưng tải nhiều năm sẽ cần monthly. `collector.backfill` hiện từ chối hơn 366 ngày nếu thiếu `--yes`.
-- Khoảng hở lớn khi collector khởi động lâu sau lần ghi cuối: được lấp bằng REST ở luồng riêng (giãn 0,6 giây mỗi trang), mất vài phút cho khoảng một triệu id. Khoảng hở trên `max_gap` (5 triệu id) bị bỏ qua và ghi `skipped`, phải dùng `collector.backfill`.
+- Khoảng hở lớn khi collector khởi động lâu sau lần ghi cuối: được lấp bằng REST ở luồng riêng (giãn 0,6 giây mỗi trang, khoảng 1,5 phút cho mỗi 100 nghìn dòng, tức khoảng 15 phút cho 900 nghìn id). Khoảng hở trên `max_gap` (5 triệu id) bị bỏ qua và ghi `skipped`, phải dùng `collector.backfill`.
+- Lỗi thật đã sửa khi chạy nhiều giờ: luồng lấp khoảng hở chết vì `PermissionError` khi đọc `config/symbols.toml` (file nằm trong OneDrive, bị khoá tạm thời) và không tự thử lại. Nguyên nhân gốc là `to_int_price` đọc lại file TOML cho từng tick. Đã thêm nhớ đệm theo mtime, tiến độ có thể tiếp tục và tự thử lại. Bài học: mọi thứ nằm trong OneDrive đều có thể bị khoá bất ngờ, nên không đọc cấu hình trong vòng lặp nóng.
 - Compaction chưa được cài lịch chạy. Xem README.
 - Giá Databento, phí SSI, điều khoản options GLD, gói Coinglass: chưa xác minh (xem `PLAN-CLAUDE-CODE.md`).
 - Đơn vị khối lượng của XAUUSDT: chưa xác minh (kho ghi `quantity` dạng số thập phân, tick 0,01, bước 0,001).
