@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Chart, { type Flow } from './Chart'
 import PinePanel from './PinePanel'
+import AlertsPanel from './AlertsPanel'
 import { fetchSymbols, fetchWatchlist, saveWatchlist, type PineResult, type StreamState, type SymbolInfo } from './api'
 import { TIMEFRAMES, TIMEZONES } from './logic'
 
@@ -49,6 +50,7 @@ export default function App() {
     return n
   })
   const [pine, setPine] = useState<PineResult | null>(null)
+  const [alertsOpen, setAlertsOpen] = useState(() => pref('alertsOpen', '0', ['0', '1']) === '1')
   const [pineOpen, setPineOpen] = useState(() => pref('pineOpen', '0', ['0', '1']) === '1')
   const [state, setState] = useState<StreamState>('connecting')
   const [err, setErr] = useState<string | null>(null)
@@ -139,6 +141,7 @@ export default function App() {
               </label>
             )}
           </div>
+          <button className="themebtn" aria-pressed={alertsOpen} onClick={() => { const n = !alertsOpen; setAlertsOpen(n); savePref('alertsOpen', n ? '1' : '0') }}>Cảnh báo</button>
           <button className="themebtn" aria-pressed={pineOpen} onClick={() => { const n = !pineOpen; setPineOpen(n); savePref('pineOpen', n ? '1' : '0') }}>Pine</button>
           <button className="themebtn" aria-label="Đổi giao diện sáng/tối"
             onClick={() => { const n = theme === 'dark' ? 'light' : 'dark'; setTheme(n); savePref('theme', n) }}>
@@ -154,6 +157,7 @@ export default function App() {
         )}
         {symbol && <Chart symbol={symbol} tf={tf} tz={tz} flow={flow} pine={pine} theme={theme} onState={onState} />}
         {err && <p className="status bad" role="alert">{err}</p>}
+        {alertsOpen && symbol && <AlertsPanel symbol={symbol} lastPrice={null} />}
         {pineOpen && symbol && <PinePanel key={`${symbol}|${tf}`} symbol={symbol} tf={tf} onResult={setPine} />}
       </section>
     </div>

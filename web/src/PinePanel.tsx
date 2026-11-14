@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchPineExamples, runPine, type PineResult } from './api'
+import { createAlert, fetchPineExamples, runPine, type PineResult } from './api'
 
 type Props = {
   symbol: string
@@ -28,6 +28,7 @@ export default function PinePanel({ symbol, tf, onResult }: Props) {
   const [inputs, setInputs] = useState<Record<string, unknown>>({})
   const [err, setErr] = useState<{ message: string; line?: number } | null>(null)
   const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState<string | null>(null)
 
   useEffect(() => { fetchPineExamples().then(setExamples).catch(() => setExamples([])) }, [])
 
@@ -60,6 +61,13 @@ export default function PinePanel({ symbol, tf, onResult }: Props) {
         </select>
         <button className="primary" onClick={() => void run()} disabled={busy}>{busy ? 'Đang chạy...' : 'Add to chart'}</button>
         <button onClick={remove} disabled={!res}>Gỡ khỏi chart</button>
+        {res && res.alerts.length > 0 && (
+          <button onClick={() => {
+            void createAlert(symbol, { type: 'pine', source: src, tf, title: res.alerts[0].title, once: false })
+              .then(() => setNote(`Đã tạo cảnh báo "${res.alerts[0].title}". Tiến trình nền sẽ gửi thông báo khi nến đóng thoả điều kiện.`))
+              .catch((e: unknown) => setErr({ message: JSON.stringify((e as { detail?: unknown }).detail ?? e) }))
+          }}>Tạo cảnh báo từ script</button>
+        )}
         <span className="mute">{symbol} · {tf}</span>
       </div>
       <div className="pine-body">
@@ -69,6 +77,7 @@ export default function PinePanel({ symbol, tf, onResult }: Props) {
           onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); void run() } }}
         />
         <div className="pine-side">
+          {note && <p className="mute">{note}</p>}
           {err && <p className="status bad" role="alert">{err.line ? `Dòng ${err.line}: ` : ''}{err.message}</p>}
           {res && res.inputs.length > 0 && (
             <div className="pine-inputs">

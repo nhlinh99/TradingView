@@ -144,3 +144,17 @@ export const createDrawing = (symbol: string, kind: DrawKind, payload: Drawing['
   json<Drawing>('/api/drawings', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ symbol, kind, payload }) })
 export const deleteDrawing = (id: number) => json<{ deleted: number }>(`/api/drawings/${id}`, { method: 'DELETE' })
 export const clearDrawings = (symbol: string) => json<{ deleted: number }>(`/api/drawings?symbol=${encodeURIComponent(symbol)}`, { method: 'DELETE' })
+
+export type AlertItem = { id: number; symbol: string; text: string; enabled: boolean; created: string; has_source: boolean; condition: Record<string, unknown> }
+export type AlertEvent = { id: number; alert_id: number; ts: number; symbol: string; message: string; sent: string }
+export const fetchAlerts = () => json<AlertItem[]>('/api/alerts')
+export const fetchAlertEvents = () => json<AlertEvent[]>('/api/alerts/events')
+export const createAlert = async (symbol: string, condition: Record<string, unknown>, message?: string) => {
+  const r = await fetch('/api/alerts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ symbol, condition, message }) })
+  const b = await r.json()
+  if (!r.ok) throw b
+  return b as AlertItem
+}
+export const setAlertEnabled = (id: number, enabled: boolean) =>
+  json<{ id: number }>(`/api/alerts/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled }) })
+export const deleteAlert = (id: number) => json<{ deleted: number }>(`/api/alerts/${id}`, { method: 'DELETE' })

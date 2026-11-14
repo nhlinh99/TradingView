@@ -30,6 +30,15 @@ CREATE TABLE IF NOT EXISTS alerts (
   enabled   INTEGER NOT NULL DEFAULT 1,
   created   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+-- Lịch sử các lần cảnh báo đã bắn (để xem lại và để biết thông báo đã gửi chưa).
+CREATE TABLE IF NOT EXISTS alert_events (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  alert_id  INTEGER,
+  ts        INTEGER NOT NULL,      -- ms
+  symbol    TEXT NOT NULL,
+  message   TEXT NOT NULL,
+  sent      TEXT NOT NULL DEFAULT ''   -- các kênh đã gửi thành công, ví dụ "desktop,telegram"
+);
 -- Nhật ký backfill: ngày nào của dataset nào đã tải và kiểm checksum xong.
 CREATE TABLE IF NOT EXISTS backfill_log (
   dataset   TEXT NOT NULL,

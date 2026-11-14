@@ -91,3 +91,11 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--focus); ou
 .draw-tools button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .draw-tools button:disabled { opacity: .4; cursor: default; }
 .draw-tools .bad { color: var(--bad); font-size: 11px; max-width: 90px; }
+
+.alerts { border-top: 1px solid var(--line); background: var(--bg); }
+.alerts input[type='number'] { width: 110px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.alerts .chk, .pine .chk { display: inline-flex; align-items: center; gap: 4px; }
+.alerts-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; padding: 0 12px 10px; font-size: 13px; max-height: 160px; overflow: auto; }
+.alerts button { padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); cursor: pointer; }
+.alerts button.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+@media (max-width: 700px) { .alerts-body { grid-template-columns: 1fr; } }

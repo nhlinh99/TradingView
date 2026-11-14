@@ -20,6 +20,7 @@ $jobs = [ordered]@{
   trades = @('-m', 'collector.live_trades', '--symbols', $Symbols)
   book   = @('-m', 'collector.live_book', '--symbols', $Symbols)
   deribit = @('-m', 'collector.deribit')
+  alerts = @('-m', 'collector.alerts')
   vnbook = @('-m', 'collector.vn_book')   # tu dong chi ghi trong gio giao dich HOSE
 }
 $procs = @{}
