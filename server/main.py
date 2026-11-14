@@ -1,0 +1,19 @@
+"""Server cục bộ. Chạy: python -m uvicorn server.main:app --host 127.0.0.1 --port 8000"""
+from __future__ import annotations
+
+import duckdb
+from fastapi import FastAPI
+
+from common import store
+
+app = FastAPI(title="tv-local")
+
+
+@app.get("/health")
+@app.get("/api/health")
+def health() -> dict:
+    try:
+        root = store.data_dir()
+    except store.DataDirError as e:
+        return {"status": "error", "detail": str(e), "duckdb": duckdb.__version__}
+    return {"status": "ok", "duckdb": duckdb.__version__, "data_dir": str(root)}

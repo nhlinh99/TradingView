@@ -1,0 +1,12 @@
+# tick: bước giá nhỏ nhất. Giá lưu dạng số nguyên = round(giá / tick).
+# Giá trị lấy từ /fapi/v1/exchangeInfo ngày 14/11/2026.
+
+[BTCUSDT]
+source = "binance_futures"
+tick = 0.1
+qty_step = 0.001
+
+[XAUUSDT]
+source = "binance_futures"
+tick = 0.01
+qty_step = 0.001

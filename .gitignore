@@ -218,3 +218,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- tv-local (project) ---
+.env
+node_modules
+plan-viewer/node_modules
+!plan-viewer/dist/
+*.parquet
+*.parquet.tmp
+app.sqlite
+# third-party skills installed for local use; reinstall from their source repos
+.claude/skills/
+.claude/settings.local.json

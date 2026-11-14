@@ -1,0 +1,5 @@
+{
+  "venvPath": "C:/tv-data",
+  "venv": ".venv",
+  "include": ["common", "server", "collector", "tests"]
+}

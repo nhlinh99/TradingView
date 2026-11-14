@@ -1,0 +1,25 @@
+# Chính sách giữ dữ liệu. Job gom nén (collector/compact.py, làm ở Phase 1) đọc file này.
+
+[limits]
+max_data_gb = 20            # vượt trần thì xoá tầng cũ nhất, theo thứ tự: book_1m, options, ticks
+
+[ticks]
+full_days = 30              # giữ nguyên tick 30 ngày
+after = "footprint_1m"      # sau đó gom thành footprint 1 phút, xoá tick
+
+[footprint_1m]
+keep = "forever"
+
+[bars_1m]
+keep = "forever"
+
+[book]                      # sổ lệnh tự ghi (heatmap)
+raw_days = 7
+raw_interval_s = 5
+agg_days = 180
+agg_interval_s = 60
+agg_method = "max"          # giá trị lớn nhất mỗi bucket
+
+[options]                   # snapshot options Deribit
+hourly_days = 30
+after = "daily"

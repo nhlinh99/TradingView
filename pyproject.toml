@@ -1,0 +1,23 @@
+[project]
+name = "tv-local"
+version = "0.1.0"
+description = "Chart cá nhân kiểu TradingView: collector, server, web"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi",
+  "uvicorn",
+  "duckdb",
+  "httpx",
+  "websockets",
+  "python-dotenv",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+# Không dùng uvicorn[standard] và PyYAML: PyYAML chưa có bản dựng sẵn cho Python 3.15.
+# Cấu hình dùng TOML (thư viện chuẩn tomllib).
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
