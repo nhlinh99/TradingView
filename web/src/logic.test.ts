@@ -12,7 +12,7 @@ test('tfMs', () => {
   assert.equal(tfMs('15m'), 900_000)
   assert.equal(tfMs('4h'), 14_400_000)
   assert.equal(tfMs('1d'), 86_400_000)
-  for (const bad of ['', 'm', '0m', '1w', '-1m', '1.5m']) assert.throws(() => tfMs(bad))
+  for (const bad of ['', 'm', '0m', '1x', '-1m', '1.5m']) assert.throws(() => tfMs(bad))
 })
 
 test('decimalsFromTick', () => {
@@ -146,4 +146,27 @@ test('distToSegment', () => {
   assert.equal(distToSegment(5, 5, 0, 0, 10, 0), 5)
   assert.equal(distToSegment(-3, 4, 0, 0, 10, 0), 5)   // gần đầu mút
   assert.equal(distToSegment(1, 1, 2, 2, 2, 2), Math.SQRT2) // đoạn suy biến thành điểm
+})
+
+import { bucketStartMs } from './logic.ts'
+
+test('week and month timeframes: names, bucket boundaries, live trades', () => {
+  assert.equal(tfMs('1w'), 7 * 86_400_000)
+  assert.equal(tfMs('1M'), 30 * 86_400_000)
+  assert.equal(tfMs('1m'), 60_000)                                  // m thường vẫn là phút
+  const ms = (s: string) => Date.parse(s)
+  assert.equal(bucketStartMs('1w', ms('2026-11-12T05:00:00Z')), ms('2026-11-09T00:00:00Z'))   // thứ Năm -> thứ Hai
+  assert.equal(bucketStartMs('1w', ms('2026-11-09T00:00:00Z')), ms('2026-11-09T00:00:00Z'))
+  assert.equal(bucketStartMs('1w', ms('2026-11-08T23:59:59Z')), ms('2026-11-02T00:00:00Z'))   // Chủ nhật thuộc tuần trước
+  assert.equal(bucketStartMs('1M', ms('2026-11-30T23:00:00Z')), ms('2026-11-01T00:00:00Z'))
+  assert.equal(bucketStartMs('1M', ms('2026-12-01T00:00:00Z')), ms('2026-12-01T00:00:00Z'))
+  assert.equal(bucketStartMs('5m', ms('2026-11-12T05:07:30Z')), ms('2026-11-12T05:05:00Z'))
+  const bars: Bar[] = []
+  const t = (ts: number, p: number) => ({ ts, id: 1, p, q: 1, m: false })
+  applyTrade(bars, tfMs('1w'), t(ms('2026-11-10T10:00:00Z'), 100), '1w')
+  applyTrade(bars, tfMs('1w'), t(ms('2026-11-14T10:00:00Z'), 110), '1w')       // cùng tuần: gộp vào một nến
+  applyTrade(bars, tfMs('1w'), t(ms('2026-11-16T00:00:00Z'), 105), '1w')       // thứ Hai kế tiếp: nến mới
+  assert.equal(bars.length, 2)
+  assert.equal(bars[0].time, ms('2026-11-09T00:00:00Z') / 1000)
+  assert.equal(bars[0].high, 110)
 })

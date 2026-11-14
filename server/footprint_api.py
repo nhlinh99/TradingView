@@ -61,6 +61,8 @@ def get_footprint(symbol: str, tf: str, start_ms: int | None, end_ms: int | None
         cfg = store.symbol_config(symbol)
     except (ValueError, KeyError) as e:
         raise HTTPException(400, str(e)) from e
+    if tickbars.is_calendar(tf):
+        raise HTTPException(400, "footprint không hỗ trợ khung tuần và tháng")
     if tf_ms < MINUTE or tf_ms % MINUTE:
         raise HTTPException(400, "footprint cần khung thời gian là bội của 1 phút")
     tick = cfg["tick"]

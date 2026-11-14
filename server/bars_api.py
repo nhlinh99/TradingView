@@ -80,7 +80,7 @@ def tick_bars(symbol: str, tf_ms: int, first_ms: int, end_ms: int, live: bool) -
     return bars, last_id
 
 
-def aggregate_minutes(symbol: str, tf_ms: int, start_ms: int, end_ms: int, live: bool) -> tuple[list[tuple], int | None]:
+def aggregate_minutes(symbol: str, tf_ms: int, start_ms: int, end_ms: int, live: bool, tf: str | None = None) -> tuple[list[tuple], int | None]:
     """Gộp nến 1 phút (kline + phần đuôi dựng từ tick) thành nến tf_ms."""
     src = store.range_select("bars", symbol, start_ms, end_ms)
     last_kline = None
@@ -105,7 +105,7 @@ def aggregate_minutes(symbol: str, tf_ms: int, start_ms: int, end_ms: int, live:
             parts.append(f"SELECT ts, o, h, l, c, v::DOUBLE v, buy_v::DOUBLE buy_v, sell_v::DOUBLE sell_v FROM ({src})")
         parts.append("SELECT * FROM tail")
         sql = f"""
-            SELECT (ts // {tf_ms}) * {tf_ms} AS t,
+            SELECT {tickbars.bucket_sql(tf if tf is not None else tf_ms)} AS t,
                    first(o ORDER BY ts) AS o, max(h) AS h, min(l) AS l, last(c ORDER BY ts) AS c,
                    sum(v) AS v, sum(buy_v) AS buy_v, sum(sell_v) AS sell_v
             FROM ({' UNION ALL '.join(parts)})
@@ -144,14 +144,14 @@ def get_bars(symbol: str, tf: str, start_ms: int | None, end_ms: int | None, lim
         raise HTTPException(422, "from phải nhỏ hơn to")
     if (end_ms - start_ms) // tf_ms > MAX_LIMIT * 4:
         raise HTTPException(422, f"khoảng thời gian quá lớn cho timeframe {tf}")
-    start_ms = start_ms // tf_ms * tf_ms          # căn đầu nến để nến đầu tiên đủ dữ liệu
+    start_ms = tickbars.bucket_start(tf, start_ms)          # căn đầu nến (tuần: thứ Hai, tháng: ngày 1) để nến đầu tiên đủ dữ liệu
 
     if tf_ms < MINUTE and is_vn:
         raise HTTPException(422, "cổ phiếu VN chỉ có nến từ 1 phút trở lên (không có tick)")
     if tf_ms < MINUTE:
         rows, last_id = tick_bars(symbol, tf_ms, start_ms, end_ms, live)
     elif tf_ms % MINUTE == 0:
-        rows, last_id = aggregate_minutes(symbol, tf_ms, start_ms, end_ms, live)
+        rows, last_id = aggregate_minutes(symbol, tf_ms, start_ms, end_ms, live, tf)
     else:
         raise HTTPException(422, "timeframe từ 1 phút trở lên phải là bội của 1 phút")
     rows = rows[-limit:]

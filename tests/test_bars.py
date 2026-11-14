@@ -20,7 +20,8 @@ def test_tf_to_ms():
     assert bars.tf_to_ms("1s") == 1000 and bars.tf_to_ms("5m") == 300_000
     assert bars.tf_to_ms("1h") == 3_600_000 and bars.tf_to_ms("1d") == 86_400_000
     assert bars.tf_to_ms(250) == 250
-    for bad in ("", "m", "0m", "1w", "-1m", "1.5m"):
+    assert bars.tf_to_ms("1w") == 7 * 86_400_000 and bars.tf_to_ms("1M") == 30 * 86_400_000
+    for bad in ("", "m", "0m", "1x", "-1m", "1.5m", "2M"):
         with pytest.raises(ValueError):
             bars.tf_to_ms(bad)
 

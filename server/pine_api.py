@@ -41,6 +41,10 @@ class RunBody(BaseModel):
 def _norm_tf(tf: str) -> str:
     """Pine "60" hoặc "D" -> kiểu của /api/bars ("1h", "1d")."""
     ms = tf_to_ms(tf)
+    if ms == 7 * 86_400_000:
+        return "1w"
+    if ms == 30 * 86_400_000 and str(tf).strip() in ("M", "1M"):
+        return "1M"
     for unit, size in (("d", 86_400_000), ("h", 3_600_000), ("m", 60_000)):
         if ms % size == 0:
             return f"{ms // size}{unit}"

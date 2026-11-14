@@ -241,3 +241,28 @@ def test_merge_tail_helpers():
     b = bars.bars_from_tick_rows(ticks, "1m")
     assert b == [(T0, 100, 105, 100, 105, 3.0, 2.0, 1.0)]
     assert bars.combine_bars((T0, 100, 110, 99, 105, 1.0, 1.0, 0.0), (T0, 106, 120, 104, 118, 2.0, 0.0, 2.0)) ==         (T0, 100, 120, 99, 118, 3.0, 1.0, 2.0)
+
+
+def test_week_and_month_timeframes_use_calendar_boundaries(data_root):
+    from datetime import datetime, timezone
+
+    def ms(y, m, d, h=12):
+        return int(datetime(y, m, d, h, tzinfo=timezone.utc).timestamp() * 1000)
+    # một nến 1 phút mỗi ngày từ 2026-10-26 (thứ Hai) tới 2026-11-10; giá = số ngày kể từ đầu
+    days = []
+    d0 = date(2026, 10, 26)
+    for k in range(16):
+        d = date.fromordinal(d0.toordinal() + k)
+        t = ms(d.year, d.month, d.day)
+        store.write_partition("bars", "BTCUSDT", d, [(t, 1000 + k * 10, 1005 + k * 10, 995 + k * 10, 1001 + k * 10, 2.0, 1.0, 1.0)])
+        days.append(t)
+    w = client.get("/api/bars", params={"symbol": "BTCUSDT", "tf": "1w", "from": ms(2026, 10, 26, 0), "to": ms(2026, 11, 11, 0)}).json()
+    opens = [b[0] for b in w["bars"]]
+    assert opens == [ms(2026, 10, 26, 0), ms(2026, 11, 2, 0), ms(2026, 11, 9, 0)]       # thứ Hai mỗi tuần
+    first = w["bars"][0]
+    assert first[5] == 14.0 and first[1] == 100.0 and first[4] == pytest.approx(100.0 + 6 * 1.0 + 0.1)   # 7 ngày: open ngày đầu, close ngày cuối
+    mth = client.get("/api/bars", params={"symbol": "BTCUSDT", "tf": "1M", "from": ms(2026, 10, 1, 0), "to": ms(2026, 11, 11, 0)}).json()
+    assert [b[0] for b in mth["bars"]] == [ms(2026, 10, 1, 0), ms(2026, 11, 1, 0)]
+    assert mth["bars"][0][5] == 12.0 and mth["bars"][1][5] == 20.0          # 26-31/10 = 6 ngày, 1-10/11 = 10 ngày, mỗi ngày volume 2
+    assert client.get("/api/bars", params={"symbol": "BTCUSDT", "tf": "2M"}).status_code == 422
+    assert client.get("/api/footprint", params={"symbol": "BTCUSDT", "tf": "1w"}).status_code == 400

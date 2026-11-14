@@ -12,8 +12,39 @@ import duckdb
 
 from . import store
 
-_TF_RE = re.compile(r"^(\d+)([smhd])$")
-_UNIT_MS = {"s": 1_000, "m": 60_000, "h": 3_600_000, "d": 86_400_000}
+_TF_RE = re.compile(r"^(\d+)([smhdwM])$")
+# w = tuần (bắt đầu thứ Hai 00:00 UTC), M = tháng dương lịch (bắt đầu ngày 1 lúc 00:00 UTC). Độ dài của 1M chỉ là số danh nghĩa
+# 30 ngày, dùng để ước lượng khoảng thời gian; ranh giới nến luôn lấy theo lịch (xem bucket_sql và bucket_start).
+_UNIT_MS = {"s": 1_000, "m": 60_000, "h": 3_600_000, "d": 86_400_000, "w": 7 * 86_400_000, "M": 30 * 86_400_000}
+_MONDAY_SHIFT_MS = 3 * 86_400_000   # 1970-01-01 là thứ Năm; cộng 3 ngày thì ranh giới tuần rơi vào thứ Hai
+
+
+def is_calendar(tf: str | int) -> bool:
+    return isinstance(tf, str) and tf[-1:] in ("w", "M") and bool(_TF_RE.match(tf))
+
+
+def bucket_sql(tf: str | int, col: str = "ts") -> str:
+    """Biểu thức DuckDB cho thời điểm mở nến chứa `col` (mili giây)."""
+    ms = tf_to_ms(tf)
+    if isinstance(tf, str) and tf.endswith("w"):
+        return f"(({col} + {_MONDAY_SHIFT_MS}) // {ms}) * {ms} - {_MONDAY_SHIFT_MS}"
+    if isinstance(tf, str) and tf.endswith("M"):
+        if int(tf[:-1]) != 1:
+            raise ValueError("chỉ hỗ trợ 1M (một tháng)")
+        return f"epoch_ms(date_trunc('month', epoch_ms({col})))"
+    return f"({col} // {ms}) * {ms}"
+
+
+def bucket_start(tf: str | int, ms: int) -> int:
+    """Thời điểm mở nến chứa `ms` (cùng quy tắc với bucket_sql)."""
+    step = tf_to_ms(tf)
+    if isinstance(tf, str) and tf.endswith("w"):
+        return (ms + _MONDAY_SHIFT_MS) // step * step - _MONDAY_SHIFT_MS
+    if isinstance(tf, str) and tf.endswith("M"):
+        from datetime import datetime, timezone
+        d = datetime.fromtimestamp(ms / 1000, timezone.utc)
+        return int(datetime(d.year, d.month, 1, tzinfo=timezone.utc).timestamp() * 1000)
+    return ms // step * step
 
 
 def tf_to_ms(tf: str | int) -> int:
@@ -25,6 +56,8 @@ def tf_to_ms(tf: str | int) -> int:
     m = _TF_RE.match(tf)
     if not m or int(m.group(1)) <= 0:
         raise ValueError(f"timeframe không hợp lệ: {tf!r} (ví dụ 1s, 5m, 1h, 1d)")
+    if m.group(2) == "M" and int(m.group(1)) != 1:
+        raise ValueError("chỉ hỗ trợ 1M (một tháng)")
     return int(m.group(1)) * _UNIT_MS[m.group(2)]
 
 

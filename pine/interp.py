@@ -67,10 +67,10 @@ def tf_to_ms(tf: str) -> int:
         return int(t) * 60_000
     unit = t[-1].lower()
     num = t[:-1] or "1"
+    if t[-1] == "M" and num.isdigit():          # chữ M hoa là tháng, m thường là phút
+        return int(num) * 30 * 86_400_000
     if unit in TF_MS and num.isdigit():
         return int(num) * TF_MS[unit]
-    if unit == "m" and t[-1] == "M":
-        return int(num) * 30 * 86_400_000
     raise PineRuntimeError(f"timeframe không hợp lệ: {tf!r}")
 
 

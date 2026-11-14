@@ -205,7 +205,7 @@ export default function Chart({ symbol, tf, tz, flow, pine, replay, onTotal, syn
       if (replayRef.current !== null) return // đang phát lại: không trộn lệnh khớp trực tiếp vào
       if (lastId !== null && t.id <= lastId) return // đã nằm trong nến tải về
       lastId = t.id
-      const b = applyTrade(bars.current, step, t)
+      const b = applyTrade(bars.current, step, t, tf)
       if (!b) return
       candles.current?.update({ time: b.time as UTCTimestamp, open: b.open, high: b.high, low: b.low, close: b.close })
       volume.current?.update({ time: b.time as UTCTimestamp, value: b.volume, color: volColor(b, PALETTE[themeRef.current].up, PALETTE[themeRef.current].down) })

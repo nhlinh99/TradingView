@@ -12,11 +12,26 @@ export type Bar = {
 }
 export type Trade = { ts: number; id: number; p: number; q: number; m: boolean }
 
-export const TIMEFRAMES = ['1s', '1m', '5m', '15m', '1h', '4h', '1d'] as const
-const UNIT: Record<string, number> = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }
+export const TIMEFRAMES = ['1s', '1m', '5m', '15m', '1h', '4h', '1d', '1w', '1M'] as const
+// w = tuần (thứ Hai 00:00 UTC), M = tháng dương lịch; độ dài của M chỉ là số danh nghĩa 30 ngày
+const UNIT: Record<string, number> = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000, w: 7 * 86_400_000, M: 30 * 86_400_000 }
+
+/** Mili giây mở nến chứa tsMs. Tuần bắt đầu thứ Hai, tháng bắt đầu ngày 1 (UTC), còn lại chia đều theo bội của khung. */
+export function bucketStartMs(tf: string, tsMs: number): number {
+  const step = tfMs(tf)
+  if (tf.endsWith('w')) {
+    const shift = 3 * 86_400_000 // 1970-01-01 là thứ Năm
+    return Math.floor((tsMs + shift) / step) * step - shift
+  }
+  if (tf.endsWith('M')) {
+    const d = new Date(tsMs)
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)
+  }
+  return Math.floor(tsMs / step) * step
+}
 
 export function tfMs(tf: string): number {
-  const m = /^(\d+)([smhd])$/.exec(tf)
+  const m = /^(\d+)([smhdwM])$/.exec(tf)
   if (!m || Number(m[1]) <= 0) throw new Error(`timeframe không hợp lệ: ${tf}`)
   return Number(m[1]) * UNIT[m[2]]
 }
@@ -37,8 +52,8 @@ export function barFromRow(r: number[]): Bar {
  * Áp một lệnh khớp vào mảng nến (sửa tại chỗ). Trả về nến vừa đổi hoặc vừa thêm, hoặc null nếu
  * lệnh thuộc nến cũ hơn nến cuối (không sửa quá khứ).
  */
-export function applyTrade(bars: Bar[], tf: number, t: Trade): Bar | null {
-  const time = Math.floor(t.ts / tf) * (tf / 1000)
+export function applyTrade(bars: Bar[], tf: number, t: Trade, tfName?: string): Bar | null {
+  const time = tfName ? bucketStartMs(tfName, t.ts) / 1000 : Math.floor(t.ts / tf) * (tf / 1000)
   const buy = t.m ? 0 : t.q // isBuyerMaker=true nghĩa là taker bán
   const sell = t.m ? t.q : 0
   const last = bars[bars.length - 1]
