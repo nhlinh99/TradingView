@@ -11,6 +11,7 @@ import Bubbles from './Bubbles'
 import Gex from './Gex'
 import PineLayer from './PineLayer'
 import Drawings from './Drawings'
+import type { SyncBus } from './sync'
 import {
   applyTrade, cvdSeries, delta, barFromRow, decimalsFromTick, formatTime, formatVolume, mergeOlder, tfMs, tickLabel,
   type Bar, type Trade,
@@ -23,10 +24,10 @@ const PALETTE = {
 const volColor = (b: Bar, up: string, down: string) => (b.close >= b.open ? up + '88' : down + '88')
 
 export type Flow = { delta: boolean; cvd: 'off' | 'none' | 'day'; footprint: boolean; vpvr: boolean; heatmap: boolean; bubbles: boolean; gex: boolean; ratio: number }
-type Props = { symbol: string; tf: string; tz: string; flow: Flow; pine: PineResult | null; replay: number | null; onTotal: (n: number) => void; theme: 'light' | 'dark'; onState: (s: StreamState) => void }
+type Props = { symbol: string; tf: string; tz: string; flow: Flow; pine: PineResult | null; replay: number | null; onTotal: (n: number) => void; sync?: SyncBus; cellId?: number; theme: 'light' | 'dark'; onState: (s: StreamState) => void }
 type Legend = { time: number; bar: Bar } | null
 
-export default function Chart({ symbol, tf, tz, flow, pine, replay, onTotal, theme, onState }: Props) {
+export default function Chart({ symbol, tf, tz, flow, pine, replay, onTotal, sync, cellId = 0, theme, onState }: Props) {
   const box = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candles = useRef<ISeriesApi<'Candlestick'> | null>(null)
@@ -82,10 +83,26 @@ export default function Chart({ symbol, tf, tz, flow, pine, replay, onTotal, the
       setLegend(b ? { time: b.time, bar: b } : null)
     })
     chartRef.current = chart
+    const unsync = sync?.register(cellId, {
+      el, chart, series: c,
+      closeAt: (time) => {
+        const list = bars.current
+        let lo = 0
+        let hi = list.length - 1
+        while (lo <= hi) {
+          const mid = (lo + hi) >> 1
+          if (list[mid].time < time) lo = mid + 1
+          else if (list[mid].time > time) hi = mid - 1
+          else return list[mid].close
+        }
+        return null
+      },
+    })
     if (import.meta.env.DEV) (window as unknown as { __tvChart?: IChartApi }).__tvChart = chart // chỉ để kiểm thử trong dev
     candles.current = c
     volume.current = v
     return () => {
+      unsync?.()
       chart.remove()
       chartRef.current = candles.current = volume.current = deltaS.current = cvdS.current = null
     }

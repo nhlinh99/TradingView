@@ -111,3 +111,13 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--focus); ou
 .replaybar input[type='range'] { flex: 1; min-width: 120px; }
 .replaybar select { padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
 .replaybar .chk { display: inline-flex; align-items: center; gap: 4px; color: var(--mute); }
+
+.cells { flex: 1; min-height: 0; display: grid; gap: 2px; background: var(--line); }
+.cells-1 { grid-template-columns: 1fr; }
+.cells-2 { grid-template-columns: 1fr 1fr; }
+.cells-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.cell { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); }
+.cell .chart-wrap { flex: 1; min-height: 0; }
+.cellbar { display: flex; gap: 6px; padding: 3px 8px; border-bottom: 1px solid var(--line); }
+.cellbar select { padding: 1px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+@media (max-width: 700px) { .cells-2, .cells-4 { grid-template-columns: 1fr; grid-template-rows: none; } }
