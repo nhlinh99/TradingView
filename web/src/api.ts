@@ -123,6 +123,12 @@ export type PineResult = {
   bgcolors: { colors: (string | null)[] }[]
   hlines: { price: number | null; title: string; color: string | null }[]
   alerts: { title: string; message: string; bars: number[] }[]
+  alert_events?: { bar: number; message: string }[]
+  objects?: {
+    lines: Record<string, unknown>[]; labels: Record<string, unknown>[]; boxes: Record<string, unknown>[]
+    tables: { position: string; rows: number; columns: number; bgcolor?: string | null; border_color?: string | null
+      cells: { col: number; row: number; text?: string; text_color?: string; text_size?: string; bgcolor?: string; tooltip?: string }[]; merges: number[][] }[]
+  }
   strategy: null | {
     initial_capital: number; net_profit: number; closed_trades: number; win_rate: number; max_drawdown: number; equity: (number | null)[]
     trades: { id: string; dir: string; entry_time: number; entry_price: number; exit_time: number; exit_price: number; qty: number; pnl: number; pnl_pct: number }[]

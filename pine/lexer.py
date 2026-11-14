@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-KEYWORDS = {"if", "else", "for", "to", "by", "while", "var", "varip", "and", "or", "not", "true", "false", "break", "continue", "in"}
+KEYWORDS = {"if", "else", "for", "to", "by", "while", "var", "varip", "and", "or", "not", "true", "false", "break", "continue", "in", "switch"}
 OPS3 = {"!==", "==="}
 OPS2 = {"==", "!=", "<=", ">=", ":=", "+=", "-=", "*=", "/=", "%=", "=>", "&&", "||"}
 OPS1 = set("+-*/%<>=?:()[],.!")

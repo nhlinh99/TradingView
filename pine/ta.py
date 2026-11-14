@@ -160,3 +160,40 @@ class Vwap:
         var = max(self.p2v / self.v - vw * vw, 0.0)
         sd = math.sqrt(var)
         return vw, vw + mult * sd, vw - mult * sd
+
+
+class Cum:
+    def __init__(self):
+        self.s = 0.0
+
+    def update(self, x: float) -> float:
+        if not isna(x):
+            self.s += float(x)
+        return self.s
+
+
+class Dmi:
+    """ta.dmi(diLength, adxSmoothing) -> [+DI, -DI, ADX], làm mượt bằng RMA như Pine."""
+
+    def __init__(self, n: int, adx_n: int):
+        self.p = None
+        self.tr, self.up, self.dn = make_rma(n), make_rma(n), make_rma(n)
+        self.adx = make_rma(adx_n)
+
+    def update(self, h: float, l: float, c: float) -> list[float]:
+        if self.p is None:
+            self.p = (h, l, c)
+            return [NAN, NAN, NAN]
+        ph, pl, pc = self.p
+        self.p = (h, l, c)
+        up, down = h - ph, pl - l
+        plus_dm = up if (up > down and up > 0) else 0.0
+        minus_dm = down if (down > up and down > 0) else 0.0
+        tr = true_range(h, l, pc)
+        trn, pn, mn = self.tr.update(tr), self.up.update(plus_dm), self.dn.update(minus_dm)
+        if math.isnan(trn) or trn == 0:
+            return [NAN, NAN, NAN]
+        plus, minus = 100 * pn / trn, 100 * mn / trn
+        s = plus + minus
+        adx = self.adx.update(abs(plus - minus) / (1.0 if s == 0 else s))
+        return [plus, minus, 100 * adx if not math.isnan(adx) else NAN]

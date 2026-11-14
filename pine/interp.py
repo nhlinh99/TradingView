@@ -19,8 +19,8 @@ from typing import Callable
 
 from . import ta as T
 from .lexer import PineSyntaxError
-from .parser import (Assign, Attr, Binary, Bool, Call, Color, ExprStmt, For, FuncDef, If, Index, Jump, Name, Num, Str,
-                     Ternary, TupleLit, Unary, While, parse)
+from .parser import (Assign, Attr, Binary, Bool, Call, Color, ExprStmt, For, ForIn, FuncDef, If, Index, Jump, Name, Num, Str,
+                     Switch, Ternary, TupleLit, Unary, While, parse)
 
 NAN = float("nan")
 isna = T.isna
@@ -140,7 +140,7 @@ class Interp:
     def __init__(self, src: str | list, bars: Bars, *, symbol: str = "", tf: str = "1m", tz_offset_ms: int = 0,
                  provider: Callable[[str, str], Bars | None] | None = None, inputs: dict | None = None,
                  external: dict | None = None, syminfo_type: str = "crypto", ast: list | None = None,
-                 strategy_opts: dict | None = None):
+                 strategy_opts: dict | None = None, tick: float = 0.01, chart_bg: str = "#131722"):
         self.ast = ast if ast is not None else (parse(src) if isinstance(src, str) else src)
         self.bars, self.n = bars, len(bars)
         self.symbol, self.tf, self.tz = symbol, tf, tz_offset_ms
@@ -169,6 +169,12 @@ class Interp:
         self.strategy.overrides = strategy_opts or {}
         self.strategy.apply_overrides()
         self.input_count = 0
+        self.objs = {"lines": [], "labels": [], "boxes": [], "tables": []}
+        self.alert_events: list = []
+        self.fills: dict = {}
+        self.barcolors: dict = {}
+        self.tick = tick
+        self.chart_bg = chart_bg
 
     # ---------- vòng lặp nến ----------
     def run(self) -> None:
@@ -245,6 +251,21 @@ class Interp:
                     pass
                 x += step
             return out
+        if isinstance(s, ForIn):
+            seq = self.eval(s.iterable)
+            if not isinstance(seq, list):
+                raise PineRuntimeError("for ... in cần một mảng", s.line)
+            sc = self.scope()
+            out = NAN
+            for item in list(seq):
+                sc[s.var] = item
+                try:
+                    out = self.exec_block(s.body)
+                except _Break:
+                    break
+                except _Continue:
+                    pass
+            return out
         if isinstance(s, While):
             guard = 0
             out = NAN
@@ -320,6 +341,8 @@ class Interp:
             return self.index(n)
         if t is Attr:
             return self.attr(n)
+        if t is Switch:
+            return self.switch(n)
         if t is Ternary:
             return self.eval(n.a) if _truthy(self.eval(n.cond)) else self.eval(n.b)
         if t is Unary:
@@ -339,6 +362,17 @@ class Interp:
         if t is TupleLit:
             return [self.eval(x) for x in n.items]
         raise PineRuntimeError(f"biểu thức không hỗ trợ: {t.__name__}", getattr(n, "line", 0))
+
+    def switch(self, n: Switch):
+        subj = self.eval(n.subject) if n.subject is not None else None
+        for match, body in n.cases:
+            if match is None:
+                return self.exec_block(body)
+            v = self.eval(match)
+            hit = self.binop("==", subj, v, n.line) if n.subject is not None else _truthy(v)
+            if hit:
+                return self.exec_block(body)
+        return NAN
 
     def binop(self, op: str, a, b, line: int = 0):
         if op == "+" and (isinstance(a, str) or isinstance(b, str)):
@@ -434,6 +468,10 @@ class Interp:
             return self.tf
         if d == "timeframe.multiplier":
             return float(self.tf_ms // 60_000)
+        if d == "chart.bg_color":
+            return self.chart_bg
+        if d == "syminfo.mintick":
+            return self.tick
         if d == "syminfo.type":
             return self.syminfo_type
         if d in ("syminfo.ticker", "syminfo.tickerid"):
@@ -590,9 +628,26 @@ def ta_vwap(it, node, args, kw):
     return list(res) if (len(args) >= 3 or "stdev_mult" in kw) else res[0]
 
 
+def in_session(spec: str, local_ms: float) -> bool:
+    """spec dạng "0930-1600" hoặc "0000-2400" (có thể kèm ":23456" ngày trong tuần, bỏ qua phần ngày); giờ theo múi giờ sàn."""
+    rng = str(spec).split(":")[0]
+    try:
+        a, b = rng.split("-")
+        start, end = int(a[:2]) * 60 + int(a[2:]), int(b[:2]) * 60 + int(b[2:])
+    except ValueError:
+        return True
+    m = int(local_ms // 60_000) % 1440
+    if start == end or (start == 0 and end >= 1440):
+        return True
+    return start <= m < end if start < end else (m >= start or m < end)     # phiên qua nửa đêm
+
+
 def f_time(it, node, args, kw):
     tf = A(args, kw, 0, "timeframe", it.tf)
     t = float(it.bars.time[it.i])
+    sess = A(args, kw, 1, "session", None)
+    if sess is not None and not in_session(sess, t + it.tz):
+        return NAN
     tfs = str(tf).upper()
     local = t + it.tz
     if tfs in ("D", "1D"):
@@ -965,7 +1020,7 @@ BUILTINS: dict[str, Callable] = {
     "color.new": f_color_new, "color.rgb": f_color_rgb,
     "input": input_generic, "input.int": make_input("int"), "input.float": make_input("float"), "input.bool": make_input("bool"),
     "input.string": make_input("string"), "input.symbol": make_input("symbol"), "input.timeframe": make_input("timeframe"),
-    "input.source": make_input("source"), "input.color": make_input("color"),
+    "input.source": make_input("source"), "input.color": make_input("color"), "input.session": make_input("session"),
     "ta.sma": _ta_window(T.Sma), "ta.ema": _ta_window(T.make_ema), "ta.rma": _ta_window(T.make_rma),
     "ta.rsi": _ta_window(T.Rsi), "ta.stdev": _ta_window(T.Stdev),
     "ta.highest": _ta_window(lambda n: T.Extreme(n, True)), "ta.lowest": _ta_window(lambda n: T.Extreme(n, False)),
@@ -981,3 +1036,5 @@ BUILTINS: dict[str, Callable] = {
     "strategy.entry": f_entry, "strategy.close": f_close, "strategy.close_all": f_close_all,
 }
 LAZY: dict[str, Callable] = {"request.security": lazy_security}
+
+from . import objects as _objects  # noqa: E402,F401  (đăng ký mảng, chuỗi, đối tượng vẽ vào BUILTINS)

@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from .lexer import PineSyntaxError, Tok, tokenize
 
 _ids = itertools.count(1)
-TYPES = {"int", "float", "bool", "string", "color", "series", "simple", "const"}
+TYPES = {"int", "float", "bool", "string", "color", "series", "simple", "const", "line", "label", "box", "table", "linefill", "polyline"}
 
 
 def _nid() -> int:
@@ -162,6 +162,23 @@ class FuncDef:
 
 
 @dataclass
+class Switch:
+    subject: object | None        # biểu thức được so khớp, hoặc None (switch không chủ thể: mỗi nhánh là điều kiện)
+    cases: list                   # [(biểu thức so khớp hoặc None cho nhánh mặc định, thân)]
+    line: int = 0
+    id: int = field(default_factory=_nid)
+
+
+@dataclass
+class ForIn:
+    var: str
+    iterable: object
+    body: list
+    line: int = 0
+    id: int = field(default_factory=_nid)
+
+
+@dataclass
 class ExprStmt:
     expr: object
     line: int = 0
@@ -240,6 +257,8 @@ class Parser:
             self.p += 1
         elif self.is_op(","):
             self.p += 1          # `a = 1, b = 2` trên một dòng: dấu phẩy ngăn cách các câu lệnh
+        elif self.p > 0 and self.t[self.p - 1].kind == "DEDENT":
+            pass                 # câu lệnh kết thúc bằng khối thụt lề (ví dụ `x = switch ...`)
         elif self.cur.kind not in ("EOF", "DEDENT"):
             raise self.err(f"không mong đợi {self.cur.value!r}")
 
@@ -249,8 +268,7 @@ class Parser:
         if tok.kind == "KW":
             if tok.value in ("var", "varip"):
                 self.p += 1
-                if self.cur.kind == "ID" and self.cur.value in TYPES and self.peek().kind == "ID":
-                    self.p += 1
+                self.p += self.type_len()
                 name = self.name()
                 self.eat_op("=")
                 v = self.expr()
@@ -282,8 +300,9 @@ class Parser:
         if tok.kind == "ID" and self.is_op("(", self.peek()) and self.is_func_def():
             return self.func_def()
         # khai báo có kiểu: float x = ...
-        if tok.kind == "ID" and tok.value in TYPES and self.peek().kind == "ID" and self.is_op("=", self.peek(2)):
-            self.p += 1
+        n = self.type_len()
+        if n and self.is_op("=", self.peek(n + 1)):
+            self.p += n
             tok = self.cur
         # gán
         if tok.kind == "ID" and self.peek().kind == "OP" and self.peek().value in ("=", ":=", "+=", "-=", "*=", "/=", "%="):
@@ -296,6 +315,17 @@ class Parser:
         e = self.expr()
         self.end_stmt()
         return ExprStmt(e, line=line)
+
+    def type_len(self) -> int:
+        """Độ dài (số token) của tiền tố kiểu ngay tại vị trí hiện tại nếu sau đó là một tên: `float x`, `box[] b`; ngược lại 0."""
+        c = self.cur
+        if c.kind != "ID" or c.value not in TYPES:
+            return 0
+        if self.peek().kind == "ID":
+            return 1
+        if self.is_op("[", self.peek()) and self.is_op("]", self.peek(2)) and self.peek(3).kind == "ID":
+            return 3
+        return 0
 
     def name(self) -> str:
         if self.cur.kind != "ID":
@@ -345,8 +375,7 @@ class Parser:
         self.eat_op("(")
         params = []
         while not self.is_op(")"):
-            if self.cur.kind == "ID" and self.cur.value in TYPES and self.peek().kind == "ID":
-                self.p += 1
+            self.p += self.type_len()
             pn = self.name()
             default = None
             if self.is_op("="):
@@ -384,6 +413,10 @@ class Parser:
         line = self.cur.line
         self.p += 1
         v = self.name()
+        if self.is_kw("in"):
+            self.p += 1
+            it = self.expr()
+            return ForIn(v, it, self.block(), line=line)
         self.eat_op("=")
         a = self.expr()
         if not self.is_kw("to"):
@@ -483,6 +516,36 @@ class Parser:
             else:
                 return e
 
+    def switch_expr(self) -> Switch:
+        line = self.cur.line
+        self.p += 1
+        subject = None
+        if self.cur.kind != "NL":
+            subject = self.expr()
+        self.skip_nl()
+        if self.cur.kind != "INDENT":
+            raise self.err("switch cần các nhánh thụt lề")
+        self.p += 1
+        cases = []
+        self.skip_nl()
+        while self.cur.kind not in ("DEDENT", "EOF"):
+            if self.is_op("=>"):
+                match = None
+            else:
+                match = self.expr()
+            self.eat_op("=>")
+            if self.cur.kind == "NL":
+                body = self.block()
+            else:
+                e = self.expr()
+                body = [ExprStmt(e, line=self.cur.line)]
+                self.end_stmt()
+            cases.append((match, body))
+            self.skip_nl()
+        if self.cur.kind == "DEDENT":
+            self.p += 1
+        return Switch(subject, cases, line=line)
+
     def call_args(self) -> list:
         args = []
         while not self.is_op(")"):
@@ -517,6 +580,8 @@ class Parser:
         if t.kind == "ID":
             self.p += 1
             return Name(t.value, line=line)
+        if t.kind == "KW" and t.value == "switch":
+            return self.switch_expr()
         if self.is_op("("):
             self.p += 1
             e = self.expr()

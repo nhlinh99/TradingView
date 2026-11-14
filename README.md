@@ -65,6 +65,10 @@ Kiểu màu **Mua/Bán**: lệnh mua chờ màu xanh lá, lệnh bán chờ màu
 
 ![Pine và backtest](docs/screenshots/pine-backtest.png)
 
+**Script Pine thật dài 1720 dòng** (Viprasol Liquidity Trail Matrix, Pine v6): băng trail, nhãn đảo chiều, tín hiệu retest, đường entry/SL/TP, volume profile của đoạn xu hướng và bảng dashboard, chạy trên engine của dự án.
+
+![Pine Viprasol](docs/screenshots/pine-viprasol.png)
+
 **Layout 4 ô** (chế độ sáng): BTCUSDT, XAUUSDT và hai cổ phiếu VN100 (VNM, BSI), cuộn và crosshair đồng bộ theo thời gian.
 
 ![Layout 4 ô](docs/screenshots/layout-light.png)

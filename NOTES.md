@@ -139,3 +139,14 @@ Header từ ba hàng ô chọn xuống một hàng; gom tính năng orderflow v�
 ### Gộp nóng file con trong ngày
 
 Mỗi collector ghi một file con mỗi 60 giây, nên cuối ngày mỗi symbol có hàng trăm file và truy vấn chậm đi (một lần tải biểu đồ từng mất khoảng 15 giây khi có hơn 1000 file con của hôm nay). `python -m collector.hotmerge` (đã thêm vào `run-collectors.ps1`) gộp file con của NGÀY HÔM NAY mỗi 30 phút khi có từ 40 file; `python -m collector.compact --hot` chạy một lần. Gộp an toàn khi collector đang chạy: chỉ gộp các file có mặt lúc bắt đầu và chỉ xoá đúng các file đó. Chạy thử trên dữ liệu thật: 1072 file con còn 31.
+
+
+### Kiểm tra script Pine thật: Viprasol Liquidity Trail Matrix (1720 dòng, Pine v6)
+
+File `pine/examples/viprasol_liq_trail.pine`. Ban đầu engine KHÔNG chạy được: lỗi cú pháp ở dòng 407 (`switch`), rồi hàng loạt hàm chưa có. Đã bổ sung vào engine: `switch` (biểu thức, có tuple), khai báo kiểu có mảng (`var box[] x`, `float[] v`), `for x in mảng`, mảng (`array.*`), chuỗi (`str.tostring` với `format.mintick`, `#.##`, `str.length`, `str.substring`...), đối tượng vẽ `line/label/box/table` kèm hàm set/delete, `table.cell/merge_cells`, `alert()`, `fill`, `barcolor`, `color.r/g/b/t/from_gradient`, `ta.dmi`, `ta.cum`, `chart.bg_color`, `syminfo.mintick`, `input.session`, `time(tf, session)`, các hằng `display.*`, `position.*`, `label.style_*`, `line.style_*`, `alert.freq_*`. Web vẽ line, box, label, bảng dashboard; `fill` (tô giữa hai băng) chưa vẽ.
+
+Kết quả chạy: BTCUSDT 5m và XAUUSDT 15m (1000 nến) khoảng 1,8 giây, VNM 0,4 giây; sinh nhãn đảo chiều, tín hiệu retest, lệnh với đường entry/SL/TP1-3, volume profile (31 hộp, POC, VAH, VAL, LVN), bảng dashboard 27 dòng và các alert.
+
+`tests/test_pine_viprasol.py` kiểm tra: (1) chạy trọn vẹn và đủ loại đầu ra; (2) 4 băng trail và các điểm đảo chiều khớp một bản cài đặt độc lập viết tay trong test (sai số 1e-9, 1500 nến, 5 lần đảo chiều trở lên); (3) SL/TP của lệnh đúng công thức 1R/2R/3R; (4) không repaint: cắt 300 nến cuối thì mọi sự kiện ở các nến trước giữ nguyên; (5) kết quả lặp lại y hệt, đổi preset đổi băng đúng theo tham chiếu; (6) chạy được với symbol không có volume.
+
+Giới hạn khi chạy trên engine này: mọi nến đều là nến lịch sử, nên `barstate.isconfirmed` luôn đúng và `barstate.isrealtime` luôn sai; tần suất của `alert()` (`once_per_bar_close`...) bị bỏ qua, mỗi lần gọi ghi một sự kiện; `max_bars_back`, `max_lines_count` bị bỏ qua (giữ tối đa 500 đối tượng mỗi loại); `request.security` với khung rỗng chạy trên cùng khung của biểu đồ; thống kê (`Trades`, `W/L`) tính lại từ nến đã tải (tối đa 1000-5000 nến) nên khác với số liệu trên TradingView nếu lịch sử dài hơn. Chưa đối chiếu từng giá trị với TradingView vì không có TradingView ở đây; phần được kiểm là logic của chính script (trail, đảo chiều, SL/TP) và tính nhất quán.

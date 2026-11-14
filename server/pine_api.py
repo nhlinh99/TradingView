@@ -100,6 +100,7 @@ def run_pine(body: RunBody) -> dict:
         out = runner.run_script(
             body.source, bars, symbol=sym, tf=body.tf, tz_offset_ms=VN_TZ_MS if is_vn else 0, provider=provider,
             inputs=body.inputs, external={"gex_levels": gex_levels()} if "gex_levels" in body.source else None,
+            tick=cfg["tick"],
             strategy_opts={"commission_pct": body.commission_pct, "initial_capital": body.initial_capital,
                            "slippage": (body.slippage_ticks or 0.0) * cfg["tick"]},
             syminfo_type="stock" if is_vn else ("cfd" if sym.startswith("XAU") else "crypto"))

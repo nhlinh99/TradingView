@@ -11,6 +11,7 @@ import Bubbles from './Bubbles'
 import Icebergs from './Icebergs'
 import Gex from './Gex'
 import PineLayer from './PineLayer'
+import PineObjects from './PineObjects'
 import Drawings from './Drawings'
 import type { SyncBus } from './sync'
 import {
@@ -290,6 +291,7 @@ export default function Chart({ symbol, tf, tz, flow, pine, replay, onTotal, syn
       <Icebergs on={flow.iceberg} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
       <Bubbles on={flow.bubbles} dotScale={flow.dotScale / 100} dotMin={flow.dotMin / 100} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
       <Drawings symbol={symbol} tf={tf} dark={theme === 'dark'} chart={chartRef} candles={candles} bars={bars} />
+      <PineObjects result={pine} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
       <PineLayer result={pine} chart={chartRef} candles={candles} version={version} />
       <Gex on={flow.gex} symbol={symbol} dark={theme === 'dark'} chart={chartRef} candles={candles} />
       <Profile on={flow.vpvr} symbol={symbol} tf={tf} dark={theme === 'dark'} chart={chartRef} candles={candles} bars={bars} version={version} />

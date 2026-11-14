@@ -1,0 +1,294 @@
+//@version=6
+indicator("Volume Profile by Range", "VP Range", true, max_bars_back = 5000, max_boxes_count = 1250, max_lines_count = 500)
+
+//---------------------------------------------------------------------------------------------------------------------}
+// Settings
+//---------------------------------------------------------------------------------------------------------------------{
+
+disp = display.all - display.status_line
+
+grGEN = 'Profile Settings'
+
+vpRANGE = input.string('Day', '  Range', options = ['1 Hour', 'Day', 'Week', 'Month', '3 Month', '6 Month'], group = grGEN, display = disp,
+     tooltip = 'Build one volume profile per 1 Hour / Day / Week / Month / 3 Month / 6 Month period.')
+
+vpCOUNT = input.int(3, '  Number of Profiles', minval = 1, maxval = 100, group = grGEN, display = disp,
+     tooltip = 'How many past periods to display (including current).')
+
+vpNR    = input.int(25, '  Number of Rows', minval = 10, maxval = 100, step = 5, group = grGEN, display = disp)
+
+vpW     = input.int(13, '  Profile Width %', minval = 5, maxval = 50, group = grGEN, display = disp) / 100
+
+vpSRC   = input.string('Volume', '  Profile Source', options = ['Volume', 'Money Flow'], group = grGEN, display = disp)
+
+vpHO    = input.int(0, '  Horizontal Offset', group = grGEN, display = disp)
+
+grCOL = 'Color Settings'
+
+vpHVC = input.color(color.new(#ffeb3b, 50), '  High Nodes',    inline = 'c1', group = grCOL)
+vpHVT = input.int(53, 'Threshold %', minval = 50, maxval = 99, inline = 'c1', group = grCOL) / 100
+vpAVC = input.color(color.new(#2962ff, 50), '  Average Nodes', group = grCOL)
+vpLVC = input.color(color.new(#f23645, 50), '  Low Nodes',     inline = 'c2', group = grCOL)
+vpLVT = input.int(37, 'Threshold %', minval = 10, maxval = 40, inline = 'c2', group = grCOL) / 100
+
+grPOC = 'POC / VAH / VAL'
+
+pocSH  = input.bool(true, 'Show POC Line',  group = grPOC, display = disp)
+pocC   = input.color(color.new(#ffeb3b, 0), '  POC Color', group = grPOC, display = disp)
+
+vahvalSH  = input.bool(true, 'Show VAH / VAL', group = grPOC, display = disp)
+vahvalPct = input.int(70, '  Value Area %', minval = 1, maxval = 99, group = grPOC, display = disp) / 100
+vahC      = input.color(color.new(#26a69a, 0), '  VAH Color', inline = 'vv', group = grPOC)
+valC      = input.color(color.new(#ef5350, 0), 'VAL Color',   inline = 'vv', group = grPOC)
+vahvalLS  = input.string('Dashed', '  Line Style', options = ['Solid', 'Dashed', 'Dotted'], group = grPOC, display = disp)
+vahvalLW  = input.int(1, '  Line Width', minval = 1, maxval = 4, group = grPOC, display = disp)
+vahvalLB  = input.bool(true, '  Show Labels', group = grPOC, display = disp)
+
+grTXT = 'Text Settings'
+vpLS = input.string('Small', '  Text Size', options = ['Auto', 'Tiny', 'Small', 'Normal'], group = grTXT, display = disp)
+vpShowText = input.bool(true, '  Show Volume Text', group = grTXT, display = disp)
+
+//---------------------------------------------------------------------------------------------------------------------}
+// Functions
+//---------------------------------------------------------------------------------------------------------------------{
+
+f_gTS(_t) =>
+    switch _t
+        'Tiny'   => size.tiny
+        'Small'  => size.small
+        'Normal' => size.normal
+        =>          size.auto
+
+f_gLS(_s) =>
+    switch _s
+        'Solid'  => line.style_solid
+        'Dotted' => line.style_dotted
+        =>          line.style_dashed
+
+f_calcVA(_vols, _pct, _pocIdx) =>
+    totalVol  = _vols.sum()
+    targetVol = totalVol * _pct
+    accVol    = _vols.get(_pocIdx)
+    hiIdx     = _pocIdx
+    loIdx     = _pocIdx
+    nRows     = _vols.size()
+    while accVol < targetVol and (hiIdx < nRows - 1 or loIdx > 0)
+        volUp   = hiIdx < nRows - 1 ? _vols.get(hiIdx + 1) : -1.
+        volDown = loIdx > 0          ? _vols.get(loIdx - 1) : -1.
+        if volUp >= volDown
+            hiIdx  += 1
+            accVol += volUp
+        else
+            loIdx  -= 1
+            accVol += volDown
+    [hiIdx, loIdx]
+
+// Returns true on the first bar of a new 3-month quarter (Jan, Apr, Jul, Oct)
+f_isNew3M() =>
+    month_now  = month(time)
+    month_prev = month(time[1])
+    isQtrStart = month_now != month_prev and (month_now == 1 or month_now == 4 or month_now == 7 or month_now == 10)
+    isQtrStart
+
+// Returns true on the first bar of a new 6-month half-year (Jan, Jul)
+f_isNew6M() =>
+    month_now  = month(time)
+    month_prev = month(time[1])
+    isHalfStart = month_now != month_prev and (month_now == 1 or month_now == 7)
+    isHalfStart
+
+// Returns true on the first bar of a new 1-hour period
+f_isNew1H() =>
+    hour_now  = hour(time)
+    hour_prev = hour(time[1])
+    day_now   = dayofmonth(time)
+    day_prev  = dayofmonth(time[1])
+    hour_now != hour_prev or day_now != day_prev
+
+//---------------------------------------------------------------------------------------------------------------------}
+// Persistent drawing arrays
+//---------------------------------------------------------------------------------------------------------------------{
+
+var array<box>   drawnBoxes  = array.new<box>()
+var array<line>  drawnLines  = array.new<line>()
+var array<label> drawnLabels = array.new<label>()
+
+f_clearAll() =>
+    if drawnBoxes.size() > 0
+        for i = 0 to drawnBoxes.size() - 1
+            box.delete(drawnBoxes.get(i))
+        drawnBoxes.clear()
+    if drawnLines.size() > 0
+        for i = 0 to drawnLines.size() - 1
+            line.delete(drawnLines.get(i))
+        drawnLines.clear()
+    if drawnLabels.size() > 0
+        for i = 0 to drawnLines.size() - 1
+            label.delete(drawnLabels.get(i))
+        drawnLabels.clear()
+
+//---------------------------------------------------------------------------------------------------------------------}
+// Period boundary detection
+//---------------------------------------------------------------------------------------------------------------------{
+
+var array<int> periodStarts = array.new<int>()
+var array<int> periodEnds   = array.new<int>()
+
+isNewPeriod = switch vpRANGE
+    '1 Hour'  => f_isNew1H()
+    'Day'     => timeframe.change('D')
+    'Week'    => timeframe.change('W')
+    'Month'   => timeframe.change('M')
+    '3 Month' => f_isNew3M()
+    =>           f_isNew6M()
+
+if bar_index == 0
+    periodStarts.push(0)
+
+if isNewPeriod and bar_index > 0
+    if periodStarts.size() > 0
+        periodEnds.push(bar_index - 1)
+    periodStarts.push(bar_index)
+
+//---------------------------------------------------------------------------------------------------------------------}
+// Build & draw on last bar
+//---------------------------------------------------------------------------------------------------------------------{
+
+vpS = f_gTS(vpLS)
+
+if barstate.islast
+    f_clearAll()
+
+    int totalPeriods = periodStarts.size()
+    int showCount    = math.min(vpCOUNT, totalPeriods)
+    // After calculating showCount, scale down rows if needed
+    int effectiveRows = math.min(vpNR, 500 / math.max(showCount, 1))
+
+    for pIdx = 0 to showCount - 1
+        int revIdx    = totalPeriods - 1 - pIdx
+        int pStartBar = periodStarts.get(revIdx)
+        int pEndBar   = revIdx < periodEnds.size() ? periodEnds.get(revIdx) : bar_index
+
+        int pLen = pEndBar - pStartBar
+        if pLen < 1
+            continue
+
+        // --- Pass 1: find high/low of this period ---
+        float pLow  =  high[bar_index - pStartBar]
+        float pHigh =  low[bar_index - pStartBar]
+
+        for bOff = 0 to pLen
+            int dist = bar_index - (pStartBar + bOff)
+            if dist < 0
+                break
+            pLow  := math.min(pLow,  low[dist])
+            pHigh := math.max(pHigh, high[dist])
+
+        float pSTP = (pHigh - pLow) / effectiveRows
+        if pSTP <= 0
+            continue
+
+        // --- Pass 2: accumulate volume per row ---
+        array<float> vols = array.new_float(effectiveRows, 0.)
+
+        for bOff = 0 to pLen
+            int dist = bar_index - (pStartBar + bOff)
+            if dist < 0
+                break
+            float nzV = nz(volume[dist])
+
+            for l = 0 to effectiveRows - 1
+                float rowLow  = pLow + l * pSTP
+                float rowHigh = rowLow + pSTP
+                if high[dist] >= rowLow and low[dist] < rowHigh
+                    float vPOR =
+                         low[dist] >= rowLow  and high[dist] > rowHigh  ? (rowHigh - low[dist])  / (high[dist] - low[dist]) :
+                         high[dist] <= rowHigh and low[dist] < rowLow   ? (high[dist] - rowLow)  / (high[dist] - low[dist]) :
+                         low[dist] >= rowLow  and high[dist] <= rowHigh ? 1. :
+                         pSTP / (high[dist] - low[dist])
+
+                    float val = vpSRC == 'Money Flow' ? nzV * vPOR * (pLow + (l + .5) * pSTP) : nzV * vPOR
+                    vols.set(l, vols.get(l) + val)
+
+        // --- POC / VAH / VAL ---
+        int   pocIdx   = vols.indexof(vols.max())
+        float pocPrice = pLow + (pocIdx + .5) * pSTP
+        [vahIdx, valIdx] = f_calcVA(vols, vahvalPct, pocIdx)
+        float vahPrice = pLow + (vahIdx + 1.) * pSTP
+        float valPrice = pLow + (valIdx + 0.) * pSTP
+
+        float vtMX         = vols.max()
+        int   profWidthBars = math.max(int(pLen * vpW), 2)
+        int   lineStartBar  = pStartBar - vpHO - 1
+
+        // --- Draw profile rows (left of pStartBar) ---
+        for l = 0 to effectiveRows - 1
+            float vtLV = vols.get(l)
+            float LpM  = vtLV / vtMX
+
+            color llC = LpM > vpHVT ?
+                 color.from_gradient(LpM, vpHVT, 1, vpAVC, vpHVC) :
+                 color.from_gradient(LpM, 0, vpLVT, vpLVC, vpAVC)
+
+            // grow leftward from pStartBar
+            int sBI = pStartBar - vpHO - 1
+            int eBI = sBI - int(LpM * profWidthBars)
+
+            drawnBoxes.push(box.new(
+                 eBI, pLow + (l + .1) * pSTP,
+                 sBI, pLow + (l + .9) * pSTP,
+                 llC, bgcolor = llC,
+                 text         = vpShowText ? str.tostring(vtLV, format.volume) : '',
+                 text_halign  = text.align_right,
+                 text_color   = chart.fg_color,
+                 text_size    = vpS))
+
+        // --- POC line ---
+        if pocSH
+            drawnLines.push(line.new(
+                 lineStartBar, pocPrice,
+                 pEndBar, pocPrice,
+                 xloc  = xloc.bar_index,
+                 color = pocC,
+                 style = line.style_dashed,
+                 width = 1))
+
+        // --- VAH / VAL lines ---
+        lineStyle = f_gLS(vahvalLS)
+        if vahvalSH
+            drawnLines.push(line.new(
+                 lineStartBar, vahPrice,
+                 pEndBar, vahPrice,
+                 xloc  = xloc.bar_index,
+                 color = vahC,
+                 style = lineStyle,
+                 width = vahvalLW))
+
+            drawnLines.push(line.new(
+                 lineStartBar, valPrice,
+                 pEndBar, valPrice,
+                 xloc  = xloc.bar_index,
+                 color = valC,
+                 style = lineStyle,
+                 width = vahvalLW))
+
+            if vahvalLB
+                drawnLabels.push(label.new(
+                     lineStartBar, vahPrice,
+                     text      = 'VAH',
+                     xloc      = xloc.bar_index,
+                     yloc      = yloc.price,
+                     color     = color(na),
+                     style     = label.style_label_left,
+                     textcolor = vahC,
+                     size      = size.small))
+
+                drawnLabels.push(label.new(
+                     lineStartBar, valPrice,
+                     text      = 'VAL',
+                     xloc      = xloc.bar_index,
+                     yloc      = yloc.price,
+                     color     = color(na),
+                     style     = label.style_label_left,
+                     textcolor = valC,
+                     size      = size.small))

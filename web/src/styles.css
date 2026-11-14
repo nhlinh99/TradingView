@@ -232,3 +232,9 @@ kbd { font: 11px ui-monospace, Consolas, monospace; border: 1px solid var(--line
 :root:not([data-theme='dark']) .tk-comment { color: #5a7d5a; } :root:not([data-theme='dark']) .tk-string { color: #a0561f; }
 :root:not([data-theme='dark']) .tk-number { color: #0b66b2; } :root:not([data-theme='dark']) .tk-keyword { color: #8a2be2; }
 :root:not([data-theme='dark']) .tk-func { color: #00796b; } :root:not([data-theme='dark']) .tk-const { color: #9a6700; }
+
+.pinetable { position: absolute; z-index: 4; border-collapse: collapse; border: 1px solid; font-size: 10px; pointer-events: auto; max-width: 46%; }
+.pinetable td { padding: 1px 6px; white-space: nowrap; }
+.pinetable.pos-top_right { top: 4px; right: 62px; } .pinetable.pos-top_left { top: 4px; left: 52px; } .pinetable.pos-top_center { top: 4px; left: 50%; transform: translateX(-50%); }
+.pinetable.pos-bottom_right { bottom: 30px; right: 62px; } .pinetable.pos-bottom_left { bottom: 30px; left: 52px; }
+.pinetable.pos-middle_right { top: 40%; right: 62px; } .pinetable.pos-middle_left { top: 40%; left: 52px; }

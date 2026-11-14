@@ -37,7 +37,7 @@ export default function PineLayer({ result, chart, candles, version }: Props) {
       } else {
         const s = c.addSeries(LineSeries, {
           color: colorOf(p.colors.findIndex((x) => x) >= 0 ? p.colors.findIndex((x) => x) : 0), lineWidth: Math.max(1, Math.min(4, p.linewidth)) as 1 | 2 | 3 | 4,
-          priceLineVisible: false, lastValueVisible: false, title: p.title,
+          priceLineVisible: false, lastValueVisible: false,
           lineStyle: p.style === 'circles' || p.style === 'cross' ? LineStyle.Dotted : LineStyle.Solid,
         }, pane)
         // màu thay đổi theo nến được hỗ trợ bằng cách cho từng điểm một màu

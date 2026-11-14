@@ -58,7 +58,7 @@ def test_security_other_symbol_and_timeframe(data_root):
 
 def test_examples_listed():
     j = client.get("/api/pine/examples").json()
-    assert {e["name"] for e in j} == {"volume_proxy", "delta_cvd", "relative_volume_alert", "session_vwap", "ema_cross_strategy"}
+    assert {"volume_proxy", "delta_cvd", "relative_volume_alert", "session_vwap", "ema_cross_strategy"} <= {e["name"] for e in j}
 
 
 def test_backtest_params_and_date_range(data_root):
