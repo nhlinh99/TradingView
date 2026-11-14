@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Chart, { type Flow } from './Chart'
-import { fetchSymbols, fetchWatchlist, saveWatchlist, type StreamState, type SymbolInfo } from './api'
+import PinePanel from './PinePanel'
+import { fetchSymbols, fetchWatchlist, saveWatchlist, type PineResult, type StreamState, type SymbolInfo } from './api'
 import { TIMEFRAMES, TIMEZONES } from './logic'
 
 // Cài đặt nhỏ của người xem: nhớ trong trình duyệt, không có thì dùng mặc định.
@@ -47,6 +48,8 @@ export default function App() {
     savePref('delta', n.delta ? '1' : '0'); savePref('cvd', n.cvd); savePref('footprint', n.footprint ? '1' : '0'); savePref('ratio', String(n.ratio)); savePref('vpvr', n.vpvr ? '1' : '0'); savePref('heatmap', n.heatmap ? '1' : '0'); savePref('bubbles', n.bubbles ? '1' : '0'); savePref('gex', n.gex ? '1' : '0')
     return n
   })
+  const [pine, setPine] = useState<PineResult | null>(null)
+  const [pineOpen, setPineOpen] = useState(() => pref('pineOpen', '0', ['0', '1']) === '1')
   const [state, setState] = useState<StreamState>('connecting')
   const [err, setErr] = useState<string | null>(null)
 
@@ -62,6 +65,7 @@ export default function App() {
   }, [])
 
   useEffect(() => { document.documentElement.dataset.theme = theme }, [theme])
+  useEffect(() => { setPine(null) }, [symbol, tf]) // kết quả Pine chỉ đúng với symbol và khung đã chạy
   const choose = (s: string) => { setSymbol(s); savePref('symbol', s) }
   const update = async (next: string[]) => {
     try {
@@ -135,6 +139,7 @@ export default function App() {
               </label>
             )}
           </div>
+          <button className="themebtn" aria-pressed={pineOpen} onClick={() => { const n = !pineOpen; setPineOpen(n); savePref('pineOpen', n ? '1' : '0') }}>Pine</button>
           <button className="themebtn" aria-label="Đổi giao diện sáng/tối"
             onClick={() => { const n = theme === 'dark' ? 'light' : 'dark'; setTheme(n); savePref('theme', n) }}>
             {theme === 'dark' ? 'Sáng' : 'Tối'}
@@ -147,8 +152,9 @@ export default function App() {
         {all.find((s) => s.symbol === symbol)?.source === 'vn' && (
           <p className="srcnote">Cổ phiếu VN100 (HOSE), nến từ VNDirect, giá nghìn đồng, đã điều chỉnh. Chưa có phía mua/bán nên delta và CVD bằng 0; không có tick, chỉ có khung từ 1 phút.</p>
         )}
-        {symbol && <Chart symbol={symbol} tf={tf} tz={tz} flow={flow} theme={theme} onState={onState} />}
+        {symbol && <Chart symbol={symbol} tf={tf} tz={tz} flow={flow} pine={pine} theme={theme} onState={onState} />}
         {err && <p className="status bad" role="alert">{err}</p>}
+        {pineOpen && symbol && <PinePanel key={`${symbol}|${tf}`} symbol={symbol} tf={tf} onResult={setPine} />}
       </section>
     </div>
   )

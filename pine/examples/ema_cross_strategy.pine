@@ -1,0 +1,8 @@
+//@version=5
+strategy("EMA Cross + Volume filter", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=100)
+fast = ta.ema(close, 20), slow = ta.ema(close, 50)
+volOK = volume > ta.sma(volume, 20)
+if ta.crossover(fast, slow) and volOK
+    strategy.entry("L", strategy.long)
+if ta.crossunder(fast, slow)
+    strategy.close("L")

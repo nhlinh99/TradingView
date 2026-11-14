@@ -306,72 +306,24 @@ plot(flip, "flip")
     assert set(plot(res, "flip")) == {70000.0}
 
 
-# ---------- 5 script mẫu trong PLAN.md mục 4 ----------
+# ---------- 5 script mẫu trong PLAN.md mục 4 (file trong pine/examples) ----------
 
-S1 = '''//@version=5
-indicator("Volume Proxy (GC1! for XAUUSD)", format=format.volume, overlay=false)
+from pathlib import Path
 
-useProxy = input.bool(true, "Dùng volume GC1! khi symbol là spot/CFD")
-maLen    = input.int(20, "MA length", minval=1)
-proxySym = input.symbol("COMEX:GC1!", "Proxy symbol")
 
-proxyVol = request.security(proxySym, timeframe.period, volume, lookahead=barmerge.lookahead_off)
-vol = useProxy and (syminfo.type == "forex" or syminfo.type == "cfd") ? proxyVol : volume
+def example(name):
+    return (Path(__file__).resolve().parent.parent / "pine" / "examples" / f"{name}.pine").read_text(encoding="utf-8")
 
-up  = close >= open
-col = up ? color.new(color.teal, 20) : color.new(color.red, 20)
-plot(vol, "Volume", style=plot.style_columns, color=col)
-plot(ta.sma(vol, maLen), "Vol MA", color=color.orange)
-'''
 
-S2 = '''//@version=5
-indicator("Volume Delta + CVD (approx)", overlay=false)
+S1 = example("volume_proxy")
 
-rng   = high - low
-buyV  = rng > 0 ? volume * (close - low) / rng : volume / 2
-sellV = volume - buyV
-delta = buyV - sellV
+S2 = example("delta_cvd")
 
-// CVD reset theo phiên
-newSession = ta.change(time("D")) != 0
-var float cvd = 0.0
-cvd := newSession ? delta : cvd + delta
+S3 = example("relative_volume_alert")
 
-plot(delta, "Delta", style=plot.style_columns, color=delta >= 0 ? color.green : color.red)
-plot(cvd,   "CVD",   color=color.blue)
-'''
+S4 = example("session_vwap")
 
-S3 = '''//@version=5
-indicator("Relative Volume Alert", overlay=true)
-
-len    = input.int(20, "Lookback")
-mult   = input.float(2.0, "Ngưỡng x lần", step=0.1)
-rvol   = volume / ta.sma(volume, len)
-spike  = rvol >= mult and close > open
-
-plotshape(spike, "Spike", shape.triangleup, location.belowbar, color.lime, size=size.small)
-bgcolor(spike ? color.new(color.lime, 90) : na)
-alertcondition(spike, "Volume Spike", "RVOL >= {{plot_0}} trên {{ticker}}")
-'''
-
-S4 = '''//@version=5
-indicator("Session VWAP Bands", overlay=true)
-mult = input.float(1.0, "Std mult")
-[v, up, lo] = ta.vwap(hlc3, ta.change(time("D")) != 0, mult)
-plot(v, "VWAP", color.orange)
-plot(up, "Upper", color.gray)
-plot(lo, "Lower", color.gray)
-'''
-
-S5 = '''//@version=5
-strategy("EMA Cross + Volume filter", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=100)
-fast = ta.ema(close, 20), slow = ta.ema(close, 50)
-volOK = volume > ta.sma(volume, 20)
-if ta.crossover(fast, slow) and volOK
-    strategy.entry("L", strategy.long)
-if ta.crossunder(fast, slow)
-    strategy.close("L")
-'''
+S5 = example("ema_cross_strategy")
 
 
 def test_sample_1_volume_proxy():

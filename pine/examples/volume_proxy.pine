@@ -1,0 +1,14 @@
+//@version=5
+indicator("Volume Proxy (GC1! for XAUUSD)", format=format.volume, overlay=false)
+
+useProxy = input.bool(true, "Dùng volume GC1! khi symbol là spot/CFD")
+maLen    = input.int(20, "MA length", minval=1)
+proxySym = input.symbol("COMEX:GC1!", "Proxy symbol")
+
+proxyVol = request.security(proxySym, timeframe.period, volume, lookahead=barmerge.lookahead_off)
+vol = useProxy and (syminfo.type == "forex" or syminfo.type == "cfd") ? proxyVol : volume
+
+up  = close >= open
+col = up ? color.new(color.teal, 20) : color.new(color.red, 20)
+plot(vol, "Volume", style=plot.style_columns, color=col)
+plot(ta.sma(vol, maLen), "Vol MA", color=color.orange)

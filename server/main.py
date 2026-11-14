@@ -5,13 +5,14 @@ import duckdb
 from fastapi import FastAPI
 
 from common import store
-from server import bars_api, footprint_api, gex_api, heatmap_api, live_hub, watchlist_api
+from server import bars_api, footprint_api, gex_api, heatmap_api, live_hub, pine_api, watchlist_api
 
 app = FastAPI(title="tv-local")
 app.include_router(bars_api.router)
 app.include_router(footprint_api.router)
 app.include_router(heatmap_api.router)
 app.include_router(gex_api.router)
+app.include_router(pine_api.router)
 app.include_router(watchlist_api.router)
 app.include_router(live_hub.router)
 

@@ -1,0 +1,15 @@
+//@version=5
+indicator("Volume Delta + CVD (approx)", overlay=false)
+
+rng   = high - low
+buyV  = rng > 0 ? volume * (close - low) / rng : volume / 2
+sellV = volume - buyV
+delta = buyV - sellV
+
+// CVD reset theo phiên
+newSession = ta.change(time("D")) != 0
+var float cvd = 0.0
+cvd := newSession ? delta : cvd + delta
+
+plot(delta, "Delta", style=plot.style_columns, color=delta >= 0 ? color.green : color.red)
+plot(cvd,   "CVD",   color=color.blue)

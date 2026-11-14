@@ -112,3 +112,28 @@ export type GexResponse = {
   by_strike: { strike: number; call: number; put: number; net: number }[]
 }
 export const fetchGex = (signal?: AbortSignal) => json<GexResponse>('/api/gex', { signal })
+
+export type PineInput = { title: string; type: string; default: unknown; minval?: number; maxval?: number; step?: number }
+export type PineResult = {
+  symbol: string; tf: string; times: number[]
+  meta: { kind: string; title: string; overlay: boolean }
+  inputs: PineInput[]
+  plots: { title: string; style: string; linewidth: number; values: (number | null)[]; colors: (string | null)[] }[]
+  shapes: { title: string; shape: string; location: string; text: string; values: boolean[]; colors: (string | null)[] }[]
+  bgcolors: { colors: (string | null)[] }[]
+  hlines: { price: number | null; title: string; color: string | null }[]
+  alerts: { title: string; message: string; bars: number[] }[]
+  strategy: null | {
+    net_profit: number; closed_trades: number; win_rate: number; max_drawdown: number; equity: (number | null)[]
+    trades: { id: string; dir: string; entry_time: number; exit_time: number; pnl: number }[]
+  }
+}
+export const fetchPineExamples = () => json<{ name: string; source: string }[]>('/api/pine/examples')
+export async function runPine(source: string, symbol: string, tf: string, inputs: Record<string, unknown>): Promise<PineResult> {
+  const r = await fetch('/api/pine/run', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ source, symbol, tf, limit: 1000, inputs }),
+  })
+  const body = await r.json()
+  if (!r.ok) throw body
+  return body as PineResult
+}

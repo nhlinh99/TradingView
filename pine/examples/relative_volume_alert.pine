@@ -1,0 +1,11 @@
+//@version=5
+indicator("Relative Volume Alert", overlay=true)
+
+len    = input.int(20, "Lookback")
+mult   = input.float(2.0, "Ngưỡng x lần", step=0.1)
+rvol   = volume / ta.sma(volume, len)
+spike  = rvol >= mult and close > open
+
+plotshape(spike, "Spike", shape.triangleup, location.belowbar, color.lime, size=size.small)
+bgcolor(spike ? color.new(color.lime, 90) : na)
+alertcondition(spike, "Volume Spike", "RVOL >= {{plot_0}} trên {{ticker}}")
