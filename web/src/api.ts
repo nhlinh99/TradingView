@@ -105,3 +105,10 @@ export function fetchBubbles(symbol: string, from: number, to: number, tbucket: 
   const q = new URLSearchParams({ symbol, from: String(from), to: String(to), tbucket: String(tbucket), top: String(top) })
   return json<BubblesResponse>(`/api/bubbles?${q}`, { signal })
 }
+
+export type GexResponse = {
+  symbol: string; ts: number; spot: number; total: number; flip: number | null
+  call_wall: number | null; put_wall: number | null; age_s: number; oi_note: string
+  by_strike: { strike: number; call: number; put: number; net: number }[]
+}
+export const fetchGex = (signal?: AbortSignal) => json<GexResponse>('/api/gex', { signal })

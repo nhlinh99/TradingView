@@ -48,17 +48,24 @@ SCHEMAS: dict[str, list[tuple[str, str]]] = {
     "footprint_1m": [("ts", "BIGINT"), ("p", "INTEGER"), ("buy", "FLOAT"), ("sell", "FLOAT")],
     # sổ lệnh 1 phút: kết quả gom nén của book (lấy giá trị lớn nhất mỗi bucket trong phút)
     "book_1m": [("ts", "BIGINT"), ("p", "INTEGER"), ("bid", "FLOAT"), ("ask", "FLOAT")],
+    # chuỗi quyền chọn Deribit, mỗi 15 phút một snapshot. expiry = thời điểm hết hạn (ms), strike = giá thực hiện (USD),
+    # cp = true nếu là call, oi = open interest (số hợp đồng, 1 hợp đồng = 1 BTC), iv = mark IV (%),
+    # fwd = giá underlying của kỳ hạn đó, spot = giá chỉ số
+    "options": [
+        ("ts", "BIGINT"), ("expiry", "BIGINT"), ("strike", "INTEGER"), ("cp", "BOOLEAN"),
+        ("oi", "FLOAT"), ("iv", "FLOAT"), ("fwd", "DOUBLE"), ("spot", "DOUBLE"),
+    ],
 }
 
 # Khoá duy nhất của từng loại, dùng để loại trùng. Dòng trùng khoá: giữ dòng có ts nhỏ nhất.
 KEYS: dict[str, list[str]] = {
     "ticks": ["id"], "bars": ["ts"], "book": ["ts", "p"], "bookdepth": ["ts", "pct"], "metrics": ["ts"],
-    "footprint_1m": ["ts", "p"], "book_1m": ["ts", "p"],
+    "footprint_1m": ["ts", "p"], "book_1m": ["ts", "p"], "options": ["ts", "expiry", "strike", "cp"],
 }
 # Thứ tự sắp xếp khi ghi và đọc (ổn định khi nhiều lệnh cùng mili giây).
 ORDER: dict[str, str] = {
     "ticks": "ts, id", "bars": "ts", "book": "ts, p", "bookdepth": "ts, pct", "metrics": "ts",
-    "footprint_1m": "ts, p", "book_1m": "ts, p",
+    "footprint_1m": "ts, p", "book_1m": "ts, p", "options": "ts, expiry, strike, cp",
 }
 
 INT32_MAX = 2**31 - 1

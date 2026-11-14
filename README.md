@@ -13,7 +13,7 @@ Dự án không liên kết với TradingView. Không dùng tên, logo hay giao 
 | 2 | Chart cơ bản: nến, volume, danh sách theo dõi, trực tiếp, múi giờ, giao diện tối | Xong |
 | 3 | Orderflow: footprint (imbalance, POC), delta, CVD, VPVR (POC/VAH/VAL) | Xong, trừ volume profile theo phiên |
 | 4 | Heatmap thanh khoản: lớp heatmap dưới nến, bong bóng lệnh lớn | Xong, chưa đo thời gian vẽ (đích 100 ms) |
-| 5 | GEX BTC (Deribit) | Chưa làm |
+| 5 | GEX BTC (Deribit): snapshot 15 phút, GEX theo strike, gamma flip, call/put wall | Xong. Gamma tính từ IV (Black-76), OI trễ ~8 giờ |
 | 6 | Vàng (XAUUSDT; GC1! tuỳ chọn, trả phí) | Chưa làm |
 | 7 | Cổ phiếu VN100 | Chưa làm |
 | 8 | Engine Pine Script (tập con) | Chưa làm |

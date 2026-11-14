@@ -62,3 +62,7 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--focus); ou
 .heat-canvas { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
 .chart-wrap { background: var(--bg); }
 .chart { z-index: 1; }
+
+.gexnote { position: absolute; left: 10px; top: 28px; z-index: 3; font-size: 12px; color: var(--mute); background: var(--veil);
+  padding: 2px 8px; border-radius: 6px; pointer-events: none; }
+.gexnote.bad { color: var(--bad); }

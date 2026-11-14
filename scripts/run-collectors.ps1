@@ -19,6 +19,7 @@ New-Item -ItemType Directory -Force -Path $logs | Out-Null
 $jobs = [ordered]@{
   trades = @('-m', 'collector.live_trades', '--symbols', $Symbols)
   book   = @('-m', 'collector.live_book', '--symbols', $Symbols)
+  deribit = @('-m', 'collector.deribit')
 }
 $procs = @{}
 
