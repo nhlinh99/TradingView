@@ -82,20 +82,25 @@ C:\tv-data\.venv\Scripts\python.exe -m pytest
 | Tick trực tiếp | `& $py -m collector.live_trades --symbols BTCUSDT,XAUUSDT` |
 | Sổ lệnh trực tiếp (heatmap) | `& $py -m collector.live_book --symbols BTCUSDT,XAUUSDT` |
 | Gom nén (thử trước) | `& $py -m collector.compact --dry-run` |
+| Việc hằng đêm: nến, sửa khoảng thiếu, gom nén | `& $py -m collector.daily` |
 
-Collector trực tiếp chỉ chạy khi tiến trình còn sống, và dữ liệu sổ lệnh trong quá khứ không lấy lại được miễn phí. Muốn chạy liên tục, dùng:
+**Collector trực tiếp chỉ chạy khi tiến trình còn sống.** Đóng cửa sổ, tắt máy hoặc kết thúc phiên làm việc là chúng dừng, và dữ liệu sổ lệnh trong quá khứ không lấy lại được miễn phí. Muốn chạy liên tục, dùng:
 
 ```powershell
 .\scripts\run-collectors.ps1
 ```
 
-Script khởi động cả hai collector, tự chạy lại nếu một cái thoát, ghi log vào `DATA_DIR\logs`. Để tự chạy khi đăng nhập Windows và gom nén mỗi đêm, tạo hai tác vụ (chạy một lần, đổi đường dẫn cho đúng):
+Script khởi động cả hai collector, tự chạy lại nếu một cái thoát, ghi log vào `DATA_DIR\logs`. Đừng chạy hai bộ collector cùng lúc: hai bên sẽ ghi trùng.
+
+Hai việc cần lên lịch (chạy một lần, đổi đường dẫn cho đúng):
 
 ```powershell
 $root = 'C:\duong\dan\toi\TradingView'
 schtasks /Create /TN tv-collectors /SC ONLOGON /TR "powershell -NoProfile -ExecutionPolicy Bypass -File $root\scripts\run-collectors.ps1"
-schtasks /Create /TN tv-compact /SC DAILY /ST 03:00 /TR "cmd /c cd /d $root && C:\tv-data\.venv\Scripts\python.exe -m collector.compact"
+schtasks /Create /TN tv-daily /SC DAILY /ST 03:00 /TR "cmd /c cd /d $root && C:\tv-data\.venv\Scripts\python.exe -m collector.daily"
 ```
+
+`collector.daily` là việc không thể thiếu, không chỉ là dọn dẹp. Với mỗi symbol nó chạy: (1) đồng bộ nến 1 phút (không có bước này `bars` đứng yên), (2) tải lại 3 ngày gần nhất từ kho Binance để sửa mọi khoảng thiếu của collector trực tiếp (máy tắt, khoảng hở bị bỏ qua), (3) gom nén. 03:00 giờ Việt Nam là 20:00 UTC, lúc đó file của ngày UTC hôm kia đã được Binance công bố. Mỗi bước bọc riêng, mã thoát khác 0 nếu có bước lỗi.
 
 Gom nén chỉ đụng các ngày đã qua. Tick quá 30 ngày được gom thành footprint 1 phút (chỉ bằng khoảng 6% dung lượng) sau khi kiểm tra tổng mua và bán từng phút. Chính sách nằm trong `config/retention.toml`.
 
