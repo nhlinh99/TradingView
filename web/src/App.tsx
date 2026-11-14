@@ -44,12 +44,19 @@ export default function App() {
     heatmap: pref('heatmap', '0', ['0', '1']) === '1',
     vpvr: pref('vpvr', '0', ['0', '1']) === '1',
     ratio: Number(pref('ratio', '3', ['2', '3', '4', '5'])),
-    heatMode: pref('heatMode', 'intensity', ['intensity', 'side']) as Flow['heatMode'],
+    heatMode: pref('heatMode', 'bookmap', ['intensity', 'side', 'bookmap']) as Flow['heatMode'],
+    heatLo: Number(pref('heatLo', '5', ['0', '5', '10', '20', '30', '40', '50'])),
+    heatHi: Number(pref('heatHi', '100', ['40', '50', '60', '70', '80', '90', '100'])),
+    bestLines: pref('bestLines', '1', ['0', '1']) === '1',
+    strip: pref('strip', '1', ['0', '1']) === '1',
+    dotScale: Number(pref('dotScale', '100', ['50', '75', '100', '150', '200', '300'])),
+    dotMin: Number(pref('dotMin', '0', ['0', '2', '5', '10', '20'])),
+    iceberg: pref('iceberg', '0', ['0', '1']) === '1',
     fpMode: pref('fpMode', 'bidask', ['bidask', 'delta', 'volume', 'profile']) as Flow['fpMode'],
   }))
   const setF = (patch: Partial<Flow>) => setFlow((f) => {
     const n = { ...f, ...patch }
-    savePref('delta', n.delta ? '1' : '0'); savePref('cvd', n.cvd); savePref('footprint', n.footprint ? '1' : '0'); savePref('ratio', String(n.ratio)); savePref('vpvr', n.vpvr ? '1' : '0'); savePref('heatmap', n.heatmap ? '1' : '0'); savePref('bubbles', n.bubbles ? '1' : '0'); savePref('gex', n.gex ? '1' : '0'); savePref('heatMode', n.heatMode); savePref('fpMode', n.fpMode)
+    savePref('delta', n.delta ? '1' : '0'); savePref('cvd', n.cvd); savePref('footprint', n.footprint ? '1' : '0'); savePref('ratio', String(n.ratio)); savePref('vpvr', n.vpvr ? '1' : '0'); savePref('heatmap', n.heatmap ? '1' : '0'); savePref('bubbles', n.bubbles ? '1' : '0'); savePref('gex', n.gex ? '1' : '0'); savePref('heatMode', n.heatMode); savePref('heatLo', String(n.heatLo)); savePref('heatHi', String(n.heatHi)); savePref('bestLines', n.bestLines ? '1' : '0'); savePref('strip', n.strip ? '1' : '0'); savePref('dotScale', String(n.dotScale)); savePref('dotMin', String(n.dotMin)); savePref('iceberg', n.iceberg ? '1' : '0'); savePref('fpMode', n.fpMode)
     return n
   })
   const [layout, setLayout] = useState(() => Number(pref('layout', '1', ['1', '2', '4'])))
@@ -149,6 +156,7 @@ export default function App() {
           <div className="opts" role="group" aria-label="Orderflow">
             <label><input type="checkbox" checked={flow.footprint} onChange={(e) => setF({ footprint: e.target.checked })} />Footprint</label>
             <label><input type="checkbox" checked={flow.heatmap} onChange={(e) => setF({ heatmap: e.target.checked })} />Heatmap</label>
+            <label><input type="checkbox" checked={flow.iceberg} onChange={(e) => setF({ iceberg: e.target.checked })} />Iceberg</label>
             <label><input type="checkbox" checked={flow.bubbles} onChange={(e) => setF({ bubbles: e.target.checked })} />Bong bóng</label>
             <label><input type="checkbox" checked={flow.gex} onChange={(e) => setF({ gex: e.target.checked })} />GEX</label>
             <label><input type="checkbox" checked={flow.vpvr} onChange={(e) => setF({ vpvr: e.target.checked })} />VPVR</label>
@@ -168,9 +176,39 @@ export default function App() {
             {flow.heatmap && (
               <label>Màu heatmap
                 <select value={flow.heatMode} onChange={(e) => setF({ heatMode: e.target.value as Flow['heatMode'] })} aria-label="Màu heatmap">
-                  <option value="intensity">Cường độ</option><option value="side">Mua/Bán</option>
+                  <option value="bookmap">Bookmap</option><option value="intensity">Cường độ</option><option value="side">Mua/Bán</option>
                 </select>
               </label>
+            )}
+            {flow.heatmap && (
+              <>
+                <label>Cắt thấp
+                  <select value={flow.heatLo} onChange={(e) => setF({ heatLo: Number(e.target.value) })} aria-label="Cắt thấp heatmap">
+                    {[0, 5, 10, 20, 30, 40, 50].map((v) => <option key={v} value={v}>{v}%</option>)}
+                  </select>
+                </label>
+                <label>Cắt cao
+                  <select value={flow.heatHi} onChange={(e) => setF({ heatHi: Number(e.target.value) })} aria-label="Cắt cao heatmap">
+                    {[40, 50, 60, 70, 80, 90, 100].map((v) => <option key={v} value={v}>{v}%</option>)}
+                  </select>
+                </label>
+                <label><input type="checkbox" checked={flow.bestLines} onChange={(e) => setF({ bestLines: e.target.checked })} />Bid/Ask</label>
+                <label><input type="checkbox" checked={flow.strip} onChange={(e) => setF({ strip: e.target.checked })} />Dải volume</label>
+              </>
+            )}
+            {flow.bubbles && (
+              <>
+                <label>Cỡ chấm
+                  <select value={flow.dotScale} onChange={(e) => setF({ dotScale: Number(e.target.value) })} aria-label="Cỡ chấm">
+                    {[50, 75, 100, 150, 200, 300].map((v) => <option key={v} value={v}>{v}%</option>)}
+                  </select>
+                </label>
+                <label>Lọc nhỏ
+                  <select value={flow.dotMin} onChange={(e) => setF({ dotMin: Number(e.target.value) })} aria-label="Lọc chấm nhỏ">
+                    {[0, 2, 5, 10, 20].map((v) => <option key={v} value={v}>{v === 0 ? 'Tắt' : `<${v}%`}</option>)}
+                  </select>
+                </label>
+              </>
             )}
             {flow.footprint && (
               <label>Imbalance

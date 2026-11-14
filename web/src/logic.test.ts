@@ -198,3 +198,24 @@ test('stackedImbalance needs 3 consecutive same-side diagonal imbalances', () =>
   assert.equal(stackedImbalance(cells.slice(0, 3), 1, 3), null)   // chỉ 2 mức liên tiếp
   assert.equal(stackedImbalance([], 1, 3), null)
 })
+
+import { applyCutoff, bestBidAsk } from './logic.ts'
+
+test('applyCutoff clamps and rescales like Bookmap cutoffs', () => {
+  assert.equal(applyCutoff(0.1, 0.2, 0.8), 0)
+  assert.equal(applyCutoff(0.9, 0.2, 0.8), 1)
+  assert.ok(Math.abs(applyCutoff(0.5, 0.2, 0.8) - 0.5) < 1e-12)
+  assert.equal(applyCutoff(0.3, 0.5, 0.5), 0)
+  assert.equal(applyCutoff(0.7, 0.5, 0.5), 1)
+})
+
+test('bestBidAsk picks highest bid and lowest ask per time bucket', () => {
+  const rows = [
+    [100, 99, 5, 0], [100, 98, 3, 0], [100, 101, 0, 4], [100, 102, 0, 9],
+    [200, 99.5, 2, 0], [200, 100.5, 0, 1],
+  ]
+  const m = bestBidAsk(rows, 1)
+  assert.deepEqual(m.get(100), { bid: 100, ask: 101 })        // bid cao nhất 99 + bucket 1; ask thấp nhất 101
+  assert.deepEqual(m.get(200), { bid: 100.5, ask: 100.5 })
+  assert.deepEqual(bestBidAsk([[1, 10, 0, 0]], 1).get(1), { bid: null, ask: null })
+})

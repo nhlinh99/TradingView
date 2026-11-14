@@ -122,3 +122,54 @@ def bubbles_endpoint(
     top: int = Query(300, ge=1, le=5000),
 ) -> dict:
     return get_bubbles(symbol.upper(), from_, to, tbucket, top)
+
+
+def get_icebergs(symbol: str, start_ms: int, end_ms: int, tbucket_ms: int, factor: float, min_qty: float, top: int = 40) -> dict:
+    """Ước lượng lệnh iceberg: ô (thời gian, giá) mà khối lượng khớp vượt `factor` lần thanh khoản đang hiển thị ở phía bị đánh.
+
+    Mua chủ động đánh vào lệnh bán chờ (ask), bán chủ động đánh vào lệnh mua chờ (bid). Nếu đã khớp nhiều hơn nhiều so với
+    thanh khoản hiển thị tại đúng mức giá đó mà vẫn còn lệnh chờ, phần dư được bổ sung ngầm, tức là dấu hiệu iceberg.
+    Đây chỉ là ước lượng độ tin cậy thấp: sổ lệnh lấy mẫu mỗi 5 giây và gom theo bucket giá, sàn không công bố iceberg
+    (Bookmap cũng suy luận theo cách tương tự và cảnh báo độ chính xác tuỳ nguồn dữ liệu).
+    Chỉ giữ `top` ô có khối lượng khớp lớn nhất (trên dữ liệu thật hàng nghìn ô vượt ngưỡng tỉ lệ vì sổ lệnh chỉ lấy mẫu
+    5 giây). Mỗi dòng: [ts, price, traded, displayed, side] với side = "buy" (mua chủ động) hoặc "sell".
+    """
+    try:
+        cfg = store.symbol_config(symbol)
+    except (ValueError, KeyError) as e:
+        raise HTTPException(400, str(e)) from e
+    if end_ms <= start_ms:
+        raise HTTPException(400, "to phải lớn hơn from")
+    tbucket_ms = max(tbucket_ms, MIN_TBUCKET_MS) // MIN_TBUCKET_MS * MIN_TBUCKET_MS
+    base = round(cfg["book_bucket"] / cfg["tick"])
+    book_sql = heatmap_sql(symbol, start_ms, end_ms, tbucket_ms, 1)
+    ticks = store.range_select("ticks", symbol, start_ms, end_ms)
+    rows: list[list] = []
+    if book_sql and ticks:
+        con = duckdb.connect()
+        try:
+            data = con.execute(
+                f"WITH b AS ({book_sql}), "
+                f"t AS (SELECT (ts // {tbucket_ms}) * {tbucket_ms} AS t, (p // {base}) * {base} AS p, m, sum(q::DOUBLE) AS q "
+                f"      FROM ({ticks}) GROUP BY 1, 2, 3) "
+                f"SELECT t.t, t.p, t.q, CASE WHEN t.m THEN b.bid ELSE b.ask END AS shown, t.m "
+                f"FROM t JOIN b ON b.t = t.t AND b.p = t.p "
+                f"WHERE t.q >= {float(min_qty)} AND shown > 0 AND t.q > {float(factor)} * shown ORDER BY t.q DESC LIMIT {int(top)}"
+            ).fetchall()
+        finally:
+            con.close()
+        rows = sorted([[t, round(p * cfg["tick"], 10), round(q, 6), round(s, 6), "sell" if m else "buy"] for t, p, q, s, m in data])
+    return {"symbol": symbol, "from": start_ms, "to": end_ms, "tbucket": tbucket_ms, "rows": rows}
+
+
+@router.get("/api/icebergs")
+def icebergs_endpoint(
+    symbol: str,
+    from_: int = Query(..., alias="from"),
+    to: int = Query(...),
+    tbucket: int = Query(30_000, ge=1),
+    factor: float = Query(5.0, gt=0, description="khối lượng khớp phải lớn hơn factor lần thanh khoản hiển thị"),
+    min_qty: float = Query(0.0, ge=0),
+    top: int = Query(40, ge=1, le=500, description="chỉ giữ `top` ô có khối lượng khớp lớn nhất, vì dòng lệnh thường cũng vượt ngưỡng ở rất nhiều ô"),
+) -> dict:
+    return get_icebergs(symbol.upper(), from_, to, tbucket, factor, min_qty, top)

@@ -204,16 +204,20 @@ function ramp(stops: [number, RGB][], x: number): RGB {
 const INTENSITY_STOPS: [number, RGB][] = [
   [0, [0, 0, 0]], [0.2, [20, 40, 170]], [0.5, [255, 255, 255]], [0.72, [255, 235, 59]], [0.88, [255, 152, 0]], [1, [244, 67, 54]],
 ]
+// Thang kiểu Bookmap: nền đen, xanh đậm, xanh dương, cyan, vàng, cam, đỏ (thanh khoản lớn nhất).
+const BOOKMAP_STOPS: [number, RGB][] = [
+  [0, [0, 0, 0]], [0.15, [0, 16, 63]], [0.4, [10, 90, 203]], [0.62, [18, 214, 224]], [0.8, [255, 233, 74]], [0.92, [255, 138, 0]], [1, [255, 45, 45]],
+]
 // Kiểu theo phía: lệnh mua chờ màu xanh lá, lệnh bán chờ màu tím.
 const BID_STOPS: [number, RGB][] = [[0, [0, 0, 0]], [0.5, [0, 120, 70]], [1, [140, 255, 200]]]
 const ASK_STOPS: [number, RGB][] = [[0, [0, 0, 0]], [0.5, [110, 50, 190]], [1, [235, 190, 255]]]
 
 /** Màu ô heatmap: v = thanh khoản / phân vị 99 (có thể lớn hơn 1, sẽ bị cắt). Trả về [r,g,b,a]. */
-export function heatColor(v: number, side?: 'bid' | 'ask'): [number, number, number, number] {
+export function heatColor(v: number, side?: 'bid' | 'ask' | 'bookmap'): [number, number, number, number] {
   const x = Math.min(1, Math.max(0, v))
   if (x === 0) return [0, 0, 0, 0]
   const s = Math.pow(x, 0.5)
-  const [r, g, b] = ramp(side === 'bid' ? BID_STOPS : side === 'ask' ? ASK_STOPS : INTENSITY_STOPS, s)
+  const [r, g, b] = ramp(side === 'bid' ? BID_STOPS : side === 'ask' ? ASK_STOPS : side === 'bookmap' ? BOOKMAP_STOPS : INTENSITY_STOPS, s)
   return [r, g, b, 0.3 + 0.65 * s]
 }
 
@@ -257,4 +261,22 @@ export function stackedImbalance(cells: Cell[], step: number, ratio: number): { 
   })
   const b = best as { side: 'buy' | 'sell'; from: number; to: number } | null
   return b && Math.round((b.to - b.from) / step) + 1 >= 3 ? b : null
+}
+
+/** Cắt thang màu như Bookmap: dưới `lo` không vẽ, từ `hi` trở lên là màu đậm nhất. v, lo, hi đều theo thang 0..1 của phân vị 99. */
+export function applyCutoff(v: number, lo: number, hi: number): number {
+  if (hi <= lo) return v >= hi ? 1 : 0
+  return Math.min(1, Math.max(0, (v - lo) / (hi - lo)))
+}
+
+/** Đường bid/ask tốt nhất theo từng ô thời gian, lấy từ các ô heatmap: bid = giá cao nhất còn lệnh mua chờ, ask = giá thấp nhất còn lệnh bán chờ. */
+export function bestBidAsk(rows: number[][], bucket: number): Map<number, { bid: number | null; ask: number | null }> {
+  const out = new Map<number, { bid: number | null; ask: number | null }>()
+  for (const [t, price, bid, ask] of rows) {
+    const e = out.get(t) ?? { bid: null, ask: null }
+    if (bid > 0 && (e.bid === null || price + bucket > e.bid)) e.bid = price + bucket
+    if (ask > 0 && (e.ask === null || price < e.ask)) e.ask = price
+    out.set(t, e)
+  }
+  return out
 }

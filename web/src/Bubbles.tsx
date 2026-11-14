@@ -5,6 +5,8 @@ import { tfMs, timeToIndex, type Bar } from './logic'
 
 type Props = {
   on: boolean
+  dotScale: number
+  dotMin: number
   symbol: string
   tf: string
   chart: MutableRefObject<IChartApi | null>
@@ -16,7 +18,7 @@ type Props = {
 const MAX_R = 20
 
 /** Bong bóng: cụm lệnh khớp lớn nhất trong đoạn đang nhìn, kích thước theo khối lượng, màu theo phía chủ động. */
-export default function Bubbles({ on, symbol, tf, chart, candles, bars, version }: Props) {
+export default function Bubbles({ on, dotScale, dotMin, symbol, tf, chart, candles, bars, version }: Props) {
   const cv = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -81,7 +83,7 @@ export default function Bubbles({ on, symbol, tf, chart, candles, bars, version 
         sig = ''
       }
       const r = c.timeScale().getVisibleLogicalRange()
-      const newSig = `${r?.from}|${r?.to}|${s.priceToCoordinate(0)}|${s.priceToCoordinate(1000)}|${bars.current.length}|${rows.length}`
+      const newSig = `${r?.from}|${r?.to}|${s.priceToCoordinate(0)}|${s.priceToCoordinate(1000)}|${bars.current.length}|${rows.length}|${dotScale}|${dotMin}`
       if (newSig === sig) return
       sig = newSig
       void load()
@@ -101,7 +103,8 @@ export default function Bubbles({ on, symbol, tf, chart, candles, bars, version 
         const x = xOf(timeToIndex(times, ((t as number) + tb / 2) / 1000, step))
         const y = s.priceToCoordinate(price as number)
         if (y === null || x < 0 || x > plotW) continue
-        const rad = Math.max(3, Math.sqrt((q as number) / max) * MAX_R)
+        if ((q as number) / max < dotMin) continue // lọc theo cỡ lệnh như Bookmap
+        const rad = Math.max(3, Math.sqrt((q as number) / max) * MAX_R * dotScale)
         // kiểu Deep Trades: vòng đặc = một lệnh lớn đơn lẻ; vòng rỗng = nhiều lệnh nhỏ cộng lại
         const solid = Number(n) === 1
         const rgb = side === 'buy' ? '38,166,154' : '239,83,80'
@@ -123,7 +126,7 @@ export default function Bubbles({ on, symbol, tf, chart, candles, bars, version 
       ctrl?.abort()
       ctx.clearRect(0, 0, canvas.width, canvas.height)
     }
-  }, [on, symbol, tf, chart, candles, bars, version])
+  }, [on, dotScale, dotMin, symbol, tf, chart, candles, bars, version])
 
   return <canvas ref={cv} className="fp-canvas" aria-hidden="true" />
 }

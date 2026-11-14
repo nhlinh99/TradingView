@@ -70,3 +70,23 @@ def test_bubbles_top_clusters(data_root):
     rows = r.json()["rows"]
     assert rows == [[T0, 67000.0, 5.0, "buy", 2], [T0, 67001.0, 3.0, "sell", 1]]   # n: số lệnh gộp trong cụm
     assert client.get("/api/bubbles", params={"symbol": "BTCUSDT", "from": T0, "to": T0}).status_code == 400
+
+
+def test_icebergs_flag_traded_far_above_displayed(data_root):
+    # bucket 1.0 = 10 tick. ask hiển thị 2 BTC ở 67000.0 và 5 BTC ở 67001.0; bid hiển thị 3 BTC ở 66999.0
+    put_book([(T0, 670000, 0.0, 2.0), (T0, 670010, 0.0, 5.0), (T0, 669990, 3.0, 0.0)])
+    ticks = [
+        (T0 + 1000, 1, 670000, 7.0, False),    # mua chủ động 7 vào ask 2: 7 > 2*2 -> iceberg mua
+        (T0 + 2000, 2, 670010, 6.0, False),    # 6 vs ask 5: chưa vượt 2 lần -> không
+        (T0 + 3000, 3, 669990, 9.0, True),     # bán chủ động 9 vào bid 3: 9 > 2*3 -> iceberg bán
+        (T0 + 4000, 4, 670020, 50.0, False),   # mức giá không có thanh khoản hiển thị -> không đánh giá
+    ]
+    store.write_partition("ticks", "BTCUSDT", DAY, ticks, part="t")
+    r = client.get("/api/icebergs", params={"symbol": "BTCUSDT", "from": T0, "to": T0 + 60_000, "tbucket": 5000, "factor": 2})
+    assert r.status_code == 200, r.text
+    assert r.json()["rows"] == [[T0, 66999.0, 9.0, 3.0, "sell"], [T0, 67000.0, 7.0, 2.0, "buy"]]
+    top1 = client.get("/api/icebergs", params={"symbol": "BTCUSDT", "from": T0, "to": T0 + 60_000, "tbucket": 5000, "factor": 2, "top": 1}).json()
+    assert top1["rows"] == [[T0, 66999.0, 9.0, 3.0, "sell"]]            # giữ ô khớp lớn nhất
+    strict = client.get("/api/icebergs", params={"symbol": "BTCUSDT", "from": T0, "to": T0 + 60_000, "tbucket": 5000, "factor": 4})
+    assert strict.json()["rows"] == []                  # ngưỡng 4 lần: 7 < 8 và 9 < 12
+    assert client.get("/api/icebergs", params={"symbol": "BTCUSDT", "from": T0, "to": T0}).status_code == 400

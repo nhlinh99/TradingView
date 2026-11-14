@@ -159,3 +159,9 @@ export const createAlert = async (symbol: string, condition: Record<string, unkn
 export const setAlertEnabled = (id: number, enabled: boolean) =>
   json<{ id: number }>(`/api/alerts/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled }) })
 export const deleteAlert = (id: number) => json<{ deleted: number }>(`/api/alerts/${id}`, { method: 'DELETE' })
+
+export type IcebergsResponse = { symbol: string; from: number; to: number; tbucket: number; rows: (number | string)[][] }
+export function fetchIcebergs(symbol: string, from: number, to: number, tbucket: number, signal?: AbortSignal) {
+  const q = new URLSearchParams({ symbol, from: String(from), to: String(to), tbucket: String(tbucket) })
+  return json<IcebergsResponse>(`/api/icebergs?${q}`, { signal })
+}

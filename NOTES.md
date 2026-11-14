@@ -121,3 +121,11 @@ Nguồn tham khảo: trang trợ giúp DeepDom về heatmap và ghi chú bản v
 - Đã làm: thang heatmap đen, xanh dương, trắng, vàng, cam, đỏ; kiểu màu mua (xanh lá) và bán (tím); thang tự chuẩn hoá theo phân vị 99; footprint có kiểu Bid x Ask, Delta, Volume, Profile; chữ tự co; thống kê delta và volume dưới nến; stacked imbalance; ký hiệu lệnh lớn đặc và rỗng.
 - Chưa làm: DOM ladder (thiếu dữ liệu sổ lệnh tức thời trên giao diện), nhiều cột footprint cạnh nhau (Multi Column), phân biệt thanh khoản mới và thanh khoản tồn tại lâu, ký hiệu hình vuông và hình thoi của Deep Trades (cần dữ liệu MBO để biết lệnh chờ hay lệnh chủ động; Binance chỉ có aggTrade), Imbalance Horizontal, FVG.
 - Lệnh lớn của DeepCharts phân loại bằng MBO. Ở đây vòng đặc nghĩa là cụm chỉ có một aggTrade, vòng rỗng là nhiều aggTrade trong cùng ô thời gian và giá, nên không tương đương hoàn toàn.
+
+
+### Thiết kế orderflow theo Bookmap
+
+Nguồn tham khảo: kết quả tìm kiếm về Bookmap (heatmap, volume dots, iceberg, CVD) và blog bản 7 của Bookmap; chưa đọc tài liệu gốc. Màu mặc định của Bookmap được các nguồn mô tả không thống nhất nên thang màu ở đây là của dự án.
+- Đã làm: kiểu màu Bookmap (mặc định), cắt thấp/cao, đường bid/ask tốt nhất bậc thang, dải volume mua/bán dưới đáy, cỡ chấm và lọc chấm nhỏ, dấu hiệu iceberg.
+- **Iceberg chỉ là ước lượng độ tin cậy thấp.** Ô (thời gian, giá) bị đánh dấu khi khối lượng khớp lớn hơn 5 lần thanh khoản hiển thị ở phía bị đánh. Sổ lệnh của dự án chỉ lấy mẫu mỗi 5 giây và gom theo bucket 1 USD (BTC), còn khối lượng khớp cộng cả ô thời gian, nên trên dữ liệu thật hàng nghìn ô vượt ngưỡng chỉ vì dòng lệnh bình thường. Vì vậy API chỉ giữ 40 ô có khối lượng khớp lớn nhất. Bookmap suy luận tương tự nhưng dùng dữ liệu sổ lệnh đầy đủ từng lệnh (MBO); ở đây không có.
+- Chưa làm: gom chấm kiểu "Smart", đặt lệnh và phát hiện lệnh stop, cột volume và delta theo mức giá ở mép phải gắn với heatmap (đã có VPVR riêng), thanh trượt thật thay cho ô chọn.

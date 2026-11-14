@@ -1,11 +1,16 @@
 import { useEffect, useRef, type MutableRefObject } from 'react'
 import type { IChartApi, ISeriesApi } from 'lightweight-charts'
 import { fetchHeatmap } from './api'
-import { heatColor, tfMs, timeToIndex, type Bar } from './logic'
+import { applyCutoff, bestBidAsk, heatColor, tfMs, timeToIndex, type Bar } from './logic'
 
 type Props = {
   on: boolean
-  mode: 'intensity' | 'side'
+  mode: 'intensity' | 'side' | 'bookmap'
+  cutLo: number
+  cutHi: number
+  bestLines: boolean
+  strip: boolean
+  dark: boolean
   symbol: string
   tf: string
   chart: MutableRefObject<IChartApi | null>
@@ -17,7 +22,7 @@ type Props = {
 const CELL_PX = 4
 
 /** Heatmap thanh khoản vẽ DƯỚI nến (canvas nằm sau biểu đồ; nền biểu đồ được đặt trong suốt). */
-export default function Heatmap({ on, mode, symbol, tf, chart, candles, bars, version }: Props) {
+export default function Heatmap({ on, mode, cutLo, cutHi, bestLines, strip, dark, symbol, tf, chart, candles, bars, version }: Props) {
   const cv = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -102,7 +107,7 @@ export default function Heatmap({ on, mode, symbol, tf, chart, candles, bars, ve
         sig = ''
       }
       const r = c.timeScale().getVisibleLogicalRange()
-      const newSig = `${r?.from}|${r?.to}|${s.priceToCoordinate(0)}|${s.priceToCoordinate(1000)}|${bars.current.length}|${rows.length}|${mode}`
+      const newSig = `${r?.from}|${r?.to}|${s.priceToCoordinate(0)}|${s.priceToCoordinate(1000)}|${bars.current.length}|${rows.length}|${mode}|${cutLo}|${cutHi}|${bestLines}|${strip}|${dark}`
       if (newSig === sig) return
       sig = newSig
       void load()
@@ -134,11 +139,51 @@ export default function Heatmap({ on, mode, symbol, tf, chart, candles, bars, ve
         const yt = s.priceToCoordinate(price + bucket)
         const yb = s.priceToCoordinate(price)
         if (yt === null || yb === null) continue
-        const [R, G, B, A] = mode === 'side' ? heatColor(Math.max(bid, ask) / scale, bid >= ask ? 'bid' : 'ask') : heatColor((bid + ask) / scale)
+        const raw = (mode === 'side' ? Math.max(bid, ask) : bid + ask) / scale
+        const [R, G, B, A] = mode === 'side' ? heatColor(applyCutoff(raw, cutLo, cutHi), bid >= ask ? 'bid' : 'ask') : heatColor(applyCutoff(raw, cutLo, cutHi), mode === 'bookmap' ? 'bookmap' : undefined)
         if (A === 0) continue
         ctx.fillStyle = `rgba(${R | 0},${G | 0},${B | 0},${A.toFixed(2)})`
         const top = Math.min(yt, yb)
         ctx.fillRect(x0, top, Math.max(1, x1 - x0 + 0.5), Math.max(1, Math.abs(yb - yt) + 0.5))
+      }
+      // đường bid/ask tốt nhất (bậc thang) như Bookmap
+      if (bestLines) {
+        const m = bestBidAsk(rows, bucket)
+        const draw1 = (pick: 'bid' | 'ask', color: string) => {
+          ctx.strokeStyle = color
+          ctx.lineWidth = 1.5
+          ctx.beginPath()
+          let started = false
+          for (const t of [...m.keys()].sort((p, q) => p - q)) {
+            const price = m.get(t)![pick]
+            const [x0, x1] = span(t)
+            const y = price === null ? null : s.priceToCoordinate(price)
+            if (y === null || Number.isNaN(x0)) { started = false; continue }
+            if (!started) { ctx.moveTo(x0, y); started = true } else ctx.lineTo(x0, y)
+            ctx.lineTo(x1, y)
+          }
+          ctx.stroke()
+        }
+        draw1('bid', '#00e676')
+        draw1('ask', '#ff5252')
+      }
+      // dải volume dưới đáy vùng giá: mua (xanh) chồng lên bán (đỏ), cao theo volume của nến
+      if (strip) {
+        const list = bars.current
+        const paneH = c.panes()[0]?.getHeight() ?? h
+        const stripH = Math.max(30, paneH * 0.14)
+        const vis = list.filter((b) => { const x = xOf(timeToIndex(times, b.time, step)); return x >= 0 && x <= plotW })
+        const vmax = Math.max(1e-9, ...vis.map((b) => b.volume))
+        const bw = Math.max(1, Math.abs(xOf(1) - xOf(0)) * 0.8)
+        for (const b of vis) {
+          const x = xOf(timeToIndex(times, b.time, step))
+          const hh = (b.volume / vmax) * stripH
+          const share = b.volume > 0 && (b.buy + b.sell) > 0 ? b.buy / (b.buy + b.sell) : 0.5
+          ctx.fillStyle = 'rgba(0,230,118,.75)'
+          ctx.fillRect(x - bw / 2, paneH - hh * share, bw, hh * share)
+          ctx.fillStyle = 'rgba(255,82,82,.75)'
+          ctx.fillRect(x - bw / 2, paneH - hh, bw, hh * (1 - share))
+        }
       }
     }
 
@@ -150,7 +195,7 @@ export default function Heatmap({ on, mode, symbol, tf, chart, candles, bars, ve
       ctrl?.abort()
       ctx.clearRect(0, 0, canvas.width, canvas.height)
     }
-  }, [on, mode, symbol, tf, chart, candles, bars, version])
+  }, [on, mode, cutLo, cutHi, bestLines, strip, dark, symbol, tf, chart, candles, bars, version])
 
   return <canvas ref={cv} className="heat-canvas" aria-hidden="true" />
 }
