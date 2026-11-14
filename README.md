@@ -23,6 +23,32 @@ Kế hoạch chi tiết, điều kiện nghiệm thu từng phase và các việ
 
 Sơ đồ tương tác của kế hoạch: mở `plan-viewer/dist/plan.html` bằng trình duyệt. Trang chạy offline. Dựng lại bằng `cd plan-viewer && npm install && node build.mjs`.
 
+## Giao diện
+
+Ảnh chụp từ bản chạy thật, dữ liệu thật của máy này (2026-11-14). Chế độ tối là mặc định theo hệ thống; có nút đổi sang sáng.
+
+**Footprint** (BTCUSDT 1 phút): ô `bán x mua` theo từng mức giá, màu theo imbalance chéo (ngưỡng chỉnh được 2:1 đến 5:1), viền vàng là POC, kèm pane volume, delta và CVD.
+
+![Footprint](docs/screenshots/footprint.png)
+
+**Heatmap thanh khoản** dưới nến, cộng bong bóng lệnh khớp lớn (BTCUSDT 1 phút). Vạch vàng ngang là các lệnh chờ lớn tồn tại lâu.
+
+![Heatmap](docs/screenshots/heatmap.png)
+
+**GEX BTC** từ options Deribit: histogram theo strike, gamma flip, call wall, put wall, kèm nhãn tuổi dữ liệu và OI trễ.
+
+![GEX](docs/screenshots/gex.png)
+
+**Pine Script và backtest**: editor, tham số tự sinh, vốn, phí, trượt giá, khoảng ngày, đường vốn và danh sách lệnh.
+
+![Pine và backtest](docs/screenshots/pine-backtest.png)
+
+**Layout 4 ô** (chế độ sáng): BTCUSDT, XAUUSDT và hai cổ phiếu VN100 (VNM, BSI), cuộn và crosshair đồng bộ theo thời gian.
+
+![Layout 4 ô](docs/screenshots/layout-light.png)
+
+Chụp lại ảnh sau khi đổi giao diện: mở trang ở 1400x800, bật tính năng cần chụp rồi lưu vào `docs/screenshots/`.
+
 ## Nguồn dữ liệu
 
 | Dữ liệu | Nguồn | Chi phí |
