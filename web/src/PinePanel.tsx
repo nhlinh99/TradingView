@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { createAlert, fetchPineExamples, runPine, type PineResult } from './api'
+import { createAlert, fetchPineExamples, runPine, type BacktestOpts, type PineResult } from './api'
 
 type Props = {
   symbol: string
@@ -28,14 +28,22 @@ export default function PinePanel({ symbol, tf, onResult }: Props) {
   const [inputs, setInputs] = useState<Record<string, unknown>>({})
   const [err, setErr] = useState<{ message: string; line?: number } | null>(null)
   const [busy, setBusy] = useState(false)
+  const [bt, setBt] = useState({ capital: '10000', fee: '0.05', slip: '0', from: '', to: '' })
   const [note, setNote] = useState<string | null>(null)
 
   useEffect(() => { fetchPineExamples().then(setExamples).catch(() => setExamples([])) }, [])
 
+  const opts = (): BacktestOpts => {
+    if (!/\bstrategy\s*\(/.test(src)) return {}
+    const o: BacktestOpts = { commission_pct: Number(bt.fee) || 0, slippage_ticks: Number(bt.slip) || 0, initial_capital: Number(bt.capital) || 10000 }
+    if (bt.from) o.from_ms = Date.parse(bt.from + 'T00:00:00Z')
+    if (bt.to) o.to_ms = Date.parse(bt.to + 'T00:00:00Z') + 86_400_000
+    return o
+  }
   const run = async (over: Record<string, unknown> = inputs) => {
     setBusy(true)
     try {
-      const r = await runPine(src, symbol, tf, over)
+      const r = await runPine(src, symbol, tf, over, opts())
       setRes(r)
       setErr(null)
       onResult(r)
@@ -97,13 +105,40 @@ export default function PinePanel({ symbol, tf, onResult }: Props) {
               ))}
             </div>
           )}
+          {/\bstrategy\s*\(/.test(src) && (
+            <div className="pine-inputs">
+              <b>Backtest</b>
+              <label>Vốn ban đầu<input type="number" value={bt.capital} onChange={(e) => setBt({ ...bt, capital: e.target.value })} /></label>
+              <label>Phí mỗi lần khớp (%)<input type="number" step="0.01" value={bt.fee} onChange={(e) => setBt({ ...bt, fee: e.target.value })} /></label>
+              <label>Trượt giá (tick)<input type="number" step="1" value={bt.slip} onChange={(e) => setBt({ ...bt, slip: e.target.value })} /></label>
+              <label>Từ ngày<input type="date" value={bt.from} onChange={(e) => setBt({ ...bt, from: e.target.value })} /></label>
+              <label>Đến ngày<input type="date" value={bt.to} onChange={(e) => setBt({ ...bt, to: e.target.value })} /></label>
+              <span className="mute">Tối đa 5000 nến mỗi lần. Lệnh khớp ở giá mở của nến kế tiếp; không có stop/limit, không mô phỏng thanh khoản. Dữ liệu delta, heatmap, GEX chỉ có từ lúc bắt đầu thu thập.</span>
+            </div>
+          )}
           {st && (
             <table className="pine-stats">
               <tbody>
+                <tr><td>Vốn cuối</td><td>{(st.equity[st.equity.length - 1] ?? st.initial_capital).toFixed(2)}</td></tr>
                 <tr><td>Lãi ròng</td><td>{st.net_profit.toFixed(2)}</td></tr>
                 <tr><td>Số lệnh đã đóng</td><td>{st.closed_trades}</td></tr>
                 <tr><td>Tỉ lệ thắng</td><td>{(st.win_rate * 100).toFixed(1)}%</td></tr>
                 <tr><td>Sụt vốn tối đa</td><td>{(st.max_drawdown * 100).toFixed(1)}%</td></tr>
+              </tbody>
+            </table>
+          )}
+          {st && st.trades.length > 0 && (
+            <table className="pine-stats trades">
+              <thead><tr><th>Hướng</th><th>Vào</th><th>Ra</th><th>Giá vào</th><th>Giá ra</th><th>Lãi</th></tr></thead>
+              <tbody>
+                {st.trades.slice(-50).map((t, i) => (
+                  <tr key={i}>
+                    <td>{t.dir}</td><td>{new Date(t.entry_time).toISOString().slice(0, 16).replace('T', ' ')}</td>
+                    <td>{new Date(t.exit_time).toISOString().slice(0, 16).replace('T', ' ')}</td>
+                    <td>{t.entry_price.toFixed(2)}</td><td>{t.exit_price.toFixed(2)}</td>
+                    <td className={t.pnl >= 0 ? 'up' : 'down'}>{t.pnl.toFixed(2)} ({t.pnl_pct.toFixed(1)}%)</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           )}

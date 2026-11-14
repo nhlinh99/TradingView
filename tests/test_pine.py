@@ -416,3 +416,45 @@ def test_sample_5_strategy_backtest_matches_manual():
     assert st["closed_trades"] == len(trades)
     assert st["net_profit"] == pytest.approx(sum(trades), rel=1e-9)
     assert len(st["equity"]) == 600 and st["trades"][0]["dir"] == "long"
+
+
+def manual_cross_backtest(bars, commission_pct=0.0, slip=0.0, initial=10000.0):
+    f, s = ref_ema(bars.close, 20), ref_ema(bars.close, 50)
+    sma20 = [None if i < 19 else sum(bars.volume[i - 19:i + 1]) / 20 for i in range(len(bars))]
+    realized, pos, entry, qty, pend, entry_fee, pnls = 0.0, 0, 0.0, 0.0, None, 0.0, []
+    for i in range(len(bars)):
+        if pend:
+            px = bars.open[i]
+            if pend == "L" and pos == 0:
+                qty = (initial + realized) / px
+                entry = px + slip
+                entry_fee = qty * entry * commission_pct / 100
+                realized -= entry_fee
+                pos = 1
+            elif pend == "C" and pos == 1:
+                exit_px = px - slip
+                fee = qty * exit_px * commission_pct / 100
+                realized += qty * (exit_px - entry) - fee
+                pnls.append(qty * (exit_px - entry) - fee - entry_fee)
+                pos = 0
+            pend = None
+        ok = i > 0 and all(x is not None for x in (f[i], s[i], f[i - 1], s[i - 1]))
+        if ok and f[i] > s[i] and f[i - 1] <= s[i - 1] and bars.volume[i] > (sma20[i] or 1e18):
+            pend = "L"
+        elif ok and f[i] < s[i] and f[i - 1] >= s[i - 1]:
+            pend = "C"
+    return pnls
+
+
+def test_backtest_fees_and_slippage_match_manual_and_reduce_profit():
+    bars = make_bars(600, seed=11)
+    base = run(S5, bars)["strategy"]
+    costly = run(S5, bars, strategy_opts={"commission_pct": 0.1, "slippage": 0.25})["strategy"]
+    want = manual_cross_backtest(bars, 0.1, 0.25)
+    assert costly["closed_trades"] == len(want) > 0
+    assert costly["net_profit"] == pytest.approx(sum(want), rel=1e-9)
+    assert costly["net_profit"] < base["net_profit"]
+    assert [t["pnl"] for t in costly["trades"]] == [pytest.approx(x, rel=1e-9) for x in want]
+    # vốn ban đầu được ghi đè
+    big = run(S5, bars, strategy_opts={"initial_capital": 50000.0})["strategy"]
+    assert big["initial_capital"] == 50000.0 and big["equity"][0] == pytest.approx(50000.0, rel=1e-3)

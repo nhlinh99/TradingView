@@ -30,6 +30,12 @@ class RunBody(BaseModel):
     tf: str = "1m"
     limit: int = 1000
     inputs: dict = {}
+    # Tham số backtest (giao diện backtest ghi đè giá trị trong strategy())
+    from_ms: int | None = None
+    to_ms: int | None = None
+    commission_pct: float | None = None      # phần trăm giá trị lệnh, mỗi lần khớp
+    slippage_ticks: float | None = None
+    initial_capital: float | None = None
 
 
 def _norm_tf(tf: str) -> str:
@@ -41,15 +47,15 @@ def _norm_tf(tf: str) -> str:
     raise PineRuntimeError(f"timeframe không hỗ trợ: {tf}")
 
 
-def load_bars(symbol: str, tf: str, limit: int, to_ms: int | None = None) -> Bars | None:
+def load_bars(symbol: str, tf: str, limit: int, to_ms: int | None = None, from_ms: int | None = None) -> Bars | None:
     sym = symbol.split(":")[-1].upper()
     try:
         store.symbol_config(sym)
     except KeyError:
         return None
-    j = bars_api.get_bars(sym, _norm_tf(tf), None, to_ms, min(limit, MAX_BARS))
+    j = bars_api.get_bars(sym, _norm_tf(tf), from_ms, to_ms, min(limit, MAX_BARS))
     rows = j["bars"]
-    if not rows and to_ms is None:
+    if not rows and to_ms is None and from_ms is None:
         # collector tắt hoặc thị trường nghỉ lâu: dùng đoạn nến cuối cùng đang có thay vì trả rỗng
         from collector import vn as _last
         last = _last.last_bar_ts(sym)
@@ -77,7 +83,7 @@ def run_pine(body: RunBody) -> dict:
     except KeyError:
         raise HTTPException(404, f"symbol không có trong config: {body.symbol}")
     try:
-        bars = load_bars(sym, body.tf, body.limit)
+        bars = load_bars(sym, body.tf, MAX_BARS if body.from_ms else body.limit, body.to_ms, body.from_ms)
         if bars is None:
             raise HTTPException(404, f"chưa có nến cho {sym} {body.tf}")
         is_vn = cfg.get("market") == "vn"
@@ -90,6 +96,8 @@ def run_pine(body: RunBody) -> dict:
         out = runner.run_script(
             body.source, bars, symbol=sym, tf=body.tf, tz_offset_ms=VN_TZ_MS if is_vn else 0, provider=provider,
             inputs=body.inputs, external={"gex_levels": gex_levels()} if "gex_levels" in body.source else None,
+            strategy_opts={"commission_pct": body.commission_pct, "initial_capital": body.initial_capital,
+                           "slippage": (body.slippage_ticks or 0.0) * cfg["tick"]},
             syminfo_type="stock" if is_vn else ("cfd" if sym.startswith("XAU") else "crypto"))
     except PineSyntaxError as e:
         raise HTTPException(400, {"kind": "syntax", "message": str(e), "line": e.line})

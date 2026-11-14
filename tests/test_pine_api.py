@@ -59,3 +59,20 @@ def test_security_other_symbol_and_timeframe(data_root):
 def test_examples_listed():
     j = client.get("/api/pine/examples").json()
     assert {e["name"] for e in j} == {"volume_proxy", "delta_cvd", "relative_volume_alert", "session_vwap", "ema_cross_strategy"}
+
+
+def test_backtest_params_and_date_range(data_root):
+    src = ('strategy("s", default_qty_type=strategy.fixed, default_qty_value=1)\n'
+           'if bar_index == 2\n    strategy.entry("L", strategy.long)\n'
+           'if bar_index == 10\n    strategy.close("L")\n')
+    free = post(source=src, limit=120).json()["strategy"]
+    assert free["closed_trades"] == 1
+    gross = free["net_profit"]                       # mở ở nến 3, đóng ở nến 11: giá tăng 0,1 (1 tick) mỗi nến nên lãi = 0,8
+    assert gross == pytest.approx(0.8)
+    costly = post(source=src, limit=120, slippage_ticks=10, commission_pct=0.0).json()["strategy"]
+    assert costly["net_profit"] == pytest.approx(gross - 2 * 10 * 0.1)          # tick 0.1: mua cao 1.0, bán thấp 1.0
+    fee = post(source=src, limit=120, commission_pct=1.0).json()["strategy"]
+    assert fee["net_profit"] < gross
+    t0 = 1_794_268_800_000
+    r = post(source='indicator("t")\nplot(close)\n', from_ms=t0 + 30 * 60_000, to_ms=t0 + 60 * 60_000).json()
+    assert r["times"][0] == t0 + 30 * 60_000 and r["times"][-1] == t0 + 59 * 60_000 and len(r["times"]) == 30

@@ -18,11 +18,12 @@ def _clean(v):
 
 
 def run_script(source: str, bars: Bars, *, symbol: str = "", tf: str = "1m", tz_offset_ms: int = 0, provider=None,
-               inputs: dict | None = None, external: dict | None = None, syminfo_type: str = "crypto") -> dict:
+               inputs: dict | None = None, external: dict | None = None, syminfo_type: str = "crypto",
+               strategy_opts: dict | None = None) -> dict:
     """Ném PineSyntaxError hoặc PineRuntimeError khi script sai."""
     ast = parse(source)
     it = Interp(source, bars, symbol=symbol, tf=tf, tz_offset_ms=tz_offset_ms, provider=provider, inputs=inputs,
-                external=external, syminfo_type=syminfo_type, ast=ast)
+                external=external, syminfo_type=syminfo_type, ast=ast, strategy_opts=strategy_opts)
     it.run()
     strat = it.strategy.summary()
     return {

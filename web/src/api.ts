@@ -124,14 +124,15 @@ export type PineResult = {
   hlines: { price: number | null; title: string; color: string | null }[]
   alerts: { title: string; message: string; bars: number[] }[]
   strategy: null | {
-    net_profit: number; closed_trades: number; win_rate: number; max_drawdown: number; equity: (number | null)[]
-    trades: { id: string; dir: string; entry_time: number; exit_time: number; pnl: number }[]
+    initial_capital: number; net_profit: number; closed_trades: number; win_rate: number; max_drawdown: number; equity: (number | null)[]
+    trades: { id: string; dir: string; entry_time: number; entry_price: number; exit_time: number; exit_price: number; qty: number; pnl: number; pnl_pct: number }[]
   }
 }
 export const fetchPineExamples = () => json<{ name: string; source: string }[]>('/api/pine/examples')
-export async function runPine(source: string, symbol: string, tf: string, inputs: Record<string, unknown>): Promise<PineResult> {
+export type BacktestOpts = { from_ms?: number; to_ms?: number; commission_pct?: number; slippage_ticks?: number; initial_capital?: number }
+export async function runPine(source: string, symbol: string, tf: string, inputs: Record<string, unknown>, opts: BacktestOpts = {}): Promise<PineResult> {
   const r = await fetch('/api/pine/run', {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ source, symbol, tf, limit: 1000, inputs }),
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ source, symbol, tf, limit: 1000, inputs, ...opts }),
   })
   const body = await r.json()
   if (!r.ok) throw body

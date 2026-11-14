@@ -139,7 +139,8 @@ class Func:
 class Interp:
     def __init__(self, src: str | list, bars: Bars, *, symbol: str = "", tf: str = "1m", tz_offset_ms: int = 0,
                  provider: Callable[[str, str], Bars | None] | None = None, inputs: dict | None = None,
-                 external: dict | None = None, syminfo_type: str = "crypto", ast: list | None = None):
+                 external: dict | None = None, syminfo_type: str = "crypto", ast: list | None = None,
+                 strategy_opts: dict | None = None):
         self.ast = ast if ast is not None else (parse(src) if isinstance(src, str) else src)
         self.bars, self.n = bars, len(bars)
         self.symbol, self.tf, self.tz = symbol, tf, tz_offset_ms
@@ -165,6 +166,8 @@ class Interp:
         self.alerts: dict[int, dict] = {}
         self.input_defs: dict[int, dict] = {}
         self.strategy = Strategy(self)
+        self.strategy.overrides = strategy_opts or {}
+        self.strategy.apply_overrides()
         self.input_count = 0
 
     # ---------- vòng lặp nến ----------
@@ -691,6 +694,7 @@ def f_strategy(it, node, args, kw):
     s.qty_value = _num(kw.get("default_qty_value", 1.0))
     s.commission = _num(kw.get("commission_value", 0.0)) if kw.get("commission_type", "percent") == "percent" else 0.0
     s.pyramiding = int(_num(kw.get("pyramiding", 0)))
+    s.apply_overrides()         # tham số của giao diện backtest thắng giá trị ghi trong script
     return NAN
 
 
@@ -851,6 +855,8 @@ class Strategy:
         self.it = it
         self.initial = 10000.0
         self.qty_type, self.qty_value, self.commission, self.pyramiding = "fixed", 1.0, 0.0, 0
+        self.overrides: dict = {}      # initial_capital, commission_pct, slippage (đơn vị giá) từ giao diện backtest
+        self.slippage = 0.0
         self.pending: list = []
         self.position_size = 0.0
         self.avg = 0.0
@@ -870,8 +876,17 @@ class Strategy:
         px = self.it.bars.close[i] if self.it.n else 0.0
         return self.initial + self.realized + self.position_size * (px - self.avg)
 
+    def apply_overrides(self) -> None:
+        o = self.overrides
+        if o.get("initial_capital") is not None:
+            self.initial = float(o["initial_capital"])
+        if o.get("commission_pct") is not None:
+            self.commission = float(o["commission_pct"])
+        self.slippage = float(o.get("slippage") or 0.0)
+
     def _fill(self, i: int, px: float, delta: float, oid: str) -> None:
-        """Đổi vị thế một lượng delta (có dấu) ở giá px."""
+        """Đổi vị thế một lượng delta (có dấu) ở giá px. Trượt giá làm giá khớp xấu đi: mua cao hơn, bán thấp hơn."""
+        px = px + self.slippage if delta > 0 else px - self.slippage
         fee = abs(delta) * px * self.commission / 100.0
         self.realized -= fee
         old = self.position_size

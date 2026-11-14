@@ -99,3 +99,8 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--focus); ou
 .alerts button { padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); cursor: pointer; }
 .alerts button.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 @media (max-width: 700px) { .alerts-body { grid-template-columns: 1fr; } }
+
+.pine-stats.trades { font-size: 12px; margin-top: 8px; }
+.pine-stats.trades th { text-align: left; padding-right: 10px; color: var(--mute); font-weight: 500; }
+.pine-stats .up { color: var(--ok); } .pine-stats .down { color: var(--bad); }
+.pine-inputs input[type='date'] { padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
