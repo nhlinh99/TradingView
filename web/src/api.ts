@@ -113,17 +113,22 @@ export type GexResponse = {
 }
 export const fetchGex = (signal?: AbortSignal) => json<GexResponse>('/api/gex', { signal })
 
-export type PineInput = { title: string; type: string; default: unknown; minval?: number; maxval?: number; step?: number }
+export type PineInput = {
+  title: string; type: string; default: unknown; minval?: number; maxval?: number; step?: number
+  options?: string[]; group?: string; tooltip?: string; inline?: string
+}
 export type PineResult = {
   symbol: string; tf: string; times: number[]
   meta: { kind: string; title: string; overlay: boolean }
   inputs: PineInput[]
-  plots: { title: string; style: string; linewidth: number; values: (number | null)[]; colors: (string | null)[] }[]
+  plots: { title: string; style: string; linewidth: number; offset?: number; values: (number | null)[]; colors: (string | null)[] }[]
   shapes: { title: string; shape: string; location: string; text: string; values: boolean[]; colors: (string | null)[] }[]
   bgcolors: { colors: (string | null)[] }[]
   hlines: { price: number | null; title: string; color: string | null }[]
   alerts: { title: string; message: string; bars: number[] }[]
   alert_events?: { bar: number; message: string }[]
+  future_bars?: number
+  fills?: { a: number; b: number; title: string; colors: (string | null)[] }[]
   objects?: {
     lines: Record<string, unknown>[]; labels: Record<string, unknown>[]; boxes: Record<string, unknown>[]
     tables: { position: string; rows: number; columns: number; bgcolor?: string | null; border_color?: string | null

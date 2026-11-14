@@ -78,6 +78,22 @@ export default function PineObjects({ result, tf, chart, candles, bars, version 
       const plotW = w - c.priceScale('right').width()
       const yOf = (p: number) => s.priceToCoordinate(p)
 
+      // fill giữa hai plot (ví dụ đám mây Ichimoku): tô từng đoạn giữa hai nến liên tiếp theo màu của nến đó
+      for (const f of result.fills ?? []) {
+        const A = result.plots[f.a]?.values
+        const B = result.plots[f.b]?.values
+        if (!A || !B) continue
+        for (let i = 0; i < f.colors.length - 1; i++) {
+          const col = f.colors[i]
+          if (!col || A[i] == null || B[i] == null || A[i + 1] == null || B[i + 1] == null) continue
+          const x1 = xOf(i); const x2 = xOf(i + 1)
+          if (Math.max(x1, x2) < 0 || Math.min(x1, x2) > plotW) continue
+          const ya1 = yOf(A[i] as number); const yb1 = yOf(B[i] as number); const ya2 = yOf(A[i + 1] as number); const yb2 = yOf(B[i + 1] as number)
+          if (ya1 === null || yb1 === null || ya2 === null || yb2 === null) continue
+          ctx.fillStyle = col
+          ctx.beginPath(); ctx.moveTo(x1, ya1); ctx.lineTo(x2, ya2); ctx.lineTo(x2, yb2); ctx.lineTo(x1, yb1); ctx.closePath(); ctx.fill()
+        }
+      }
       for (const b of objs.boxes) {
         const x1 = xOf(b.left as number); const x2 = xOf(b.right as number)
         const y1 = yOf(b.top as number); const y2 = yOf(b.bottom as number)

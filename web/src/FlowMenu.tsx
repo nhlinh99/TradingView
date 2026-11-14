@@ -70,10 +70,10 @@ export default function FlowMenu({ flow, setF, symbol, isVn }: Props) {
   return (
     <div className="flowmenu" ref={box}>
       <button className={`menubtn ${active.length ? 'has' : ''}`} aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((o) => !o)}>
-        Chỉ báo{active.length > 0 && <span className="badge">{active.length}</span>}<span aria-hidden="true">▾</span>
+        Orderflow{active.length > 0 && <span className="badge">{active.length}</span>}<span aria-hidden="true">▾</span>
       </button>
       {open && (
-        <div className="popover" role="dialog" aria-label="Chỉ báo và orderflow">
+        <div className="popover" role="dialog" aria-label="Orderflow">
           <div className="presets" role="group" aria-label="Mẫu dựng sẵn">
             {PRESETS.map((p) => (
               <button key={p.id} title={p.hint} className={preset?.id === p.id ? 'on' : ''} onClick={() => setF(p.patch)}>{p.label}</button>

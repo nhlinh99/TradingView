@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Chart, { type Flow } from './Chart'
-import PinePanel from './PinePanel'
+import IndicatorDock from './IndicatorDock'
+import IndicatorLegend from './IndicatorLegend'
+import { useIndicators, visibleResults } from './indicators'
 import FlowMenu from './FlowMenu'
 import SymbolSearch from './SymbolSearch'
 import AlertsPanel from './AlertsPanel'
 import { SyncBus } from './sync'
-import { fetchSymbols, fetchWatchlist, saveWatchlist, type PineResult, type StreamState, type SymbolInfo } from './api'
+import { fetchSymbols, fetchWatchlist, saveWatchlist, type StreamState, type SymbolInfo } from './api'
 import { TIMEFRAMES, TIMEZONES } from './logic'
 
 // Cài đặt nhỏ của người xem: nhớ trong trình duyệt, không có thì dùng mặc định.
@@ -73,9 +75,10 @@ export default function App() {
   const [total, setTotal] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [speed, setSpeed] = useState(2)
-  const [pine, setPine] = useState<PineResult | null>(null)
+  const ind = useIndicators(symbol, tf)
+  const [selectedInd, setSelectedInd] = useState<string | null>(null)
   const [alertsOpen, setAlertsOpen] = useState(() => pref('alertsOpen', '0', ['0', '1']) === '1')
-  const [pineOpen, setPineOpen] = useState(() => pref('pineOpen', '0', ['0', '1']) === '1')
+  const [dockOpen, setDockOpen] = useState(() => pref('dockOpen', '0', ['0', '1']) === '1')
   const [state, setState] = useState<StreamState>('connecting')
   const [err, setErr] = useState<string | null>(null)
 
@@ -91,7 +94,7 @@ export default function App() {
   }, [])
 
   useEffect(() => { document.documentElement.dataset.theme = theme }, [theme])
-  useEffect(() => { setPine(null); setReplay(null); setPlaying(false) }, [symbol, tf])
+  useEffect(() => { setReplay(null); setPlaying(false) }, [symbol, tf])
   useEffect(() => {
     if (!playing || replay === null) return
     const t = window.setInterval(() => setReplay((r) => (r === null ? r : Math.min(total, r + 1))), 1000 / speed)
@@ -133,6 +136,7 @@ export default function App() {
       if (typing || e.ctrlKey || e.metaKey || e.altKey) return
       if (e.key === '/') { e.preventDefault(); setSearchOpen(true) }
       else if (e.key === '?') { setHelpOpen((v) => !v) }
+      else if (e.key.toLowerCase() === 'i') { setDockOpen((v) => { savePref('dockOpen', v ? '0' : '1'); return !v }) }
       else if (e.key === 'Escape') { setHelpOpen(false) }
       else if (e.key === '[' || e.key === ']') {
         const i = TIMEFRAMES.indexOf(tf as (typeof TIMEFRAMES)[number])
@@ -206,7 +210,9 @@ export default function App() {
           <div className="seg" role="group" aria-label="Công cụ">
             <button aria-pressed={replay !== null} title="Phát lại từng nến" onClick={() => { setPlaying(false); setReplay((r) => (r === null ? Math.max(2, total - 100) : null)) }}>Replay</button>
             <button aria-pressed={alertsOpen} title="Cảnh báo giá" onClick={() => { const n = !alertsOpen; setAlertsOpen(n); savePref('alertsOpen', n ? '1' : '0') }}>Cảnh báo</button>
-            <button aria-pressed={pineOpen} title="Pine Script và backtest" onClick={() => { const n = !pineOpen; setPineOpen(n); savePref('pineOpen', n ? '1' : '0') }}>Pine</button>
+            <button aria-pressed={dockOpen} title="Quản lý chỉ báo Pine (phím I)" onClick={() => { const n = !dockOpen; setDockOpen(n); savePref('dockOpen', n ? '1' : '0') }}>
+              Chỉ báo{ind.list.length > 0 && <span className="badge">{ind.list.length}</span>}
+            </button>
           </div>
           <button className="iconbtn" aria-label="Đổi giao diện sáng/tối" title={theme === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
             onClick={() => { const n = theme === 'dark' ? 'light' : 'dark'; setTheme(n); savePref('theme', n) }}>
@@ -238,7 +244,11 @@ export default function App() {
         {symbol && (
           <div className={`cells cells-${layout}`}>
             <div className="cell">
-              <Chart symbol={symbol} tf={tf} tz={tz} flow={flow} pine={pine} replay={replay} onTotal={setTotal} sync={sync.current} cellId={0} theme={theme} onState={onState} />
+              <Chart symbol={symbol} tf={tf} tz={tz} flow={flow} pines={visibleResults(ind.list, ind.runs)} indLegend={<IndicatorLegend list={ind.list} runs={ind.runs} onToggle={ind.toggle} onRemove={ind.remove}
+                onInput={(id, t, v) => ind.update(id, { inputs: { ...(ind.list.find((x) => x.id === id)?.inputs ?? {}), [t]: v } })}
+                onResetInputs={(id) => ind.update(id, { inputs: {} })}
+                onEdit={(id) => { setSelectedInd(id); setDockOpen(true); savePref('dockOpen', '1') }}
+                onAdd={() => { setDockOpen(true); savePref('dockOpen', '1') }} />} replay={replay} onTotal={setTotal} sync={sync.current} cellId={0} theme={theme} onState={onState} />
             </div>
             {extra.map((c, i) => (
               <div className="cell" key={i}>
@@ -250,14 +260,18 @@ export default function App() {
                     {TIMEFRAMES.map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
-                <Chart key={`${c.symbol}|${c.tf}`} symbol={c.symbol} tf={c.tf} tz={tz} flow={flow} pine={null} replay={null} onTotal={() => {}} sync={sync.current} cellId={i + 1} theme={theme} onState={() => {}} />
+                <Chart key={`${c.symbol}|${c.tf}`} symbol={c.symbol} tf={c.tf} tz={tz} flow={flow} pines={[]} replay={null} onTotal={() => {}} sync={sync.current} cellId={i + 1} theme={theme} onState={() => {}} />
               </div>
             ))}
           </div>
         )}
         {err && <p className="status bad" role="alert">{err}</p>}
         {alertsOpen && symbol && <AlertsPanel symbol={symbol} lastPrice={null} />}
-        {pineOpen && symbol && <PinePanel key={`${symbol}|${tf}`} symbol={symbol} tf={tf} onResult={setPine} />}
+        {dockOpen && symbol && (
+          <IndicatorDock symbol={symbol} tf={tf} list={ind.list} runs={ind.runs} library={ind.library}
+            selected={selectedInd ?? ind.list[0]?.id ?? null} onSelect={setSelectedInd} onAdd={ind.add} onUpdate={ind.update}
+            onToggle={ind.toggle} onRemove={ind.remove} onSave={ind.saveToLibrary} onDeleteLib={ind.removeFromLibrary} />
+        )}
       </section>
       {searchOpen && <SymbolSearch all={all} watch={watch} current={symbol} onPick={pickSymbol} onClose={() => setSearchOpen(false)} />}
       {helpOpen && (
@@ -268,9 +282,10 @@ export default function App() {
               <dt><kbd>/</kbd> hoặc <kbd>Ctrl</kbd>+<kbd>K</kbd></dt><dd>Tìm hoặc thêm symbol</dd>
               <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Khung thời gian nhỏ hơn / lớn hơn</dd>
               <dt><kbd>T</kbd></dt><dd>Đổi giao diện sáng/tối</dd>
+              <dt><kbd>I</kbd></dt><dd>Mở hoặc đóng bảng quản lý chỉ báo</dd>
               <dt><kbd>?</kbd></dt><dd>Mở hoặc đóng bảng này</dd>
               <dt><kbd>Esc</kbd></dt><dd>Đóng bảng đang mở</dd>
-              <dt><kbd>Ctrl</kbd>+<kbd>Enter</kbd></dt><dd>Chạy script trong ô Pine</dd>
+              <dt><kbd>Ctrl</kbd>+<kbd>Enter</kbd></dt><dd>Áp dụng mã đang sửa trong bảng chỉ báo</dd>
             </dl>
           </div>
         </div>

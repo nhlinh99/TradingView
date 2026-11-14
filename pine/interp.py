@@ -19,11 +19,14 @@ from typing import Callable
 
 from . import ta as T
 from .lexer import PineSyntaxError
-from .parser import (Assign, Attr, Binary, Bool, Call, Color, ExprStmt, For, ForIn, FuncDef, If, Index, Jump, Name, Num, Str,
+from .parser import (Assign, Attr, Binary, Bool, Call, Color, ExprStmt, FieldAssign, For, ForIn, Import, TypeDef, FuncDef, If, Index, Jump, Name, Num, Str,
                      Switch, Ternary, TupleLit, Unary, While, parse)
 
 NAN = float("nan")
 isna = T.isna
+
+
+ZERO_ARG_LIB: set = set()     # thành viên thư viện được dùng như thuộc tính (không có dấu ngoặc), ví dụ chart.left_visible_bar_time
 
 
 class PineRuntimeError(Exception):
@@ -169,6 +172,9 @@ class Interp:
         self.strategy.overrides = strategy_opts or {}
         self.strategy.apply_overrides()
         self.input_count = 0
+        self.types: dict = {}        # tên kiểu do người dùng định nghĩa -> TypeDef
+        self.aliases: dict = {}      # alias của import -> đường dẫn thư viện
+        self.future_bars = 0
         self.objs = {"lines": [], "labels": [], "boxes": [], "tables": []}
         self.alert_events: list = []
         self.fills: dict = {}
@@ -181,7 +187,11 @@ class Interp:
         for stmt in self.ast:
             if isinstance(stmt, FuncDef):
                 self.funcs[stmt.name] = Func(stmt)
-        body = [s for s in self.ast if not isinstance(s, FuncDef)]
+            elif isinstance(stmt, TypeDef):
+                self.types[stmt.name] = stmt
+            elif isinstance(stmt, Import):
+                self.aliases[stmt.alias] = stmt.path
+        body = [s for s in self.ast if not isinstance(s, (FuncDef, TypeDef, Import))]
         for i in range(self.n):
             self.i = i
             self.strategy.begin_bar(i)
@@ -257,8 +267,11 @@ class Interp:
                 raise PineRuntimeError("for ... in cần một mảng", s.line)
             sc = self.scope()
             out = NAN
-            for item in list(seq):
-                sc[s.var] = item
+            for idx, item in enumerate(list(seq)):
+                if isinstance(s.var, list):          # for [i, x] in mảng
+                    sc[s.var[0]], sc[s.var[1]] = float(idx), item
+                else:
+                    sc[s.var] = item
                 try:
                     out = self.exec_block(s.body)
                 except _Break:
@@ -280,6 +293,15 @@ class Interp:
                 except _Continue:
                     pass
             return out
+        if isinstance(s, FieldAssign):
+            obj = self.eval(s.obj)
+            if not isinstance(obj, dict) or s.name not in obj:
+                raise PineRuntimeError(f"không có trường {s.name} (hoặc đối tượng là na)", s.line)
+            v = self.eval(s.value)
+            obj[s.name] = v if s.op in ("=", ":=") else self.binop(s.op[0], obj[s.name], v, s.line)
+            return v
+        if isinstance(s, (TypeDef, Import)):
+            return NAN
         if isinstance(s, Jump):
             raise _Break() if s.kind == "break" else _Continue()
         if isinstance(s, FuncDef):
@@ -343,6 +365,8 @@ class Interp:
             return self.attr(n)
         if t is Switch:
             return self.switch(n)
+        if t is If:
+            return self.exec(n)
         if t is Ternary:
             return self.eval(n.a) if _truthy(self.eval(n.cond)) else self.eval(n.b)
         if t is Unary:
@@ -455,10 +479,32 @@ class Interp:
             return ".".join(reversed(parts))
         return None
 
+    def root_is_variable(self, n) -> bool:
+        while isinstance(n, Attr):
+            n = n.obj
+        return isinstance(n, Name) and ((bool(self.locals) and n.name in self.locals[-1]) or n.name in self.vars)
+
     def attr(self, n: Attr):
         d = self.dotted(n)
+        # trường của đối tượng người dùng: gốc là biến, hoặc cơ sở không phải chuỗi tên (ví dụ `(b[1]).h`, `arr.get(0).x`)
+        if d is None or self.root_is_variable(n):
+            obj = self.eval(n.obj)
+            if isinstance(obj, dict) and n.name in obj:
+                return obj[n.name]
+            if isinstance(obj, dict):
+                raise PineRuntimeError(f"đối tượng không có trường {n.name}", n.line)
+            if d is None or isna(obj):
+                raise PineRuntimeError(f"đọc trường {n.name} của giá trị na", n.line)
         if d is None:
             raise PineRuntimeError("truy cập thuộc tính không hỗ trợ", n.line)
+        root = d.split(".")[0]
+        if root in self.aliases:
+            lib = f"{self.aliases[root]}.{d.split('.', 1)[1]}"
+            if lib in CONSTS:
+                return CONSTS[lib]
+            fn = BUILTINS.get(lib)
+            if fn is not None and not isinstance(fn, type(None)) and lib in ZERO_ARG_LIB:
+                return fn(self, n, [], {})
         if d in CONSTS:
             return CONSTS[d]
         if d == "ta.tr":
@@ -526,8 +572,15 @@ class Interp:
         d = self.dotted(n.func)
         if d is not None and d in self.funcs and not (self.locals and d in self.locals[-1]):
             return self.call_user(self.funcs[d], n)
+        if d is not None and d.endswith(".new") and d[:-4] in self.types:
+            return self.construct(self.types[d[:-4]], n)
         if d is None:
             raise PineRuntimeError("gọi hàm không hỗ trợ", n.line)
+        root = d.split(".")[0]
+        if root in self.aliases and "." in d and not self.root_is_variable(n.func):
+            lib = f"{self.aliases[root]}.{d.split('.', 1)[1]}"
+            if lib in BUILTINS or lib in LAZY:
+                d = lib
         fn = LAZY.get(d)
         if fn is not None:
             return fn(self, n)
@@ -542,6 +595,20 @@ class Interp:
             raise
         except (TypeError, ValueError, IndexError) as e:
             raise PineRuntimeError(f"{d}: tham số không hợp lệ ({e})", n.line) from e
+
+    def construct(self, td, n: Call):
+        """`Type.new(...)`: tạo đối tượng, trường không truyền thì dùng biểu thức mặc định (tính tại nến hiện tại)."""
+        pos = [self.eval(e) for nm, e in n.args if nm is None]
+        kw = {nm: self.eval(e) for nm, e in n.args if nm is not None}
+        o: dict = {"_udt": td.name}
+        for idx, (fname, default) in enumerate(td.fields):
+            if idx < len(pos):
+                o[fname] = pos[idx]
+            elif fname in kw:
+                o[fname] = kw[fname]
+            else:
+                o[fname] = self.eval(default) if default is not None else NAN
+        return o
 
     def call_user(self, f: Func, n: Call):
         node = f.node
@@ -584,6 +651,65 @@ def _ta_window(factory, nm_n="length", src_pos=0, n_pos=1):
         if n < 1:
             raise PineRuntimeError("length phải >= 1", node.line)
         return it.state(node, lambda: factory(n)).update(src)
+    return f
+
+
+def _builtin_src(it, node, pos, name):
+    """Nếu đối số nguồn là một chuỗi có sẵn (high, low, close, ...) thì trả về tên của nó, ngược lại None."""
+    pos_args = [e for nm, e in node.args if nm is None]
+    e = None
+    for nm, ex in node.args:
+        if nm == name:
+            e = ex
+    if e is None and pos < len(pos_args):
+        e = pos_args[pos]
+    if isinstance(e, Name) and e.name in it.SERIES and e.name not in it.vars and not (it.locals and e.name in it.locals[-1]):
+        return e.name
+    return None
+
+
+def _window_fn(mode):
+    """highest/lowest/sma: nếu nguồn là chuỗi có sẵn thì tính thẳng từ mảng nến (không trạng thái), nên độ dài có thể đổi theo
+    từng lần gọi như trong Pine; ngược lại dùng cửa sổ có trạng thái."""
+    stateful = {"highest": _ta_window(lambda n: T.Extreme(n, True)), "lowest": _ta_window(lambda n: T.Extreme(n, False)),
+                "sma": _ta_window(T.Sma)}[mode]
+
+    def f(it, node, args, kw):
+        # cú pháp ngắn của v4: highest(length) dùng high, lowest(length) dùng low
+        npos = [e for nm, e in node.args if nm is None]
+        if mode != "sma" and "length" in kw and "source" not in kw and not npos:
+            args, kw = [it.builtin_series("high" if mode == "highest" else "low")], dict(kw)
+            src_name = "high" if mode == "highest" else "low"
+            n = int(kw["length"])
+        elif mode != "sma" and len(npos) == 1 and "length" not in kw and "source" not in kw:
+            n = int(args[0])
+            src_name = "high" if mode == "highest" else "low"
+            args = [it.builtin_series(src_name), n]
+        else:
+            src_name = _builtin_src(it, node, 0, "source")
+            n = int(A(args, kw, 1, "length"))
+        if src_name is not None:
+            if n < 1:
+                raise PineRuntimeError("length phải >= 1", node.line)
+            lo = it.i - n + 1
+            if lo < 0:
+                return NAN
+            arr = {"open": it.bars.open, "high": it.bars.high, "low": it.bars.low, "close": it.bars.close, "volume": it.bars.volume}.get(src_name)
+            if arr is None:
+                vals = []
+                save = it.i
+                try:
+                    for k in range(lo, save + 1):
+                        it.i = k
+                        vals.append(it.builtin_series(src_name))
+                finally:
+                    it.i = save
+            else:
+                vals = arr[lo:it.i + 1]
+            if any(isna(v) for v in vals):
+                return NAN
+            return max(vals) if mode == "highest" else min(vals) if mode == "lowest" else math.fsum(vals) / n
+        return stateful(it, node, args, kw)
     return f
 
 
@@ -713,19 +839,27 @@ def make_input(kind: str):
         default = A(args, kw, 0, "defval", None)
         title = A(args, kw, 1, "title", None) or A(args, kw, 1, "name", None) or f"Input {len(it.input_defs) + 1}"
         key = node.id
+        src_name = None
+        if kind == "source":
+            first = [e for nm, e in node.args if nm is None]
+            if first and isinstance(first[0], Name) and first[0].name in it.SERIES:
+                src_name = first[0].name            # nguồn mặc định là một chuỗi có sẵn: ghi tên để giao diện cho chọn
         if key not in it.input_defs:
-            d = {"title": title, "type": kind, "default": default}
-            for opt in ("minval", "maxval", "step", "options"):
-                if opt in kw:
+            d = {"title": title, "type": kind, "default": src_name if src_name else default}
+            for opt in ("minval", "maxval", "step", "options", "group", "tooltip", "inline"):
+                if opt in kw and kw[opt] is not None:
                     d[opt] = kw[opt]
             it.input_defs[key] = d
+        if kind == "source":
+            chosen = it.input_overrides.get(title, src_name)
+            if isinstance(chosen, str) and chosen in it.SERIES:
+                return it.builtin_series(chosen)
+            return default
         val = it.input_overrides.get(title, default)
         if kind in ("int", "float") and val is not None:
             val = float(val)
             if kind == "int":
                 val = float(int(val))
-        if kind == "source" and isinstance(default, float) is False and default is not None:
-            return default
         return val
     return f
 
@@ -757,17 +891,27 @@ def _col(c):
     return None if isna(c) else c
 
 
+FUTURE_PAD = 600       # số nến tương lai tối đa mà plot(offset=...) có thể ghi tới
+
+
 def f_plot(it, node, args, kw):
     v = A(args, kw, 0, "series")
     p = it.plots.get(node.id)
     if p is None:
         p = it.plots[node.id] = {
             "title": A(args, kw, 1, "title", None) or f"Plot {len(it.plots)}", "style": kw.get("style", "line"),
-            "linewidth": int(_num(kw.get("linewidth", 1))), "values": [NAN] * it.n, "colors": [None] * it.n,
+            "linewidth": int(_num(kw.get("linewidth", 1))), "values": [NAN] * (it.n + FUTURE_PAD), "colors": [None] * (it.n + FUTURE_PAD),
+            "offset": int(_num(kw.get("offset", 0))) if not isna(kw.get("offset", 0)) else 0,
         }
-    p["values"][it.i] = _num(v)
-    p["colors"][it.i] = _col(A(args, kw, 2, "color", None))
-    return NAN
+    off = int(_num(kw.get("offset", 0))) if not isna(kw.get("offset", 0)) else 0
+    p["offset"] = off
+    j = it.i + off
+    if 0 <= j < it.n + FUTURE_PAD:
+        p["values"][j] = _num(v)
+        p["colors"][j] = _col(A(args, kw, 2, "color", None))
+        if j >= it.n:
+            it.future_bars = max(it.future_bars, j - it.n + 1)
+    return {"_plot": node.id, "offset": off}
 
 
 def f_plotshape(it, node, args, kw):
@@ -1021,9 +1165,9 @@ BUILTINS: dict[str, Callable] = {
     "input": input_generic, "input.int": make_input("int"), "input.float": make_input("float"), "input.bool": make_input("bool"),
     "input.string": make_input("string"), "input.symbol": make_input("symbol"), "input.timeframe": make_input("timeframe"),
     "input.source": make_input("source"), "input.color": make_input("color"), "input.session": make_input("session"),
-    "ta.sma": _ta_window(T.Sma), "ta.ema": _ta_window(T.make_ema), "ta.rma": _ta_window(T.make_rma),
+    "ta.sma": _window_fn("sma"), "ta.ema": _ta_window(T.make_ema), "ta.rma": _ta_window(T.make_rma),
     "ta.rsi": _ta_window(T.Rsi), "ta.stdev": _ta_window(T.Stdev),
-    "ta.highest": _ta_window(lambda n: T.Extreme(n, True)), "ta.lowest": _ta_window(lambda n: T.Extreme(n, False)),
+    "ta.highest": _window_fn("highest"), "ta.lowest": _window_fn("lowest"),
     "ta.change": lambda it, node, args, kw: it.state(node, lambda: T.Change(int(A(args, kw, 1, "length", 1)))).update(args[0]),
     "ta.crossover": lambda it, node, args, kw: it.state(node, lambda: T.Cross(True)).update(_num(args[0]), _num(args[1])),
     "ta.crossunder": lambda it, node, args, kw: it.state(node, lambda: T.Cross(False)).update(_num(args[0]), _num(args[1])),

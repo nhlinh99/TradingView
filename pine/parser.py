@@ -179,6 +179,32 @@ class ForIn:
 
 
 @dataclass
+class TypeDef:
+    name: str
+    fields: list              # [(tên, biểu thức mặc định hoặc None)]
+    line: int = 0
+    id: int = field(default_factory=_nid)
+
+
+@dataclass
+class Import:
+    path: str                 # ví dụ "PineCoders/lower_tf"
+    alias: str
+    line: int = 0
+    id: int = field(default_factory=_nid)
+
+
+@dataclass
+class FieldAssign:
+    obj: object               # biểu thức cho đối tượng chứa trường
+    name: str
+    op: str
+    value: object
+    line: int = 0
+    id: int = field(default_factory=_nid)
+
+
+@dataclass
 class ExprStmt:
     expr: object
     line: int = 0
@@ -287,6 +313,13 @@ class Parser:
                 self.p += 1
                 self.end_stmt()
                 return Jump(tok.value, line=line)
+        if tok.kind == "ID" and tok.value == "import" and self.peek().kind == "ID":
+            return self.import_stmt()
+        if tok.kind == "ID" and tok.value == "type" and self.peek().kind == "ID" and self.peek(2).kind == "NL":
+            return self.type_def()
+        fa = self.try_field_assign()
+        if fa is not None:
+            return fa
         # tuple: [a, b] = expr
         if self.is_op("["):
             save = self.p
@@ -316,16 +349,102 @@ class Parser:
         self.end_stmt()
         return ExprStmt(e, line=line)
 
+    GENERIC = {"array", "map", "matrix"}
+
     def type_len(self) -> int:
-        """Độ dài (số token) của tiền tố kiểu ngay tại vị trí hiện tại nếu sau đó là một tên: `float x`, `box[] b`; ngược lại 0."""
-        c = self.cur
-        if c.kind != "ID" or c.value not in TYPES:
+        """Số token của tiền tố kiểu (`float`, `box[]`, `array<float>`, `chart.point`, tên kiểu của người dùng) nếu ngay sau là một
+        tên; ngược lại 0. Hai ID liền nhau không bao giờ là biểu thức hợp lệ nên nhận diện theo mẫu này là an toàn."""
+        if self.cur.kind != "ID":
             return 0
-        if self.peek().kind == "ID":
-            return 1
-        if self.is_op("[", self.peek()) and self.is_op("]", self.peek(2)) and self.peek(3).kind == "ID":
-            return 3
-        return 0
+        i = 1
+        while self.is_op(".", self.peek(i)) and self.peek(i + 1).kind == "ID":
+            i += 2
+        if self.cur.value in self.GENERIC and self.is_op("<", self.peek(i)):
+            depth = 0
+            while True:
+                tk = self.peek(i)
+                if tk.kind in ("NL", "EOF"):
+                    return 0
+                if self.is_op("<", tk):
+                    depth += 1
+                elif self.is_op(">", tk):
+                    depth -= 1
+                    if depth == 0:
+                        i += 1
+                        break
+                i += 1
+        if self.is_op("[", self.peek(i)) and self.is_op("]", self.peek(i + 1)):
+            i += 2
+        return i if self.peek(i).kind == "ID" else 0
+
+    def import_stmt(self) -> Import:
+        line = self.cur.line
+        self.p += 1
+        parts = []
+        while not (self.cur.kind == "ID" and self.cur.value == "as") and self.cur.kind not in ("NL", "EOF"):
+            parts.append(str(int(self.cur.value)) if self.cur.kind == "NUM" else str(self.cur.value))
+            self.p += 1
+        if not (self.cur.kind == "ID" and self.cur.value == "as"):
+            raise self.err("import cần `as <tên>`")
+        self.p += 1
+        alias = self.name()
+        self.end_stmt()
+        path = "".join(parts)
+        return Import("/".join(path.split("/")[:2]), alias, line=line)    # bỏ số phiên bản
+
+    def type_def(self) -> TypeDef:
+        line = self.cur.line
+        self.p += 1
+        name = self.name()
+        self.skip_nl()
+        if self.cur.kind != "INDENT":
+            raise self.err("type cần các trường thụt lề")
+        self.p += 1
+        fields = []
+        self.skip_nl()
+        while self.cur.kind not in ("DEDENT", "EOF"):
+            if self.cur.kind == "ID" and self.cur.value == "const" and self.peek().kind == "ID":
+                self.p += 1
+            self.p += self.type_len()
+            fname = self.name()
+            default = None
+            if self.is_op("="):
+                self.p += 1
+                default = self.expr()
+            self.end_stmt()
+            fields.append((fname, default))
+            self.skip_nl()
+        if self.cur.kind == "DEDENT":
+            self.p += 1
+        return TypeDef(name, fields, line=line)
+
+    def try_field_assign(self):
+        """`obj.a.b := v` (hoặc =, +=, ...): gán vào trường của đối tượng người dùng."""
+        if self.cur.kind != "ID" or not self.is_op(".", self.peek()):
+            return None
+        i = 0
+        while self.peek(i).kind == "ID" and self.is_op(".", self.peek(i + 1)):
+            i += 2
+        if self.peek(i).kind != "ID":
+            return None
+        nxt = self.peek(i + 1)
+        if not (nxt.kind == "OP" and nxt.value in (":=", "=", "+=", "-=", "*=", "/=", "%=")):
+            return None
+        line = self.cur.line
+        e = Name(self.cur.value, line=line)
+        self.p += 1
+        names = []
+        while self.is_op("."):
+            self.p += 1
+            names.append(self.name())
+        field_name = names.pop()
+        for nm in names:
+            e = Attr(e, nm, line=line)
+        op = self.cur.value
+        self.p += 1
+        v = self.expr()
+        self.end_stmt()
+        return FieldAssign(e, field_name, op, v, line=line)
 
     def name(self) -> str:
         if self.cur.kind != "ID":
@@ -412,6 +531,17 @@ class Parser:
     def for_stmt(self) -> For:
         line = self.cur.line
         self.p += 1
+        if self.is_op("["):
+            self.p += 1
+            names = [self.name()]
+            while self.is_op(","):
+                self.p += 1
+                names.append(self.name())
+            self.eat_op("]")
+            if not self.is_kw("in"):
+                raise self.err("for [a, b] cần `in`")
+            self.p += 1
+            return ForIn(names, self.expr(), self.block(), line=line)
         v = self.name()
         if self.is_kw("in"):
             self.p += 1
@@ -501,10 +631,23 @@ class Parser:
     def postfix(self):
         e = self.primary()
         while True:
+            if self.p > 0 and self.t[self.p - 1].kind == "DEDENT":
+                return e          # khối thụt lề (switch, if) đã kết thúc: dòng kế tiếp là câu lệnh mới
             line = self.cur.line
             if self.is_op("("):
                 self.p += 1
                 e = Call(e, self.call_args(), line=line)
+            elif self.is_op("<") and self.generic_args_ahead():
+                depth = 0
+                while True:                     # bỏ qua `<float>` trong array.new<float>(...)
+                    if self.is_op("<"):
+                        depth += 1
+                    elif self.is_op(">"):
+                        depth -= 1
+                        if depth == 0:
+                            self.p += 1
+                            break
+                    self.p += 1
             elif self.is_op("["):
                 self.p += 1
                 i = self.expr()
@@ -537,14 +680,25 @@ class Parser:
             if self.cur.kind == "NL":
                 body = self.block()
             else:
-                e = self.expr()
-                body = [ExprStmt(e, line=self.cur.line)]
-                self.end_stmt()
+                body = [self.statement()]
             cases.append((match, body))
             self.skip_nl()
         if self.cur.kind == "DEDENT":
             self.p += 1
         return Switch(subject, cases, line=line)
+
+    def generic_args_ahead(self) -> bool:
+        """Đang ở `<` ngay sau `x.new` và phía sau là `...>(`: đây là tham số kiểu, không phải phép so sánh."""
+        i = 1
+        while True:
+            tk = self.peek(i)
+            if tk.kind in ("NL", "EOF"):
+                return False
+            if self.is_op(">", tk):
+                return self.is_op("(", self.peek(i + 1))
+            if not (tk.kind == "ID" or self.is_op(",", tk) or self.is_op(".", tk) or self.is_op("<", tk) or self.is_op("[", tk) or self.is_op("]", tk)):
+                return False
+            i += 1
 
     def call_args(self) -> list:
         args = []
@@ -582,6 +736,8 @@ class Parser:
             return Name(t.value, line=line)
         if t.kind == "KW" and t.value == "switch":
             return self.switch_expr()
+        if t.kind == "KW" and t.value == "if":
+            return self.if_stmt()
         if self.is_op("("):
             self.p += 1
             e = self.expr()

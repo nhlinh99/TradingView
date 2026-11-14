@@ -320,10 +320,14 @@ def f_alert(it, node, args, kw):
 def f_fill(it, node, args, kw):
     a, b = args[0], args[1]
     key = node.id
+    if not (isinstance(a, dict) and isinstance(b, dict) and "_plot" in a and "_plot" in b):
+        return NAN                          # fill giữa hline hoặc đối số không phải plot: bỏ qua
     rec = it.fills.get(key)
     if rec is None:
-        rec = it.fills[key] = {"a": a, "b": b, "title": kw.get("title", ""), "colors": [None] * it.n}
-    rec["colors"][it.i] = I._col(A(args, kw, 2, "color", None))
+        rec = it.fills[key] = {"a": a["_plot"], "b": b["_plot"], "title": kw.get("title", ""), "colors": [None] * (it.n + I.FUTURE_PAD)}
+    j = it.i + int(a.get("offset", 0))              # màu gắn với vị trí đã dịch của hai plot
+    if 0 <= j < len(rec["colors"]):
+        rec["colors"][j] = I._col(A(args, kw, 2, "color", None))
     return NAN
 
 
@@ -391,6 +395,15 @@ def register() -> None:
     B["label.set_xy"] = _setxy("x", "y")
     B["box.set_lefttop"] = _setxy("left", "top")
     B["box.set_rightbottom"] = _setxy("right", "bottom")
+    # tên hàm kiểu Pine v4 (không có namespace) và study()
+    for v4, v6 in (("study", "indicator"), ("avg", "math.avg"), ("sma", "ta.sma"), ("ema", "ta.ema"), ("rma", "ta.rma"), ("rsi", "ta.rsi"),
+                   ("atr", "ta.atr"), ("stdev", "ta.stdev"), ("change", "ta.change"), ("crossover", "ta.crossover"),
+                   ("crossunder", "ta.crossunder"), ("cum", "ta.cum"), ("highest", "ta.highest"), ("lowest", "ta.lowest"),
+                   ("sign", "math.sign"), ("abs", "math.abs"), ("max", "math.max"), ("min", "math.min"), ("round", "math.round"),
+                   ("sqrt", "math.sqrt"), ("log", "math.log"), ("exp", "math.exp"), ("pow", "math.pow"), ("floor", "math.floor"),
+                   ("ceil", "math.ceil"), ("tostring", "str.tostring"), ("tonumber", "str.tonumber")):
+        if v6 in B and v4 not in B:
+            B[v4] = B[v6]
     B["line.get_price"] = lambda it, n, a, k: NAN
     B["line.get_x1"] = lambda it, n, a, k: a[0]["x1"]
     B["line.get_x2"] = lambda it, n, a, k: a[0]["x2"]

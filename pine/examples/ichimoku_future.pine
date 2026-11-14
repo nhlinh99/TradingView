@@ -1,0 +1,42 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+
+//@version=4
+study(title = "Ichimoku Future", shorttitle = "Ichi Future", overlay = true)
+tenkanLength = input(9, minval = 1, title = "Tenkan")
+kijunLength = input(17, minval = 1, title = "Kijun")
+chikouLength = input(26, minval = 1, title = "Chikou")
+spanBLength = input(26, minval = 1, title = "Span B")
+daoGam1Length = input(65, minval = 1, title = "Dao Gam 1")
+daoGam2Length = input(129, minval = 1, title = "Dao Gam 2")
+
+average(length) => avg(lowest(length = length), highest(length = length))
+
+tenkan = average(tenkanLength)
+kijun = average(kijunLength)
+spanA = avg(tenkan, kijun)
+spanB = average(spanBLength)
+daoGam1 = average(daoGam1Length)
+daoGam2 = average(daoGam2Length)
+
+plot(daoGam2, color = #ff9900, title = "Dao Gam 2", linewidth = 4)
+plot(daoGam1, color = #ffe600, title = "Dao Gam 1", linewidth = 4)
+plot(kijun, color = #b41e18, title = "Kijun", linewidth = 2)
+plot(tenkan, color = #2156f3af, title = "Tenkan", linewidth = 2)
+// plot(close, offset = -chikouLength + 1, color = #43a063, title = "Chikou", linewidth = 2)
+
+spanAPlot = plot(spanA, offset = chikouLength - 1, color = #6bde93ba, title = "Span A", linewidth = 1)
+spanBPlot = plot(spanB, offset = chikouLength - 1, color = #ec794fc2, title = "Span B", linewidth = 1)
+
+fill(spanAPlot, spanBPlot, color = spanA > spanB ? #33c33a3f : #f2364648, title = "Kumo")
+
+drawFuture(length, displayLength, color, width) =>
+    for i = 1 to displayLength - 1
+        startFuture = average(length - i + 1)
+        endFuture = average(length - i)
+        if barstate.islast
+            line.new(x1=bar_index + i - 1, y1=startFuture, x2=bar_index + i, y2=endFuture, color = color, style = line.style_dotted, width = width)
+
+drawFuture(length = daoGam2Length, displayLength = 16, color = #ff9900, width=4)
+drawFuture(length = daoGam1Length, displayLength = 16, color = #ffe600, width=4)
+drawFuture(length = kijunLength, displayLength = kijunLength, color = #b41e18, width=2)
+drawFuture(length = tenkanLength, displayLength = tenkanLength, color = #2156f3af, width=2)

@@ -65,6 +65,10 @@ Kiểu màu **Mua/Bán**: lệnh mua chờ màu xanh lá, lệnh bán chờ màu
 
 ![Pine và backtest](docs/screenshots/pine-backtest.png)
 
+**Nhiều chỉ báo Pine cùng lúc**: nút **Chỉ báo** (phím `I`) mở bảng quản lý. Bên trái là danh sách đang dùng (ẩn/hiện, xoá) và Thư viện có ô tìm, thêm một chạm; giữa là trình soạn mã; bên phải là tham số tự sinh từ script (nhóm theo `group`, thanh trượt khi có min/max, ô tìm khi có nhiều tham số), backtest và thống kê. Trên biểu đồ có chú giải chỉ báo (ẩn/hiện, cài đặt nhanh, sửa mã, xoá). Danh sách chỉ báo, tham số và script của bạn (Lưu vào thư viện) nhớ trong trình duyệt; đổi symbol hoặc khung thì mọi chỉ báo đang hiện tự chạy lại.
+
+![Quản lý chỉ báo](docs/screenshots/indicators-manager.png)
+
 **Script Pine thật dài 1720 dòng** (Viprasol Liquidity Trail Matrix, Pine v6): băng trail, nhãn đảo chiều, tín hiệu retest, đường entry/SL/TP, volume profile của đoạn xu hướng và bảng dashboard, chạy trên engine của dự án.
 
 ![Pine Viprasol](docs/screenshots/pine-viprasol.png)

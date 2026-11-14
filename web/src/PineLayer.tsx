@@ -4,6 +4,7 @@ import {
   type IChartApi, type IPriceLine, type ISeriesApi, type SeriesMarker, type Time, type UTCTimestamp,
 } from 'lightweight-charts'
 import type { PineResult } from './api'
+import { tfMs } from './logic'
 
 type Props = {
   result: PineResult | null
@@ -14,6 +15,8 @@ type Props = {
 
 const hex = (c: string | null | undefined, fallback: string) => (c ? c : fallback)
 const t = (ms: number) => (ms / 1000) as UTCTimestamp
+/** Thời điểm (ms) của chỉ số i; i vượt nến cuối thì ngoại suy theo bước của khung (cho plot có offset). */
+const timeAt = (times: number[], i: number, stepMs: number) => (i < times.length ? times[i] : times[times.length - 1] + (i - times.length + 1) * stepMs)
 
 /** Vẽ kết quả script Pine lên biểu đồ: plot (đường/cột), plotshape (marker), hline, và lệnh của strategy. */
 export default function PineLayer({ result, chart, candles, version }: Props) {
@@ -25,6 +28,8 @@ export default function PineLayer({ result, chart, candles, version }: Props) {
     const lines: IPriceLine[] = []
     const markerSets: { detach: () => void }[] = []
     const overlay = result.meta.overlay
+    const stepMs = tfMs(result.tf)
+    const idx = (n: number) => Array.from({ length: n }, (_, i) => timeAt(result.times, i, stepMs))
     // indicator không overlay: mỗi script một pane mới ở cuối
     const pane = overlay ? 0 : c.panes().length
 
@@ -32,7 +37,7 @@ export default function PineLayer({ result, chart, candles, version }: Props) {
       const colorOf = (i: number) => hex(p.colors[i], '#2962FF')
       if (p.style === 'columns' || p.style === 'histogram') {
         const s = c.addSeries(HistogramSeries, { priceLineVisible: false, lastValueVisible: false, title: p.title }, pane)
-        s.setData(result.times.flatMap((ms, i) => (p.values[i] === null ? [] : [{ time: t(ms), value: p.values[i] as number, color: colorOf(i) }])))
+        s.setData(idx(p.values.length).flatMap((ms, i) => (p.values[i] === null ? [] : [{ time: t(ms), value: p.values[i] as number, color: colorOf(i) }])))
         series.push(s)
       } else {
         const s = c.addSeries(LineSeries, {
@@ -41,7 +46,7 @@ export default function PineLayer({ result, chart, candles, version }: Props) {
           lineStyle: p.style === 'circles' || p.style === 'cross' ? LineStyle.Dotted : LineStyle.Solid,
         }, pane)
         // màu thay đổi theo nến được hỗ trợ bằng cách cho từng điểm một màu
-        s.setData(result.times.flatMap((ms, i) => (p.values[i] === null ? [] : [{ time: t(ms), value: p.values[i] as number, color: colorOf(i) }])))
+        s.setData(idx(p.values.length).flatMap((ms, i) => (p.values[i] === null ? [] : [{ time: t(ms), value: p.values[i] as number, color: colorOf(i) }])))
         series.push(s)
       }
     }

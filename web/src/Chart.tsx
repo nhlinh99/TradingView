@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSeries, createChart,
   type IChartApi, type ISeriesApi, type UTCTimestamp,
@@ -26,10 +26,10 @@ const PALETTE = {
 const volColor = (b: Bar, up: string, down: string) => (b.close >= b.open ? up + '88' : down + '88')
 
 export type Flow = { delta: boolean; cvd: 'off' | 'none' | 'day'; footprint: boolean; vpvr: boolean; heatmap: boolean; bubbles: boolean; gex: boolean; ratio: number; heatMode: 'intensity' | 'side' | 'bookmap'; heatLo: number; heatHi: number; bestLines: boolean; strip: boolean; dotScale: number; dotMin: number; iceberg: boolean; fpMode: 'bidask' | 'delta' | 'volume' | 'profile' }
-type Props = { symbol: string; tf: string; tz: string; flow: Flow; pine: PineResult | null; replay: number | null; onTotal: (n: number) => void; sync?: SyncBus; cellId?: number; theme: 'light' | 'dark'; onState: (s: StreamState) => void }
+type Props = { symbol: string; tf: string; tz: string; flow: Flow; pines: { id: string; result: PineResult }[]; indLegend?: ReactNode; replay: number | null; onTotal: (n: number) => void; sync?: SyncBus; cellId?: number; theme: 'light' | 'dark'; onState: (s: StreamState) => void }
 type Legend = { time: number; bar: Bar } | null
 
-export default function Chart({ symbol, tf, tz, flow, pine, replay, onTotal, sync, cellId = 0, theme, onState }: Props) {
+export default function Chart({ symbol, tf, tz, flow, pines, indLegend, replay, onTotal, sync, cellId = 0, theme, onState }: Props) {
   const box = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candles = useRef<ISeriesApi<'Candlestick'> | null>(null)
@@ -291,8 +291,13 @@ export default function Chart({ symbol, tf, tz, flow, pine, replay, onTotal, syn
       <Icebergs on={flow.iceberg} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
       <Bubbles on={flow.bubbles} dotScale={flow.dotScale / 100} dotMin={flow.dotMin / 100} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
       <Drawings symbol={symbol} tf={tf} dark={theme === 'dark'} chart={chartRef} candles={candles} bars={bars} />
-      <PineObjects result={pine} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
-      <PineLayer result={pine} chart={chartRef} candles={candles} version={version} />
+      {pines.map((p) => (
+        <Fragment key={p.id}>
+          <PineObjects result={p.result} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
+          <PineLayer result={p.result} chart={chartRef} candles={candles} version={version} />
+        </Fragment>
+      ))}
+      {indLegend}
       <Gex on={flow.gex} symbol={symbol} dark={theme === 'dark'} chart={chartRef} candles={candles} />
       <Profile on={flow.vpvr} symbol={symbol} tf={tf} dark={theme === 'dark'} chart={chartRef} candles={candles} bars={bars} version={version} />
       <Footprint on={flow.footprint} symbol={symbol} tf={tf} ratio={flow.ratio} fpMode={flow.fpMode} dark={theme === 'dark'}

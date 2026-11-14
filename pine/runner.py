@@ -41,11 +41,18 @@ def run_script(source: str, bars: Bars, *, symbol: str = "", tf: str = "1m", tz_
                 external=external, syminfo_type=syminfo_type, ast=ast, strategy_opts=strategy_opts, tick=tick, chart_bg=chart_bg)
     it.run()
     strat = it.strategy.summary()
+    total = len(bars) + it.future_bars               # plot(offset>0) có thể ghi tới các nến tương lai
+    plot_ids = list(it.plots)
+    # fill chỉ giữ lại nếu cả hai plot đều tồn tại; a, b là chỉ số trong danh sách plots; offset của fill = offset của plot a
+    fills = [{"a": plot_ids.index(f["a"]), "b": plot_ids.index(f["b"]), "title": f["title"], "colors": f["colors"][:total]}
+             for f in it.fills.values() if f["a"] in plot_ids and f["b"] in plot_ids]
     return {
+        "future_bars": it.future_bars,
+        "fills": fills,
         "meta": it.meta,
         "inputs": list(it.input_defs.values()),
         "times": list(bars.time),
-        "plots": [{**p, "values": [_clean(x) for x in p["values"]]} for p in it.plots.values()],
+        "plots": [{**p, "values": [_clean(x) for x in p["values"][:total]], "colors": p["colors"][:total]} for p in it.plots.values()],
         "shapes": list(it.shapes.values()),
         "bgcolors": list(it.bgcolors.values()),
         "hlines": [{**h, "price": _clean(h["price"])} for h in it.hlines.values()],
