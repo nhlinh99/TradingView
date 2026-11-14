@@ -16,7 +16,7 @@ Dự án không liên kết với TradingView. Không dùng tên, logo hay giao 
 | 5 | GEX BTC (Deribit): snapshot 15 phút, GEX theo strike, gamma flip, call/put wall | Xong. Gamma tính từ IV (Black-76), OI trễ ~8 giờ |
 | 6 | Vàng (XAUUSDT; GC1! tuỳ chọn, trả phí) | 6A xong (nến, footprint, heatmap, ghi chú nguồn). 6B và 6C chưa làm (tuỳ chọn) |
 | 7 | Cổ phiếu VN100 | Đang làm: danh sách, nến 1 phút (nạp nền), bộ ghi sổ lệnh 3 mức. Chưa đo được phiên thật (thứ Hai 16/11) |
-| 8 | Engine Pine Script (tập con): parser, thông dịch, ta.*, request.security/external, strategy, 5 script mẫu, panel trong web | Xong (editor là ô văn bản, chưa Monaco) |
+| 8 | Engine Pine Script (tập con): parser, thông dịch, ta.*, request.security/external, strategy, 5 script mẫu, panel trong web | Xong (editor có tô màu cú pháp, chưa Monaco) |
 | 9 | Công cụ vẽ, layout, alert, replay, backtest | Xong (xem giới hạn trong `NOTES.md`) |
 
 Kế hoạch chi tiết, điều kiện nghiệm thu từng phase và các việc chưa xác minh nằm trong [`PLAN-CLAUDE-CODE.md`](PLAN-CLAUDE-CODE.md). Bản nghiên cứu đầu tiên là [`PLAN.md`](PLAN.md). Một số nhận định trong đó đã được sửa, xem ghi chú đầu file.

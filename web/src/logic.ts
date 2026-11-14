@@ -280,3 +280,35 @@ export function bestBidAsk(rows: number[][], bucket: number): Map<number, { bid:
   }
   return out
 }
+
+// ---------- tô màu cú pháp Pine (nhẹ, không dùng thư viện) ----------
+
+export type PineToken = { text: string; kind: 'comment' | 'string' | 'number' | 'keyword' | 'func' | 'const' | 'plain' }
+const PINE_KW = new Set(['if', 'else', 'for', 'to', 'by', 'while', 'var', 'varip', 'and', 'or', 'not', 'true', 'false', 'break', 'continue', 'na'])
+const PINE_NS = /^(ta|math|color|input|request|strategy|plot|shape|location|size|format|barmerge|hline|syminfo|timeframe|barstate|str|array)$/
+
+/** Tách mã Pine thành các đoạn để tô màu. Nối lại các `text` luôn cho đúng chuỗi gốc. */
+export function highlightPine(src: string): PineToken[] {
+  const out: PineToken[] = []
+  const re = /(\/\/[^\n]*)|("(?:[^"\\n]|\.)*"|'(?:[^'\\n]|\.)*')|(#[0-9a-fA-F]{6,8}\b)|(\d+\.?\d*(?:[eE][+-]?\d+)?|\.\d+)|([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)/g
+  let last = 0
+  let m: RegExpExecArray | null
+  while ((m = re.exec(src)) !== null) {
+    if (m.index > last) out.push({ text: src.slice(last, m.index), kind: 'plain' })
+    const t = m[0]
+    if (m[1]) out.push({ text: t, kind: 'comment' })
+    else if (m[2]) out.push({ text: t, kind: 'string' })
+    else if (m[3] || m[4]) out.push({ text: t, kind: m[3] ? 'const' : 'number' })
+    else {
+      const root = t.split('.')[0]
+      const after = src[m.index + t.length]
+      if (PINE_KW.has(t)) out.push({ text: t, kind: 'keyword' })
+      else if (t.includes('.') && PINE_NS.test(root)) out.push({ text: t, kind: after === '(' ? 'func' : 'const' })
+      else if (after === '(' && ['indicator', 'strategy', 'plot', 'plotshape', 'bgcolor', 'hline', 'alertcondition', 'input', 'nz', 'time'].includes(t)) out.push({ text: t, kind: 'func' })
+      else out.push({ text: t, kind: 'plain' })
+    }
+    last = m.index + t.length
+  }
+  if (last < src.length) out.push({ text: src.slice(last), kind: 'plain' })
+  return out
+}

@@ -220,3 +220,15 @@ kbd { font: 11px ui-monospace, Consolas, monospace; border: 1px solid var(--line
 .side li .grip { color: var(--mute); cursor: grab; padding: 6px 0 0 2px; font-size: 11px; letter-spacing: -2px; opacity: .5; user-select: none; }
 .side li:hover .grip { opacity: 1; }
 .side li.over { box-shadow: inset 0 2px 0 var(--accent); }
+
+.pine .editor { position: relative; height: 100%; min-width: 0; }
+.pine .editor pre.hl, .pine .editor textarea.code { position: absolute; inset: 0; margin: 0; padding: 8px; border: 1px solid var(--line); border-radius: 6px;
+  font: 13px/1.45 ui-monospace, Consolas, monospace; tab-size: 4; white-space: pre; overflow: auto; box-sizing: border-box; }
+.pine .editor pre.hl { background: var(--chip); color: var(--ink); pointer-events: none; scrollbar-width: none; }
+.pine .editor textarea.code { background: transparent; color: transparent; caret-color: var(--ink); resize: none; z-index: 1; width: 100%; height: 100%; }
+.pine .editor textarea.code::selection { background: rgba(76,141,255,.35); color: transparent; }
+.tk-comment { color: #6a8a6a; font-style: italic; } .tk-string { color: #d9a05b; } .tk-number { color: #7fb7e8; }
+.tk-keyword { color: #c586c0; font-weight: 600; } .tk-func { color: #4ec9b0; } .tk-const { color: #e5c07b; }
+:root:not([data-theme='dark']) .tk-comment { color: #5a7d5a; } :root:not([data-theme='dark']) .tk-string { color: #a0561f; }
+:root:not([data-theme='dark']) .tk-number { color: #0b66b2; } :root:not([data-theme='dark']) .tk-keyword { color: #8a2be2; }
+:root:not([data-theme='dark']) .tk-func { color: #00796b; } :root:not([data-theme='dark']) .tk-const { color: #9a6700; }

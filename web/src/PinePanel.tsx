@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { highlightPine } from './logic'
 import { createAlert, fetchPineExamples, runPine, type BacktestOpts, type PineResult } from './api'
 
 type Props = {
@@ -29,6 +30,7 @@ export default function PinePanel({ symbol, tf, onResult }: Props) {
   const [err, setErr] = useState<{ message: string; line?: number } | null>(null)
   const [busy, setBusy] = useState(false)
   const [bt, setBt] = useState({ capital: '10000', fee: '0.05', slip: '0', from: '', to: '' })
+  const hlRef = useRef<HTMLPreElement>(null)
   const [note, setNote] = useState<string | null>(null)
 
   useEffect(() => { fetchPineExamples().then(setExamples).catch(() => setExamples([])) }, [])
@@ -79,11 +81,17 @@ export default function PinePanel({ symbol, tf, onResult }: Props) {
         <span className="mute">{symbol} · {tf}</span>
       </div>
       <div className="pine-body">
-        <textarea
+        <div className="editor">
+          <pre className="hl" aria-hidden="true" ref={hlRef}>
+            {highlightPine(src).map((t, i) => <span key={i} className={`tk-${t.kind}`}>{t.text}</span>)}
+            {'\n'}
+          </pre>
+        <textarea className="code" onScroll={(e) => { if (hlRef.current) { hlRef.current.scrollTop = e.currentTarget.scrollTop; hlRef.current.scrollLeft = e.currentTarget.scrollLeft } }}
           aria-label="Mã Pine" spellCheck={false} value={src}
           onChange={(e) => { setSrc(e.target.value); save('pine.src', e.target.value) }}
           onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); void run() } }}
         />
+        </div>
         <div className="pine-side">
           {note && <p className="mute">{note}</p>}
           {err && <p className="status bad" role="alert">{err.line ? `Dòng ${err.line}: ` : ''}{err.message}</p>}

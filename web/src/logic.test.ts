@@ -219,3 +219,19 @@ test('bestBidAsk picks highest bid and lowest ask per time bucket', () => {
   assert.deepEqual(m.get(200), { bid: 100.5, ask: 100.5 })
   assert.deepEqual(bestBidAsk([[1, 10, 0, 0]], 1).get(1), { bid: null, ask: null })
 })
+
+import { highlightPine } from './logic.ts'
+
+test('highlightPine round-trips the source and classifies tokens', () => {
+  const src = '//@version=5\nindicator("x", overlay=true)\nlen = input.int(20, "L")\nif close > ta.sma(close, len) // up\n    plot(1.5e3, color=#ff0000)\n'
+  const toks = highlightPine(src)
+  assert.equal(toks.map((t) => t.text).join(''), src)
+  const kinds = (k: string) => toks.filter((t) => t.kind === k).map((t) => t.text)
+  assert.deepEqual(kinds('comment'), ['//@version=5', '// up'])
+  assert.deepEqual(kinds('string'), ['"x"', '"L"'])
+  assert.deepEqual(kinds('keyword'), ['true', 'if'])
+  assert.ok(kinds('func').includes('input.int') && kinds('func').includes('ta.sma') && kinds('func').includes('indicator') && kinds('func').includes('plot'))
+  assert.ok(kinds('number').includes('20') && kinds('number').includes('1.5e3'))
+  assert.deepEqual(kinds('const'), ['#ff0000'])
+  assert.equal(highlightPine('').length, 0)
+})
