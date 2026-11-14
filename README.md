@@ -1,6 +1,6 @@
 # TradingView
 
-Biểu đồ giá chạy trên máy cá nhân, dùng một người, lấy cảm hứng từ TradingView. Mục tiêu: nến, volume, orderflow (footprint, delta, CVD), heatmap thanh khoản và GEX cho BTC và vàng, cộng volume cổ phiếu VN100. Script Pine chạy trên dữ liệu của bạn.
+Biểu đồ giá chạy trên máy cá nhân, dùng một người, lấy cảm hứng từ TradingView. Mục tiêu: nến, volume, orderflow (footprint, delta, CVD), heatmap thanh khoản và GEX cho BTC và vàng, cộng volume cổ phiếu VN100. Script Pine (v4 đến v6, một tập con lớn) chạy trên dữ liệu của bạn, có backtest, cảnh báo nền và phát lại nến.
 
 Dự án không liên kết với TradingView. Không dùng tên, logo hay giao diện của họ.
 
@@ -10,20 +10,21 @@ Dự án không liên kết với TradingView. Không dùng tên, logo hay giao 
 |---|---|---|
 | 0 | Khung dự án, kho Parquet, server, trang web | Xong |
 | 1 | Collector BTC và vàng (Binance Futures): nến, backfill, tick trực tiếp, sổ lệnh, gom nén | Xong. Đã đo sổ lệnh 1 giờ (xem `NOTES.md`) |
-| 2 | Chart cơ bản: nến, volume, danh sách theo dõi, trực tiếp, múi giờ, giao diện tối | Xong |
-| 3 | Orderflow: footprint (imbalance, POC), delta, CVD, VPVR (POC/VAH/VAL) | Xong, trừ volume profile theo phiên |
-| 4 | Heatmap thanh khoản: lớp heatmap dưới nến, bong bóng lệnh lớn | Xong, chưa đo thời gian vẽ (đích 100 ms) |
+| 2 | Chart: nến, volume, danh sách theo dõi (kéo thả), trực tiếp, múi giờ, giao diện sáng/tối, khung `1s` đến `1M` | Xong |
+| 3 | Orderflow: footprint (4 kiểu, imbalance, POC, stacked imbalance), delta, CVD, VPVR | Xong, trừ volume profile theo phiên |
+| 4 | Heatmap thanh khoản kiểu DeepCharts và Bookmap, chấm lệnh lớn, iceberg ước lượng | Xong, chưa đo thời gian vẽ (đích 100 ms) |
 | 5 | GEX BTC (Deribit): snapshot 15 phút, GEX theo strike, gamma flip, call/put wall | Xong. Gamma tính từ IV (Black-76), OI trễ ~8 giờ |
-| 6 | Vàng (XAUUSDT; GC1! tuỳ chọn, trả phí) | 6A xong (nến, footprint, heatmap, ghi chú nguồn). 6B và 6C chưa làm (tuỳ chọn) |
-| 7 | Cổ phiếu VN100 | Đang làm: danh sách, nến 1 phút (nạp nền), bộ ghi sổ lệnh 3 mức. Chưa đo được phiên thật (thứ Hai 16/11) |
-| 8 | Engine Pine Script (tập con): parser, thông dịch, ta.*, request.security/external, strategy, 5 script mẫu, panel trong web | Xong (editor có tô màu cú pháp, chưa Monaco) |
-| 9 | Công cụ vẽ, layout, alert, replay, backtest | Xong (xem giới hạn trong `NOTES.md`) |
+| 6 | Vàng (XAUUSDT; GC1! tuỳ chọn, trả phí) | 6A xong. 6B và 6C chưa làm (tuỳ chọn) |
+| 7 | Cổ phiếu VN100 (SSI iBoard và VNDirect, không cần khoá) | Danh sách, nến 1 phút (khoảng 270 ngày) và bộ ghi sổ lệnh 3 mức xong. **Chưa đo phiên giao dịch thật** (Thứ Hai 16/11) |
+| 8 | Engine Pine: parser, thông dịch, `ta.*`, `request.security` và `security_lower_tf`, `type`, `import` (shim thư viện), mảng, line/label/box/table/polyline | Xong. Chạy được 6 script thật, 4 có đối chiếu tham chiếu độc lập |
+| 9 | Công cụ vẽ, layout 1/2/4 ô, cảnh báo nền (desktop, Telegram), phát lại, backtest | Xong (xem giới hạn trong `NOTES.md`) |
+| UX | Chỉ báo Pine nhiều cái cùng lúc, bảng Orderflow, tìm symbol, phím tắt, giao diện điện thoại | Xong |
 
 Kế hoạch chi tiết, điều kiện nghiệm thu từng phase và các việc chưa xác minh nằm trong [`PLAN-CLAUDE-CODE.md`](PLAN-CLAUDE-CODE.md). Bản nghiên cứu đầu tiên là [`PLAN.md`](PLAN.md). Một số nhận định trong đó đã được sửa, xem ghi chú đầu file.
 
 Sơ đồ tương tác của kế hoạch: mở `plan-viewer/dist/plan.html` bằng trình duyệt. Trang chạy offline. Dựng lại bằng `cd plan-viewer && npm install && node build.mjs`.
 
-Việc còn mở và thứ tự ưu tiên: xem [`TODO.md`](TODO.md).
+Việc còn mở và thứ tự ưu tiên: xem [`TODO.md`](TODO.md). Lịch sử thay đổi: [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Giao diện
 
@@ -35,7 +36,7 @@ Thanh trên cùng chỉ có một hàng: symbol và trạng thái trực tiếp,
 
 ![Tìm symbol](docs/screenshots/symbol-search.png)
 
-Ảnh chụp từ bản chạy thật, dữ liệu thật của máy này (2026-11-14). Chế độ tối là mặc định theo hệ thống; có nút đổi sang sáng.
+Ảnh chụp từ bản chạy thật, dữ liệu thật của máy này (2026-11-14 và 2026-11-15). Chế độ tối là mặc định theo hệ thống; có nút đổi sang sáng.
 
 Phần orderflow bám theo thiết kế của [DeepCharts](https://www.deepcharts.com) (Deep Print, DeepDom, Deep Trades), dựa trên tài liệu công khai của họ: thang màu heatmap, kiểu footprint, ký hiệu lệnh lớn. Dữ liệu và công thức là của dự án này, không sao chép mã hay tài sản của DeepCharts.
 
@@ -92,9 +93,12 @@ Chụp lại ảnh sau khi đổi giao diện: mở trang ở 1400x800, bật t�
 |---|---|---|
 | BTC: nến, lệnh khớp, sổ lệnh | Binance Futures (API công khai, không cần key) | Miễn phí |
 | BTC: GEX | Deribit (open interest trễ 8 giờ) | Miễn phí |
-| Vàng: orderflow, heatmap | Binance XAUUSDT, lịch sử từ 11/12/2025 | Miễn phí |
-| Vàng: volume COMEX, options | Databento (GC1!) | Trả phí |
-| Cổ phiếu VN100 | vnstock, SSI FastConnect (cần tài khoản SSI) | Miễn phí hoặc chưa rõ |
+| Vàng: orderflow, heatmap | Binance XAUUSDT (hợp đồng perpetual, lịch sử từ 11/12/2025; cuối tuần vẫn khớp lệnh) | Miễn phí |
+| Vàng: volume COMEX, options | Databento (GC1!) | Trả phí, chưa làm |
+| VN100: danh sách, bảng giá 3 mức | SSI iBoard (endpoint công khai, không có tài liệu chính thức) | Miễn phí |
+| VN100: nến 1 phút, khoảng 270 ngày | VNDirect dchart (cũng không chính thức) | Miễn phí |
+
+Hai nguồn VN không có hợp đồng sử dụng; có thể đổi định dạng hoặc bị chặn bất cứ lúc nào, chỉ nên dùng cá nhân và gọi thưa. Cổ phiếu VN không có tick, chỉ có nến từ 1 phút và snapshot sổ lệnh 3 mức.
 
 Lịch sử sổ lệnh từng mức giá không có miễn phí. Collector phải ghi từ lúc bạn bắt đầu chạy. Bảng đầy đủ, kèm giá và giới hạn, nằm trong kế hoạch.
 
@@ -125,11 +129,12 @@ Cần Python 3.11 trở lên (đã chạy trên 3.15.2) và Node.js (đã chạy
 .\dev.ps1
 ```
 
-Mở `http://localhost:5173`. Trang hiện "server OK" khi server Python (`127.0.0.1:8000`) hoạt động. Nhấn Ctrl+C để dừng cả hai.
+Mở `http://localhost:5173`. `dev.ps1` chạy server Python (`127.0.0.1:8000`) và Vite; nhấn Ctrl+C để dừng cả hai. Server không tự nạp lại khi bạn sửa mã Python, nên sau khi sửa phải khởi động lại `dev.ps1`.
 
-Chạy test:
+Chạy test (khoảng 240 test Python, mất 1,5 phút; test cần mạng được bỏ qua mặc định):
 ```powershell
 C:\tv-data\.venv\Scripts\python.exe -m pytest
+cd web; npx tsc --noEmit; node --test src/
 ```
 
 ## Thu thập dữ liệu
@@ -145,7 +150,13 @@ C:\tv-data\.venv\Scripts\python.exe -m pytest
 | Tick trực tiếp | `& $py -m collector.live_trades --symbols BTCUSDT,XAUUSDT` |
 | Sổ lệnh trực tiếp (heatmap) | `& $py -m collector.live_book --symbols BTCUSDT,XAUUSDT` |
 | Gom nén (thử trước) | `& $py -m collector.compact --dry-run` |
-| Việc hằng đêm: nến, sửa khoảng thiếu, gom nén | `& $py -m collector.daily` |
+| Việc hằng đêm: nến, sửa khoảng thiếu, gom nén (thêm `--vn` để cập nhật nến VN100) | `& $py -m collector.daily` |
+| Snapshot quyền chọn Deribit, mỗi 15 phút (GEX) | `& $py -m collector.deribit` |
+| Cảnh báo nền (giá, cắt mức, `alertcondition` của Pine; gửi toast Windows và Telegram) | `& $py -m collector.alerts` |
+| Gộp file con của ngày hôm nay mỗi 30 phút (truy vấn nhanh lại) | `& $py -m collector.hotmerge` (hoặc một lần: `-m collector.compact --hot`) |
+| Danh sách VN100 từ SSI | `& $py -m collector.vn refresh-vn100` |
+| Nến 1 phút VN100 (nạp lần đầu mất khoảng 1,5 giờ cho 100 mã) | `& $py -m collector.vn bars` |
+| Sổ lệnh VN100, tự chỉ ghi trong giờ giao dịch HOSE | `& $py -m collector.vn_book` |
 
 **Collector trực tiếp chỉ chạy khi tiến trình còn sống.** Đóng cửa sổ, tắt máy hoặc kết thúc phiên làm việc là chúng dừng, và dữ liệu sổ lệnh trong quá khứ không lấy lại được miễn phí. Muốn chạy liên tục, dùng:
 
@@ -153,7 +164,7 @@ C:\tv-data\.venv\Scripts\python.exe -m pytest
 .\scripts\run-collectors.ps1
 ```
 
-Script khởi động cả hai collector, tự chạy lại nếu một cái thoát, ghi log vào `DATA_DIR\logs`. Đừng chạy hai bộ collector cùng lúc: hai bên sẽ ghi trùng.
+Script khởi động mọi tiến trình nền (tick, sổ lệnh, Deribit, cảnh báo, gộp nóng, sổ lệnh VN100), tự chạy lại nếu một cái thoát, ghi log vào `DATA_DIR\logs`. Cảnh báo chỉ bắn khi tiến trình `collector.alerts` còn sống, kể cả khi đã đóng trình duyệt. Đừng chạy hai bộ collector cùng lúc: hai bên sẽ ghi trùng.
 
 Hai việc cần lên lịch (chạy một lần, đổi đường dẫn cho đúng):
 
@@ -172,12 +183,16 @@ Ghi chú kỹ thuật, số đo và các quyết định đã đổi so với k�
 ## Cấu trúc
 
 ```
-common/      kho Parquet (store.py), SQLite (appdb.py), khởi tạo thư mục
-collector/   thu thập: binance.py, klines.py, backfill.py, live_trades.py, live_book.py, verify.py, compact.py
-server/      FastAPI: /health, sau này /bars, /footprint, /heatmap, /gex
+common/      kho Parquet (store.py), SQLite (appdb.py), nến (bars.py), GEX (gex.py), khởi tạo thư mục
+collector/   thu thập và việc nền: binance, klines, backfill, live_trades, live_book, deribit, vn, vn_book,
+             compact, hotmerge, daily, alerts, verify
+server/      FastAPI: bars, footprint, heatmap (cả bubbles, icebergs, profile), gex, pine, drawings, alerts,
+             watchlist, live_hub (WebSocket)
+pine/        engine Pine: lexer, parser, interp, ta, objects (mảng, chuỗi, line/label/box/table), runner; examples/ là script mẫu
 web/         Vite + React + TypeScript + Lightweight Charts
-config/      symbols.toml (tick size), retention.toml (chính sách giữ dữ liệu)
-tests/       pytest
+config/      symbols.toml (tick size), vn100.json (danh sách VN100 kèm ngày lấy), retention.toml (chính sách giữ dữ liệu)
+tests/       pytest (có đối chiếu độc lập cho chỉ báo, backtest, footprint, profile, GEX)
+docs/        ảnh chụp giao diện dùng trong README
 scripts/     web-deps.ps1, run-collectors.ps1, ...
 plan-viewer/ sơ đồ tương tác của kế hoạch
 ```
@@ -189,4 +204,5 @@ Dữ liệu nằm ngoài repo, trong `DATA_DIR`, dạng Parquet nén zstd theo `
 - File `.ps1` phải giữ ASCII thuần. Windows PowerShell 5.1 đọc UTF-8 không BOM theo bảng mã ANSI và làm hỏng chuỗi tiếng Việt.
 - Lightweight Charts theo giấy phép Apache-2.0 và yêu cầu ghi attribution.
 - Mỗi nguồn dữ liệu có điều khoản riêng. Dùng cá nhân. Đọc điều khoản trước khi chia sẻ dữ liệu hoặc công bố kết quả.
+- Engine Pine là một tập con tự viết, chưa đối chiếu với TradingView; script chạy được chưa có nghĩa là kết quả giống TradingView. Giới hạn nằm trong `NOTES.md`.
 - Đây không phải lời khuyên đầu tư. Orderflow, heatmap và GEX là mô hình ước tính với giả định riêng. Xem giới hạn trong kế hoạch.
