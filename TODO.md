@@ -50,6 +50,7 @@ Cảnh báo:
 - [ ] Cảnh báo theo điều kiện orderflow (delta, CVD, imbalance, GEX flip). Hiện chỉ có giá, cắt mức và `alertcondition`. [09](docs/plan/09-alerts-drawing-backtest.md)
 
 VN100 (không cần chờ phiên):
+- [ ] Lịch sử sổ lệnh VN100: không có nguồn miễn phí (đã thử 15/11, xem [07](docs/plan/07-vn100.md)); chỉ có từ phiên đầu `vn_book` chạy.
 - [ ] Delta xấp xỉ cho VN từ hiệu của `bu` và `sd` giữa hai lần lấy mẫu. Hiện delta và CVD của VN bằng 0. [07](docs/plan/07-vn100.md)
 - [ ] Tìm nguyên nhân volume nến 1 phút lệch volume ngày (trung vị 0 đến 0,85%, xấu nhất 4 đến 13%). Nếu không giải thích được, dùng nến ngày của dchart làm chuẩn cho khung `1d`. [07](docs/plan/07-vn100.md)
 

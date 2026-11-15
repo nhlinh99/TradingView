@@ -39,6 +39,8 @@ Hiện trạng đo ngày 2026-11-15: các collector tổng khoảng 400 MB (`liv
 | Chế độ chẩn đoán `SERVER_MEM_DIAG=1`: bật `tracemalloc` khi khởi động, và khi bộ nhớ vượt nửa trần (hoặc ngay trước khi thoát vì vượt trần) ghi báo cáo: nơi cấp phát nhiều nhất, loại đối tượng Python nhiều nhất, luồng theo loại | Tìm nguyên nhân thật của lần phình 28 GB. Chỉ thấy phần Python cấp phát, không thấy DuckDB. Làm chậm server, chỉ bật khi đang tìm nguyên nhân | **Đã làm** (2026-11-15) |
 | Chạy thử dài với yêu cầu luân phiên giống giao diện: `python scripts/soak_server.py --minutes 360`, lấy mẫu `/health` mỗi phút, báo hệ số tăng MB mỗi giờ | Biết server có phình theo thời gian không | Script đã có. Đã chạy thử 30 phút, xem mục Kết quả chạy thử dài. **Cần chạy 6 giờ trước khi coi vấn đề đã đóng** |
 
+Đo lại ngay sau khi khởi động lại bằng mã mới (2026-11-15 11:35, bộ nhớ cam kết): `live_trades` 58 MB, `live_book` 45 MB, `hotmerge` 32 MB, `deribit` 37 MB, `alerts` 28 MB, `vn_book` 30 MB, server 91 MB. Thấp hơn lần đo trước (80, 100, 125, 45, 30, 30, 80 đến 400), nhưng đây là tiến trình mới khởi động nên chưa so được cùng điều kiện: cần đo lại sau vài giờ chạy, đặc biệt `hotmerge` chỉ lớn khi có file để gộp.
+
 Cách đo: `curl http://127.0.0.1:8000/health` cho `private_mb` của server. Bộ nhớ cam kết toàn máy: `Get-Counter '\Memory\Committed Bytes','\Memory\Commit Limit'`. Cần theo dõi commit, không chỉ RAM thật, vì Windows từ chối cấp phát khi commit chạm trần.
 
 ## Dữ liệu trên đĩa
