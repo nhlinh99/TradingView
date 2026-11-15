@@ -143,6 +143,41 @@ Nguyên nhân chưa xác định. Thử trên server mới với các yêu cầu
 
 Nếu server lại phình, dòng cảnh báo của `server.mem` trong cửa sổ `dev.ps1` cho biết đường dẫn nào được gọi ngay trước đó.
 
+### Lệnh thu thập
+
+Đặt `$py = 'C:\tv-data\.venv\Scripts\python.exe'` (hoặc đường dẫn venv của bạn), chạy từ thư mục dự án.
+
+| Việc | Lệnh |
+|---|---|
+| Nến 1 phút 30 ngày gần nhất | `& $py -m collector.klines --symbol BTCUSDT --days 30` |
+| Lịch sử tick (kiểm checksum) | `& $py -m collector.backfill --symbol BTCUSDT --dataset aggTrades --days 30` |
+| Lịch sử độ sâu thô, open interest | `--dataset bookDepth` hoặc `--dataset metrics` |
+| Kiểm tra nến dựng từ tick so với kline | `& $py -m collector.verify --symbol BTCUSDT --days 3` |
+| Tick trực tiếp | `& $py -m collector.live_trades --symbols BTCUSDT,XAUUSDT` |
+| Sổ lệnh trực tiếp (heatmap) | `& $py -m collector.live_book --symbols BTCUSDT,XAUUSDT` |
+| Gom nén (thử trước) | `& $py -m collector.compact --dry-run` |
+| Việc hằng đêm: nến, sửa khoảng thiếu, gom nén (thêm `--vn` để cập nhật nến VN100) | `& $py -m collector.daily` |
+| Snapshot quyền chọn Deribit, mỗi 15 phút (GEX) | `& $py -m collector.deribit` |
+| Cảnh báo nền (giá, cắt mức, `alertcondition` của Pine; gửi toast Windows và Telegram) | `& $py -m collector.alerts` |
+| Gộp file con của ngày hôm nay mỗi 30 phút (truy vấn nhanh lại) | `& $py -m collector.hotmerge` (hoặc một lần: `-m collector.compact --hot`) |
+| Danh sách VN100 từ SSI | `& $py -m collector.vn refresh-vn100` |
+| Nến 1 phút VN100 (nạp lần đầu mất khoảng 1,5 giờ cho 100 mã) | `& $py -m collector.vn bars` |
+| Sổ lệnh VN100, tự chỉ ghi trong giờ giao dịch HOSE | `& $py -m collector.vn_book` |
+
+Collector trực tiếp chỉ chạy khi tiến trình còn sống. Đóng cửa sổ, tắt máy hoặc kết thúc phiên làm việc là chúng dừng, và dữ liệu sổ lệnh trong quá khứ không lấy lại được miễn phí. `.\scripts\run-collectors.ps1` khởi động mọi tiến trình nền, tự chạy lại nếu một cái thoát, ghi log vào `DATA_DIR\logs`, và chạy nền `collector.daily --vn` để crawl bù mỗi lần khởi động (tắt bằng `-SkipCatchup`). Cảnh báo chỉ bắn khi tiến trình `collector.alerts` còn sống, kể cả khi đã đóng trình duyệt.
+
+Hai việc cần lên lịch (chạy một lần, đổi đường dẫn cho đúng):
+
+```powershell
+$root = 'C:\duong\dan\toi\TradingView'
+schtasks /Create /TN tv-collectors /SC ONLOGON /TR "powershell -NoProfile -ExecutionPolicy Bypass -File $root\scripts\run-collectors.ps1"
+schtasks /Create /TN tv-daily /SC DAILY /ST 03:00 /TR "cmd /c cd /d $root && C:\tv-data\.venv\Scripts\python.exe -m collector.daily --vn"
+```
+
+`collector.daily` là việc không thể thiếu, không chỉ là dọn dẹp. Với mỗi symbol nó chạy: (1) đồng bộ nến 1 phút (không có bước này `bars` đứng yên), (2) tải lại 3 ngày gần nhất từ kho Binance để sửa mọi khoảng thiếu của collector trực tiếp (máy tắt, khoảng hở bị bỏ qua), (3) gom nén. 03:00 giờ Việt Nam là 20:00 UTC, lúc đó file của ngày UTC hôm kia đã được Binance công bố. Mỗi bước bọc riêng, mã thoát khác 0 nếu có bước lỗi.
+
+Gom nén chỉ đụng các ngày đã qua. Tick quá 30 ngày được gom thành footprint 1 phút (chỉ bằng khoảng 6% dung lượng) sau khi kiểm tra tổng mua và bán từng phút. Chính sách nằm trong `config/retention.toml`.
+
 ### Khoảng trống khi máy hoặc collector dừng
 
 Ngày 2026-11-15 biểu đồ BTCUSDT thiếu khoảng 8 giờ (00:00 đến 08:00 giờ VN). Collector chạy trong phiên làm việc nên dừng cùng phiên. Có hai loại dữ liệu bị ảnh hưởng, và chúng lành khác nhau:

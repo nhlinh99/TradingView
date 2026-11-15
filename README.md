@@ -161,46 +161,16 @@ cd web; npx tsc --noEmit; node --test src/
 
 ## Thu thập dữ liệu
 
-Đặt `$py = 'C:\tv-data\.venv\Scripts\python.exe'` (hoặc đường dẫn venv của bạn), chạy từ thư mục dự án.
-
-| Việc | Lệnh |
-|---|---|
-| Nến 1 phút 30 ngày gần nhất | `& $py -m collector.klines --symbol BTCUSDT --days 30` |
-| Lịch sử tick (kiểm checksum) | `& $py -m collector.backfill --symbol BTCUSDT --dataset aggTrades --days 30` |
-| Lịch sử độ sâu thô, open interest | `--dataset bookDepth` hoặc `--dataset metrics` |
-| Kiểm tra nến dựng từ tick so với kline | `& $py -m collector.verify --symbol BTCUSDT --days 3` |
-| Tick trực tiếp | `& $py -m collector.live_trades --symbols BTCUSDT,XAUUSDT` |
-| Sổ lệnh trực tiếp (heatmap) | `& $py -m collector.live_book --symbols BTCUSDT,XAUUSDT` |
-| Gom nén (thử trước) | `& $py -m collector.compact --dry-run` |
-| Việc hằng đêm: nến, sửa khoảng thiếu, gom nén (thêm `--vn` để cập nhật nến VN100) | `& $py -m collector.daily` |
-| Snapshot quyền chọn Deribit, mỗi 15 phút (GEX) | `& $py -m collector.deribit` |
-| Cảnh báo nền (giá, cắt mức, `alertcondition` của Pine; gửi toast Windows và Telegram) | `& $py -m collector.alerts` |
-| Gộp file con của ngày hôm nay mỗi 30 phút (truy vấn nhanh lại) | `& $py -m collector.hotmerge` (hoặc một lần: `-m collector.compact --hot`) |
-| Danh sách VN100 từ SSI | `& $py -m collector.vn refresh-vn100` |
-| Nến 1 phút VN100 (nạp lần đầu mất khoảng 1,5 giờ cho 100 mã) | `& $py -m collector.vn bars` |
-| Sổ lệnh VN100, tự chỉ ghi trong giờ giao dịch HOSE | `& $py -m collector.vn_book` |
-
-**Collector trực tiếp chỉ chạy khi tiến trình còn sống.** Đóng cửa sổ, tắt máy hoặc kết thúc phiên làm việc là chúng dừng, và dữ liệu sổ lệnh trong quá khứ không lấy lại được miễn phí. Muốn chạy liên tục, dùng:
+Chạy từ thư mục dự án, trong PowerShell:
 
 ```powershell
 .\scripts\run-collectors.ps1
+C:\tv-data\.venv\Scripts\python.exe -m collector.daily --vn
 ```
 
-Script khởi động mọi tiến trình nền (tick, sổ lệnh, Deribit, cảnh báo, gộp nóng, sổ lệnh VN100), tự chạy lại nếu một cái thoát, ghi log vào `DATA_DIR\logs`. Cảnh báo chỉ bắn khi tiến trình `collector.alerts` còn sống, kể cả khi đã đóng trình duyệt. Đừng chạy hai bộ collector cùng lúc: hai bên sẽ ghi trùng.
+Dòng đầu khởi động mọi collector nền (tick, sổ lệnh, Deribit, cảnh báo, gộp nóng, sổ lệnh VN100), tự bật lại tiến trình nào thoát và tự crawl bù dữ liệu thiếu mỗi lần khởi động. Dòng thứ hai là việc hằng đêm: đồng bộ nến, tải bù khoảng hở từ kho Binance, cập nhật nến VN100 và gom nén. Collector chỉ chạy khi cửa sổ còn mở, nên nên lên lịch cả hai bằng Task Scheduler. Đừng chạy hai bộ collector cùng lúc, vì sẽ ghi trùng.
 
-Hai việc cần lên lịch (chạy một lần, đổi đường dẫn cho đúng):
-
-```powershell
-$root = 'C:\duong\dan\toi\TradingView'
-schtasks /Create /TN tv-collectors /SC ONLOGON /TR "powershell -NoProfile -ExecutionPolicy Bypass -File $root\scripts\run-collectors.ps1"
-schtasks /Create /TN tv-daily /SC DAILY /ST 03:00 /TR "cmd /c cd /d $root && C:\tv-data\.venv\Scripts\python.exe -m collector.daily"
-```
-
-`collector.daily` là việc không thể thiếu, không chỉ là dọn dẹp. Với mỗi symbol nó chạy: (1) đồng bộ nến 1 phút (không có bước này `bars` đứng yên), (2) tải lại 3 ngày gần nhất từ kho Binance để sửa mọi khoảng thiếu của collector trực tiếp (máy tắt, khoảng hở bị bỏ qua), (3) gom nén. 03:00 giờ Việt Nam là 20:00 UTC, lúc đó file của ngày UTC hôm kia đã được Binance công bố. Mỗi bước bọc riêng, mã thoát khác 0 nếu có bước lỗi.
-
-Gom nén chỉ đụng các ngày đã qua. Tick quá 30 ngày được gom thành footprint 1 phút (chỉ bằng khoảng 6% dung lượng) sau khi kiểm tra tổng mua và bán từng phút. Chính sách nằm trong `config/retention.toml`.
-
-Ghi chú kỹ thuật, số đo và các quyết định đã đổi so với kế hoạch: [`docs/plan/engineering-notes.md`](docs/plan/engineering-notes.md).
+Lệnh của từng collector, cách lên lịch bằng `schtasks`, và chính sách gom nén: [`docs/plan/01-collector-storage.md`](docs/plan/01-collector-storage.md). Ghi chú kỹ thuật và số đo: [`docs/plan/engineering-notes.md`](docs/plan/engineering-notes.md).
 
 ## Cấu trúc
 
