@@ -74,6 +74,26 @@ Chạy `python -m collector.compact` sau khi chạy thử `--dry-run`. Mất kho
 
 Số đo thật tốt hơn ước tính: footprint chỉ khoảng 0,47 MB mỗi ngày cho cả hai symbol, tức 0,17 GB mỗi năm, thay vì 1,24 MB mỗi ngày (0,45 GB mỗi năm) suy ra từ một ngày mẫu. Vì vậy ước tính mỗi năm theo chính sách giữ dữ liệu giảm từ 1,6 GB xuống khoảng 1,3 GB. Phần ngày biến động mạnh (khoảng 2,5 GB) chưa đo.
 
+## Khi máy không bật cả ngày
+
+Ràng buộc từ bạn (2026-11-15): máy cá nhân không thể chạy suốt ngày. Câu hỏi đúng không phải "làm sao chạy 24/7" mà là "dữ liệu nào mất nếu máy tắt".
+
+| Dữ liệu | Máy tắt thì sao | Cách giữ |
+|---|---|---|
+| Tick, nến 1 phút, `bookDepth`, `metrics` của Binance (BTC, vàng) | **Không mất.** Tải lại được từ kho Binance, ngày hôm qua có sau vài giờ | Bật máy lúc nào cũng được: `collector.daily` (chạy nền khi `run-collectors.ps1` khởi động) vá khoảng hở 3 ngày gần nhất. Footprint, delta, CVD, backtest không cần collector chạy liên tục |
+| Snapshot options Deribit (GEX) | Mất khoảng trống giữa các lần chụp. Open interest vốn trễ 8 giờ nên một đến vài snapshot mỗi ngày là đủ cho GEX theo ngày | `python -m collector.deribit --once` (đã có) lúc khởi động máy và theo lịch |
+| Sổ lệnh BTC, vàng (heatmap) | **Mất vĩnh viễn** trong lúc tắt. Chỉ có lớp thô thay thế: `bookDepth` cách 30 giây, 6 dải giá | Chỉ lấp được bằng thiết bị bật liên tục |
+| Sổ lệnh VN100 | **Mất vĩnh viễn**, nhưng chỉ cần phiên HOSE: Thứ Hai đến Thứ Sáu, khoảng 09:00 đến 14:45 giờ VN, ghi tự động trong giờ đó | Bật máy khoảng 08:50 đến 14:50 các ngày giao dịch, hoặc thiết bị bật liên tục |
+| Cảnh báo giá | Không bắn khi máy tắt | Telegram từ thiết bị bật liên tục |
+
+**Khuyến nghị theo mức:**
+
+1. **Không tốn gì thêm (làm trước).** Giữ tick, nến, footprint, delta, CVD, GEX theo ngày và backtest: chỉ cần máy bật mỗi ngày một lúc (để `collector.daily` vá khoảng hở và chụp snapshot Deribit). Với VN100, bật máy trong phiên (khoảng 6 giờ, 5 ngày một tuần). Hy sinh: heatmap BTC và vàng chỉ có đoạn máy đang bật.
+2. **Thiết bị nhỏ bật liên tục, chỉ khi bạn thấy lịch sử heatmap và sổ lệnh VN đáng giữ.** Thuê VPS nhỏ hoặc dùng một máy mini bật suốt. Số đo của dự án: các collector cộng lại khoảng 230 MB bộ nhớ (đo 15/11 ngay sau khởi động), đĩa khoảng 1,3 GB mỗi năm theo chính sách giữ dữ liệu, CPU chưa đo, nên cấu hình rất nhỏ đủ. Chưa tra giá VPS cụ thể. Phải kiểm trước: Binance Futures chặn một số quốc gia (chọn máy chủ ngoài danh sách đó và đọc điều khoản của họ), iBoard của SSI và dchart của VNDirect có gọi được từ ngoài Việt Nam không, và bảo vệ `.env` (token Telegram) trên máy thuê.
+3. Không nên: giữ máy cá nhân bật liên tục chỉ để heatmap.
+
+Việc cần làm để chạy được trên thiết bị khác: collector là Python thuần và chạy trên Linux được; chỉ có hai chỗ gắn với Windows là toast trong `collector/alerts.py` (nên dùng Telegram) và các script `.ps1` giám sát (thay bằng systemd). Chưa làm, chưa chạy thử trên Linux.
+
 ## Quyết định
 
 **Đã chọn (2026-11-15): để gom nén chạy, giữ `full_days = 30`.** Tick quá 30 ngày thành footprint 1 phút rồi xoá tick. Lý do bên dưới, giữ lại để biết cách đổi ý.
@@ -92,5 +112,6 @@ Một việc phụ thuộc quyết định này: sau gom nén, footprint dưới
 - [ ] Đo bộ nhớ của `hotmerge` trước và sau khi áp trần.
 - [ ] Gom sổ lệnh quá 180 ngày thành 5 phút thay vì xoá. Đo dung lượng thật trước khi chọn.
 - [ ] Bỏ cột `id` của tick đã gom, và coi `bookDepth`, `metrics` là bộ đệm.
+- [ ] Quyết định chạy kiểu nào khi máy không bật cả ngày (xem mục "Khi máy không bật cả ngày"), rồi mới làm: script lịch Windows (đánh thức máy theo giờ phiên VN, chụp Deribit một lần mỗi ngày) hoặc bản chạy Linux cho thiết bị bật liên tục.
 - [ ] Cảnh báo đĩa thấp trong watchdog.
 - [ ] Sao lưu nhóm dữ liệu không tải lại được.

@@ -13,6 +13,8 @@ Ký hiệu: `[ ]` chưa làm, `[~]` làm dở, `[x]` xong. **Chặn** nghĩa là
 
 ## 2. Việc của bạn
 
+- [ ] **Chọn cách giữ dữ liệu khi máy không bật cả ngày.** Khuyến nghị: bật máy mỗi ngày một lúc để vá khoảng hở và chụp Deribit, bật máy trong phiên HOSE (khoảng 08:50 đến 14:50) nếu muốn sổ lệnh VN100, chấp nhận heatmap BTC chỉ có lúc máy bật; thiết bị bật liên tục chỉ khi lịch sử heatmap đáng giá. Chi tiết ở [10](docs/plan/10-memory-data-optimization.md).
+
 - [ ] Xác nhận toast Windows có hiện lên màn hình. [09](docs/plan/09-alerts-drawing-backtest.md)
 - [ ] Thêm `TELEGRAM_BOT_TOKEN` và `TELEGRAM_CHAT_ID` vào `.env`, rồi thử một cảnh báo thật. [09](docs/plan/09-alerts-drawing-backtest.md)
 - [ ] Xoá thư mục thừa `C:\tv-data-bench`. [01](docs/plan/01-collector-storage.md)
