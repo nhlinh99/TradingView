@@ -8,7 +8,16 @@ Xem `docs/plan/README.md` cho thứ tự ưu tiên và các file tính năng cho
 
 ## 2026-11-15 (tài liệu)
 
+### Thêm
+- Xoá hình vẽ: bấm vào hình ở chế độ Trỏ để chọn, `Delete` hoặc `Backspace` để xoá, `Esc` để bỏ chọn, nút "Xoá hình đang chọn" trên thanh vẽ. Hình vừa vẽ được chọn sẵn.
+
+### Sửa
+- Mã Pine tràn ra ngoài khung trong bảng chỉ báo: luật CSS của trình soạn gắn nhầm vào `.pine` nên không áp dụng cho bảng mới. Nay mã cuộn trong khung, có số dòng.
+- `--hover`, `--veil`, `--focus` ở giao diện sáng tự tham chiếu nên mất màu (chú giải chỉ báo trong suốt).
+- `input(defval=hlc3)` kiểu cũ hiện thành ô số thay vì ô chọn nguồn giá (cần khởi động lại server).
+
 ### Thay đổi
+- Thiết kế lại bảng chỉ báo: biểu tượng SVG thay emoji, thẻ chỉ báo và thư viện có nhãn, tab Tham số, Backtest, Kết quả, ô bật tắt, đổi được chiều cao, tấm trượt trên điện thoại.
 - Tài liệu kế hoạch gom vào `docs/plan/`, mỗi tính năng một file (có sơ đồ). `PLAN.md`, `PLAN-CLAUDE-CODE.md` chuyển vào `docs/plan/archive/`, `NOTES.md` thành `docs/plan/engineering-notes.md`, `TODO.md` chia vào từng file tính năng.
 - Sơ đồ tương tác `docs/plan/plan.html` có tab theo tính năng và nét đứt cho phần chưa làm.
 - Mỗi lần khởi động tự crawl bù dữ liệu: `scripts/run-collectors.ps1` chạy nền `collector.daily --vn` (tắt bằng `-SkipCatchup`), `dev.ps1` đồng bộ nến 1 phút 3 ngày trước khi mở server.

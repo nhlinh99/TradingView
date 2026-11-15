@@ -48,9 +48,10 @@ function Field({ d, value, onChange }: { d: PineInput; value: unknown; onChange:
   if (NUMERIC.has(d.type)) {
     const min = d.minval; const max = d.maxval
     const step = d.type === 'int' ? 1 : (d.step ?? 0.1)
+    const ranged = min !== undefined && max !== undefined && max - min <= 400
     return (
-      <span className="numfield">
-        {min !== undefined && max !== undefined && max - min <= 400 && (
+      <span className={ranged ? 'numfield range' : 'numfield'}>
+        {ranged && (
           <input type="range" min={min} max={max} step={step} value={Number(cur)} onChange={(e) => onChange(Number(e.target.value))} aria-label={`${d.title} (thanh trượt)`} />
         )}
         <Debounced type="number" value={String(cur ?? '')} min={min} max={max} step={step} aria-label={d.title}
@@ -78,12 +79,12 @@ export default function InputsForm({ defs, values, onChange, onReset }: Props) {
   if (defs.length === 0) return <p className="mute">Script này không có tham số.</p>
   return (
     <div className="inputsform">
-      {defs.length > 10 && <input className="isearch" type="search" placeholder={`Tìm trong ${defs.length} tham số...`} value={q} onChange={(e) => setQ(e.target.value)} aria-label="Tìm tham số" />}
+      {defs.length > 8 && <input className="isearch" type="search" placeholder={`Tìm trong ${defs.length} tham số...`} value={q} onChange={(e) => setQ(e.target.value)} aria-label="Tìm tham số" />}
       {changed > 0 && onReset && <button className="linkbtn" onClick={onReset}>Đặt lại {changed} tham số đã đổi</button>}
       {groups.length === 0 && <p className="mute">Không có tham số nào khớp.</p>}
       {groups.map(([g, items]) => (
         <details key={g} open={groups.length <= 2 || g === groups[0][0]}>
-          <summary>{g} <span className="mute">({items.length})</span></summary>
+          <summary><span className="chev" aria-hidden="true" />{g}<span className="count">{items.length}</span></summary>
           {items.map((d) => (
             <div className="irow" key={d.title} title={d.tooltip ?? undefined}>
               <label>

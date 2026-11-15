@@ -916,7 +916,7 @@ def make_input(kind: str):
         key = node.id
         src_name = None
         if kind == "source":
-            first = [e for nm, e in node.args if nm is None]
+            first = [e for nm, e in node.args if nm is None] or [e for nm, e in node.args if nm == "defval"]
             if first and isinstance(first[0], Name) and first[0].name in it.SERIES:
                 src_name = first[0].name            # nguồn mặc định là một chuỗi có sẵn: ghi tên để giao diện cho chọn
         if key not in it.input_defs:
@@ -942,6 +942,9 @@ def make_input(kind: str):
 def input_generic(it, node, args, kw):
     """`input(defval, ...)` kiểu cũ: suy ra kiểu từ giá trị mặc định (bool, số, màu, chuỗi)."""
     d = A(args, kw, 0, "defval", None)
+    first = [e for nm, e in node.args if nm is None] or [e for nm, e in node.args if nm == "defval"]
+    if first and isinstance(first[0], Name) and first[0].name in it.SERIES:
+        return make_input("source")(it, node, args, kw)       # input(defval=hlc3): nguồn giá, không phải số
     if isinstance(d, bool):
         kind = "bool"
     elif isinstance(d, str):

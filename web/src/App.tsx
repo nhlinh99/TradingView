@@ -270,7 +270,8 @@ export default function App() {
         {dockOpen && symbol && (
           <IndicatorDock symbol={symbol} tf={tf} list={ind.list} runs={ind.runs} library={ind.library}
             selected={selectedInd ?? ind.list[0]?.id ?? null} onSelect={setSelectedInd} onAdd={ind.add} onUpdate={ind.update}
-            onToggle={ind.toggle} onRemove={ind.remove} onSave={ind.saveToLibrary} onDeleteLib={ind.removeFromLibrary} />
+            onToggle={ind.toggle} onRemove={ind.remove} onSave={ind.saveToLibrary} onDeleteLib={ind.removeFromLibrary}
+            onClose={() => { setDockOpen(false); savePref('dockOpen', '0') }} />
         )}
       </section>
       {searchOpen && <SymbolSearch all={all} watch={watch} current={symbol} onPick={pickSymbol} onClose={() => setSearchOpen(false)} />}

@@ -23,6 +23,10 @@ Thanh trên cùng có một hàng: symbol và trạng thái trực tiếp, khung
 
 Phím tắt: `/` hoặc `Ctrl+K` tìm symbol, `[` và `]` đổi khung, `T` đổi sáng/tối, `I` mở bảng chỉ báo, `?` xem danh sách phím, `Ctrl+Enter` chạy Pine, `Esc` đóng bảng.
 
+### Bảng chỉ báo
+
+Bảng quản lý chỉ báo có ba cột: danh sách chỉ báo và thư viện (kèm nhãn chỉ báo hoặc chiến lược), trình soạn mã có số dòng, thanh trạng thái và dòng lỗi đánh dấu đỏ, và cột tham số (chiến lược có thêm tab Backtest và Kết quả). Kéo thanh trên cùng để đổi chiều cao, nhấp đúp hoặc bấm nút mở rộng để lên 80% màn hình. Trên điện thoại bảng thành tấm trượt từ dưới lên, có nút đóng. Mã dài cuộn trong khung soạn, không còn tràn sang cột tham số.
+
 ### Khung tuần và tháng
 
 `1w` bắt đầu thứ Hai 00:00 UTC, `1M` bắt đầu ngày 1 00:00 UTC, gộp từ nến 1 phút trong DuckDB. Ranh giới theo lịch, không chia đều từ epoch, vì chia đều thì tuần bắt đầu thứ Năm. Nến đang chạy cập nhật theo lệnh khớp với cùng ranh giới. Không hỗ trợ `2M`, `2w`, và footprint không có hai khung này. Ngày tính theo UTC nên tuần của cổ phiếu VN (phiên 02:00 đến 08:00 UTC) vẫn đúng.

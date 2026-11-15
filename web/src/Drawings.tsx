@@ -52,15 +52,19 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
   const pending = useRef<DrawPoint[]>([])
   const hover = useRef<DrawPoint | null>(null)
   const itemsRef = useRef<Drawing[]>([])
+  const [selected, setSelected] = useState<number | null>(null)
+  const selRef = useRef<number | null>(null)
   const toolRef = useRef<Tool>('cursor')
   const redraw = useRef<() => void>(() => {})
   itemsRef.current = items
+  selRef.current = selected
   toolRef.current = tool
   const step = tfMs(tf) / 1000
 
   useEffect(() => {
     let stop = false
     setItems([])
+    setSelected(null)
     pending.current = []
     fetchDrawings(symbol).then((d) => { if (!stop) setItems(d) }).catch((e: unknown) => setErr(String(e)))
     return () => { stop = true }
@@ -121,7 +125,7 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
       canvas.style.clipPath = `inset(0 0 ${Math.max(0, h - paneH)}px 0)`
       const r = g.c.timeScale().getVisibleLogicalRange()
       const hv = hover.current
-      const ns = `${r?.from}|${r?.to}|${g.s.priceToCoordinate(0)}|${g.s.priceToCoordinate(1000)}|${itemsRef.current.length}|${pending.current.length}|${hv?.time}|${hv?.price}|${dark}|${g.times.length}`
+      const ns = `${r?.from}|${r?.to}|${g.s.priceToCoordinate(0)}|${g.s.priceToCoordinate(1000)}|${itemsRef.current.length}|${pending.current.length}|${hv?.time}|${hv?.price}|${dark}|${g.times.length}|${selRef.current}`
       if (!force && ns === sig) return
       sig = ns
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -141,7 +145,9 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
         ctx.save()
         ctx.strokeStyle = col
         ctx.fillStyle = col
-        ctx.lineWidth = 1.5
+        const isSel = !preview && (d as Drawing).id === selRef.current
+        ctx.lineWidth = isSel ? 3 : 1.5
+        if (isSel) { ctx.shadowColor = col; ctx.shadowBlur = 8 }
         ctx.setLineDash(preview ? [5, 4] : [])
         if (d.kind === 'trend' && P.length === 2) {
           ctx.beginPath(); ctx.moveTo(P[0].x, P[0].y); ctx.lineTo(P[1].x, P[1].y); ctx.stroke()
@@ -172,6 +178,10 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
           ctx.font = '13px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
           ctx.fillText(d.payload.text ?? '', P[0].x, P[0].y)
         }
+        if (isSel) {
+          ctx.shadowBlur = 0; ctx.setLineDash([]); ctx.fillStyle = '#fff'; ctx.strokeStyle = col; ctx.lineWidth = 2
+          for (const q of P) { ctx.beginPath(); ctx.arc(q.x, q.y, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke() }
+        }
         ctx.restore()
       }
     }
@@ -190,12 +200,12 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
     return price === null ? null : { time: g.time(px), price }
   }
 
-  const hit = (e: React.PointerEvent): Drawing | null => {
+  const hitAt = (clientX: number, clientY: number): Drawing | null => {
     const g = geo()
     const rect = cv.current?.getBoundingClientRect()
     if (!g || !rect) return null
-    const px = e.clientX - rect.left
-    const py = e.clientY - rect.top
+    const px = clientX - rect.left
+    const py = clientY - rect.top
     let best: { d: Drawing; dist: number } | null = null
     for (const d of itemsRef.current) {
       const P = d.payload.points.map((p) => toScreen(g, p))
@@ -214,15 +224,46 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
     }
     return best?.d ?? null
   }
+  const hit = (e: React.PointerEvent) => hitAt(e.clientX, e.clientY)
+
+  const remove = async (id: number) => {
+    try { await deleteDrawing(id); setItems((l) => l.filter((x) => x.id !== id)); setSelected((c) => (c === id ? null : c)); setErr(null) } catch (x) { setErr(String(x)) }
+  }
+
+  // Chế độ Trỏ: bấm vào hình để chọn (kéo biểu đồ không tính là bấm). Delete hoặc Backspace xoá hình đã chọn, Esc bỏ chọn.
+  useEffect(() => {
+    const host = cv.current?.parentElement
+    if (!host) return
+    let down: { x: number; y: number } | null = null
+    const onDown = (e: PointerEvent) => { down = { x: e.clientX, y: e.clientY } }
+    const onUp = (e: PointerEvent) => {
+      if (!down || toolRef.current !== 'cursor') return
+      const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4
+      down = null
+      if (moved) return
+      const d = hitAt(e.clientX, e.clientY)
+      setSelected(d ? d.id : null)
+      redraw.current()
+    }
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
+      if (e.key === 'Escape') { setSelected(null); redraw.current() }
+      else if ((e.key === 'Delete' || e.key === 'Backspace') && selRef.current !== null) { e.preventDefault(); void remove(selRef.current) }
+    }
+    host.addEventListener('pointerdown', onDown)
+    host.addEventListener('pointerup', onUp)
+    window.addEventListener('keydown', onKey)
+    return () => { host.removeEventListener('pointerdown', onDown); host.removeEventListener('pointerup', onUp); window.removeEventListener('keydown', onKey) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geo])
 
   const onDown = async (e: React.PointerEvent) => {
     const t = toolRef.current
     if (t === 'cursor') return
     if (t === 'erase') {
       const d = hit(e)
-      if (d) {
-        try { await deleteDrawing(d.id); setItems((l) => l.filter((x) => x.id !== d.id)) } catch (x) { setErr(String(x)) }
-      }
+      if (d) await remove(d.id)
       return
     }
     const p = pointAt(e)
@@ -239,6 +280,7 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
       try {
         const d = await createDrawing(symbol, t, payload)
         setItems((l) => [...l, d])
+        setSelected(d.id)
         setErr(null)
       } catch (x) { setErr(String(x)) }
     }
@@ -247,7 +289,7 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
 
   const clearAll = async () => {
     if (items.length === 0 || !window.confirm(`Xoá ${items.length} hình của ${symbol}?`)) return
-    try { await clearDrawings(symbol); setItems([]) } catch (x) { setErr(String(x)) }
+    try { await clearDrawings(symbol); setItems([]); setSelected(null) } catch (x) { setErr(String(x)) }
   }
 
   return (
@@ -265,6 +307,7 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
           </button>
         ))}
         <span className="sep" aria-hidden="true" />
+        <button title="Xoá hình đang chọn (Delete)" aria-label="Xoá hình đang chọn" className="del" disabled={selected === null} onClick={() => { if (selected !== null) void remove(selected) }}><Icon id="erase" /></button>
         <button title="Xoá mọi hình của symbol này" aria-label="Xoá mọi hình" onClick={() => void clearAll()} disabled={items.length === 0}><Icon id="clear" /></button>
         {err && <span className="bad" role="alert">{err}</span>}
       </div>

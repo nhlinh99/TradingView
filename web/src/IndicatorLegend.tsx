@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import Icon from './Icons'
 import InputsForm from './InputsForm'
 import type { Indicator, RunState } from './indicators'
 
@@ -40,9 +41,9 @@ export default function IndicatorLegend({ list, runs, onToggle, onRemove, onInpu
     <div className="indlegend" ref={box}>
       <div className="indhead">
         <button className="linkbtn" onClick={() => setCollapsed((c) => !c)} aria-expanded={!collapsed}>
-          {collapsed ? '▸' : '▾'} {list.length} chỉ báo
+          <span className={collapsed ? 'chev' : 'chev open'} aria-hidden="true"><Icon name="chevron" size={11} /></span> {list.length} chỉ báo
         </button>
-        <button className="linkbtn" onClick={onAdd} title="Thêm chỉ báo (phím I)">+ Thêm</button>
+        <button className="linkbtn" onClick={onAdd} title="Thêm chỉ báo (phím I)"><Icon name="plus" size={11} /> Thêm</button>
       </div>
       {shown.map((ind) => {
         const st = runs[ind.id]
@@ -50,16 +51,16 @@ export default function IndicatorLegend({ list, runs, onToggle, onRemove, onInpu
           <div key={ind.id} className={`indrow ${ind.visible ? '' : 'off'}`}>
             <span className={`sdot ${dot(st)}`} title={st?.status === 'error' ? st.error?.message : st?.status === 'loading' ? 'Đang chạy...' : st?.status === 'ok' ? 'Đã chạy' : ''} />
             <span className="indname" title={ind.name}>{ind.name}</span>
-            <button aria-label={`${ind.visible ? 'Ẩn' : 'Hiện'} ${ind.name}`} title={ind.visible ? 'Ẩn' : 'Hiện'} onClick={() => onToggle(ind.id)}>{ind.visible ? '👁' : '⌀'}</button>
-            <button aria-label={`Cài đặt ${ind.name}`} title="Cài đặt" aria-expanded={open === ind.id} onClick={() => setOpen(open === ind.id ? null : ind.id)}>⚙</button>
-            <button aria-label={`Sửa mã ${ind.name}`} title="Sửa mã" onClick={() => onEdit(ind.id)}>{'</>'}</button>
-            <button aria-label={`Xoá ${ind.name}`} title="Xoá khỏi biểu đồ" onClick={() => onRemove(ind.id)}>×</button>
+            <button aria-label={`${ind.visible ? 'Ẩn' : 'Hiện'} ${ind.name}`} title={ind.visible ? 'Ẩn' : 'Hiện'} onClick={() => onToggle(ind.id)}><Icon name={ind.visible ? 'eye' : 'eyeoff'} size={14} /></button>
+            <button aria-label={`Cài đặt ${ind.name}`} title="Cài đặt" aria-expanded={open === ind.id} onClick={() => setOpen(open === ind.id ? null : ind.id)}><Icon name="gear" size={14} /></button>
+            <button aria-label={`Sửa mã ${ind.name}`} title="Sửa mã" onClick={() => onEdit(ind.id)}><Icon name="code" size={14} /></button>
+            <button aria-label={`Xoá ${ind.name}`} title="Xoá khỏi biểu đồ" onClick={() => onRemove(ind.id)}><Icon name="x" size={13} /></button>
           </div>
         )
       })}
       {cur && (
         <div className="indpop" role="dialog" aria-label={`Cài đặt ${cur.name}`}>
-          <header><b>{cur.name}</b><button className="linkbtn" onClick={() => setOpen(null)} aria-label="Đóng">×</button></header>
+          <header><b>{cur.name}</b><button className="linkbtn" onClick={() => setOpen(null)} aria-label="Đóng"><Icon name="x" size={13} /></button></header>
           {res?.status === 'error' && <p className="status bad" role="alert">{res.error?.line ? `Dòng ${res.error.line}: ` : ''}{res.error?.message}</p>}
           {res?.status === 'loading' && !res.result && <p className="mute">Đang chạy...</p>}
           <InputsForm defs={res?.result?.inputs ?? []} values={cur.inputs} onChange={(t, v) => onInput(cur.id, t, v)} onReset={() => onResetInputs(cur.id)} />

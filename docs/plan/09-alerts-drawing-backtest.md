@@ -27,6 +27,8 @@ Chưa kiểm bằng mắt: lệnh toast trả mã thành công nhưng chưa xác
 
 Đường xu hướng, đường ngang, hộp, Fibonacci, văn bản. Lưu trong SQLite theo symbol. Điểm neo là (thời gian, giá) nên đúng ở mọi khung. Bản vẽ dùng chung cho mọi ô của symbol đó, chưa có layout đặt tên. Chưa kéo sửa điểm neo.
 
+Xoá hình có bốn cách: (1) ở chế độ Trỏ, bấm vào hình để chọn (hình sáng lên, hiện điểm neo) rồi nhấn `Delete` hoặc `Backspace`, `Esc` để bỏ chọn; (2) nút "Xoá hình đang chọn" trên thanh vẽ; (3) công cụ Xoá, bấm vào hình; (4) nút xoá mọi hình của symbol. Hình vừa vẽ xong được chọn sẵn, nên xoá ngay được nếu vẽ nhầm.
+
 ## Bar replay
 
 Phát lại từng nến: tiến, lùi, phát, tạm dừng, 1 đến 30 nến mỗi giây, thanh trượt, trên 1000 nến đã tải. Không phát lại tick, và lệnh khớp trực tiếp bị bỏ qua khi đang phát lại. Thoát replay thì nạp lại nến mới nhất.
