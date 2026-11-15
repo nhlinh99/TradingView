@@ -6,12 +6,12 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import './styles.css';
-import { components, edges as edgeDefs, phases, layout, lanes, freeMatrix, storage, history, historyLimits } from './data.js';
+import { components, edges as edgeDefs, features, layout, lanes, freeMatrix, storage, history, historyLimits } from './data.js';
 
 const CLS = { free: ['Miễn phí', 'b-free'], maybe: ['Miễn phí, chưa chắc', 'b-unverified'], paid: ['Trả phí', 'b-paid'], none: ['Không có', 'b-none'] };
 
 const BADGES = { free: 'Miễn phí', paid: 'Trả phí', unverified: 'Chưa xác minh' };
-const COLORS = { request: '#1476ff', data: '#ff791f' };
+const COLORS = { request: '#1476ff', data: '#ff791f', logical: '#8a94a6' };
 
 function Card({ data }) {
   const c = data.c;
@@ -35,11 +35,11 @@ function Lane({ data }) {
 function FlowEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data }) {
   const [path, lx, ly] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: 14 });
   const color = COLORS[data.kind];
-  const animate = data.loop && !data.reduced && !data.dim;
+  const animate = data.loop && !data.reduced && !data.dim && data.kind !== 'logical';
   return (
     <>
       <BaseEdge id={id} path={path} markerEnd={`url(#arrow-${data.kind})`}
-        style={{ stroke: color, strokeWidth: 2, strokeDasharray: data.kind === 'data' ? '6 5' : undefined, opacity: data.dim ? 0.15 : 0.9 }} />
+        style={{ stroke: color, strokeWidth: 2, strokeDasharray: data.kind === 'data' ? '6 5' : data.kind === 'logical' ? '2 6' : undefined, opacity: data.dim ? 0.15 : 0.9 }} />
       {animate && [0, 1].map(p => (
         <path key={p} className="flow-pulse" d="M -5 -4 L 1 0 L -5 4" fill="none" stroke={color}
           strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
@@ -68,20 +68,16 @@ function useReducedMotion() {
 }
 
 function App() {
-  const [view, setView] = useState('all'); // 'all' hoặc id phase
+  const [view, setView] = useState('all'); // 'all' hoặc id tính năng
   const [selected, setSelected] = useState('collector');
   const [loop, setLoop] = useState(true);
   const reduced = useReducedMotion();
   const [pos, setPos] = useState(layout);
   const [rfNodes, setRfNodes] = useState([]);
 
-  const phaseIdx = view === 'all' ? phases.length - 1 : phases.findIndex(p => p.id === view);
-  const active = useMemo(() => {
-    const s = new Set();
-    phases.slice(0, phaseIdx + 1).forEach(p => p.add.forEach(i => s.add(i)));
-    return s;
-  }, [phaseIdx]);
-  const current = useMemo(() => new Set(view === 'all' ? [] : phases[phaseIdx].add), [view, phaseIdx]);
+  const feat = view === 'all' ? null : features.find(f => f.id === view);
+  const active = useMemo(() => new Set(feat ? feat.nodes : Object.keys(components)), [feat]);
+  const current = useMemo(() => new Set(feat ? feat.focus : []), [feat]);
 
   const built = useMemo(() => {
     const laneNodes = lanes.map(l => ({ id: l.id, type: 'lane', position: { x: l.x, y: l.y }, data: l,
@@ -106,20 +102,20 @@ function App() {
   }));
 
   const c = components[selected];
-  const ph = view === 'all' ? null : phases[phaseIdx];
+  const ph = feat;
 
   return (
     <div className="page">
       <header>
         <h1>Chart cá nhân kiểu TradingView</h1>
-        <p>Dữ liệu đi từ nguồn, qua collector, vào kho, qua server, rồi lên chart. Chọn một phase để xem thứ gì xuất hiện ở bước đó. Bấm vào một khối để đọc giải thích.</p>
+        <p>Dữ liệu đi từ nguồn, qua collector, vào kho, qua server, rồi lên chart. Chọn một tính năng để xem các khối liên quan, phần còn lại mờ đi. Nét đứt xám là phần chưa làm. Bấm vào một khối để đọc giải thích.</p>
       </header>
 
-      <div className="tabs" role="tablist" aria-label="Chọn phase">
+      <div className="tabs" role="tablist" aria-label="Chọn tính năng">
         <button role="tab" aria-selected={view === 'all'} className={view === 'all' ? 'on' : ''} onClick={() => setView('all')}>Tổng quan</button>
-        {phases.map(p => (
+        {features.map(p => (
           <button key={p.id} role="tab" aria-selected={view === p.id} className={view === p.id ? 'on' : ''}
-            onClick={() => { setView(p.id); setSelected(p.add[0]); }} title={p.title}>{p.tab}</button>
+            onClick={() => { setView(p.id); setSelected(p.focus[0]); }} title={p.status}>{p.tab}</button>
         ))}
       </div>
 
@@ -127,7 +123,8 @@ function App() {
         <div className="legend">
           <span><i className="sw req" /> Yêu cầu và phản hồi</span>
           <span><i className="sw dat" /> Dòng dữ liệu</span>
-          <span><i className="sw cur" /> Mới ở phase này</span>
+          <span><i className="sw log" /> Chưa làm hoặc chưa xác minh</span>
+          <span><i className="sw cur" /> Khối chính của tính năng</span>
         </div>
         <label className="toggle">
           <input type="checkbox" checked={loop && !reduced} disabled={reduced} onChange={e => setLoop(e.target.checked)} />
@@ -158,9 +155,11 @@ function App() {
       <section className={`detail ${ph ? '' : 'solo'}`}>
         {ph && (
           <div className="phase-box">
-            <h2>{ph.tab}: {ph.title}</h2>
+            <h2>{ph.tab}</h2>
+            <p className="status">{ph.phase}. {ph.status}</p>
             <p>{ph.sum}</p>
             <p><b>Nghiệm thu:</b> {ph.ok}</p>
+            <p><b>Tài liệu:</b> <code>docs/plan/{ph.doc}</code></p>
           </div>
         )}
         <div className="comp-box">

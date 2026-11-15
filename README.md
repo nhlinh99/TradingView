@@ -9,7 +9,7 @@ Dự án không liên kết với TradingView. Không dùng tên, logo hay giao 
 | Phase | Nội dung | Trạng thái |
 |---|---|---|
 | 0 | Khung dự án, kho Parquet, server, trang web | Xong |
-| 1 | Collector BTC và vàng (Binance Futures): nến, backfill, tick trực tiếp, sổ lệnh, gom nén | Xong. Đã đo sổ lệnh 1 giờ (xem `NOTES.md`) |
+| 1 | Collector BTC và vàng (Binance Futures): nến, backfill, tick trực tiếp, sổ lệnh, gom nén | Xong. Đã đo sổ lệnh 1 giờ (xem `docs/plan/engineering-notes.md`) |
 | 2 | Chart: nến, volume, danh sách theo dõi (kéo thả), trực tiếp, múi giờ, giao diện sáng/tối, khung `1s` đến `1M` | Xong |
 | 3 | Orderflow: footprint (4 kiểu, imbalance, POC, stacked imbalance), delta, CVD, VPVR | Xong, trừ volume profile theo phiên |
 | 4 | Heatmap thanh khoản kiểu DeepCharts và Bookmap, chấm lệnh lớn, iceberg ước lượng | Xong, chưa đo thời gian vẽ (đích 100 ms) |
@@ -17,14 +17,14 @@ Dự án không liên kết với TradingView. Không dùng tên, logo hay giao 
 | 6 | Vàng (XAUUSDT; GC1! tuỳ chọn, trả phí) | 6A xong. 6B và 6C chưa làm (tuỳ chọn) |
 | 7 | Cổ phiếu VN100 (SSI iBoard và VNDirect, không cần khoá) | Danh sách, nến 1 phút (khoảng 270 ngày) và bộ ghi sổ lệnh 3 mức xong. **Chưa đo phiên giao dịch thật** (Thứ Hai 16/11) |
 | 8 | Engine Pine: parser, thông dịch, `ta.*`, `request.security` và `security_lower_tf`, `type`, `import` (shim thư viện), mảng, line/label/box/table/polyline | Xong. Chạy được 6 script thật, 4 có đối chiếu tham chiếu độc lập |
-| 9 | Công cụ vẽ, layout 1/2/4 ô, cảnh báo nền (desktop, Telegram), phát lại, backtest | Xong (xem giới hạn trong `NOTES.md`) |
+| 9 | Công cụ vẽ, layout 1/2/4 ô, cảnh báo nền (desktop, Telegram), phát lại, backtest | Xong (xem giới hạn trong `docs/plan/engineering-notes.md`) |
 | UX | Chỉ báo Pine nhiều cái cùng lúc, bảng Orderflow, tìm symbol, phím tắt, giao diện điện thoại | Xong |
 
-Kế hoạch chi tiết, điều kiện nghiệm thu từng phase và các việc chưa xác minh nằm trong [`PLAN-CLAUDE-CODE.md`](PLAN-CLAUDE-CODE.md). Bản nghiên cứu đầu tiên là [`PLAN.md`](PLAN.md). Một số nhận định trong đó đã được sửa, xem ghi chú đầu file.
+Kế hoạch, điều kiện nghiệm thu, số đo và việc còn mở của từng tính năng nằm trong [`docs/plan/`](docs/plan/README.md), mỗi tính năng một file. Đặc tả gốc và bản nghiên cứu đầu tiên nằm trong `docs/plan/archive/`.
 
-Sơ đồ tương tác của kế hoạch: mở `plan-viewer/dist/plan.html` bằng trình duyệt. Trang chạy offline. Dựng lại bằng `cd plan-viewer && npm install && node build.mjs`.
+Sơ đồ tương tác của kế hoạch: mở `docs/plan/plan.html` bằng trình duyệt. Trang chạy offline. Dựng lại bằng `cd plan-viewer && npm install && node build.mjs`.
 
-Việc còn mở và thứ tự ưu tiên: xem [`TODO.md`](TODO.md). Lịch sử thay đổi: [`CHANGELOG.md`](CHANGELOG.md).
+Việc còn mở và thứ tự ưu tiên: xem [`docs/plan/README.md`](docs/plan/README.md), mục "Thứ tự nên làm". Lịch sử thay đổi: [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Giao diện
 
@@ -178,7 +178,7 @@ schtasks /Create /TN tv-daily /SC DAILY /ST 03:00 /TR "cmd /c cd /d $root && C:\
 
 Gom nén chỉ đụng các ngày đã qua. Tick quá 30 ngày được gom thành footprint 1 phút (chỉ bằng khoảng 6% dung lượng) sau khi kiểm tra tổng mua và bán từng phút. Chính sách nằm trong `config/retention.toml`.
 
-Ghi chú kỹ thuật, số đo và các quyết định đã đổi so với kế hoạch: [`NOTES.md`](NOTES.md).
+Ghi chú kỹ thuật, số đo và các quyết định đã đổi so với kế hoạch: [`docs/plan/engineering-notes.md`](docs/plan/engineering-notes.md).
 
 ## Cấu trúc
 
@@ -192,7 +192,7 @@ pine/        engine Pine: lexer, parser, interp, ta, objects (mảng, chuỗi, l
 web/         Vite + React + TypeScript + Lightweight Charts
 config/      symbols.toml (tick size), vn100.json (danh sách VN100 kèm ngày lấy), retention.toml (chính sách giữ dữ liệu)
 tests/       pytest (có đối chiếu độc lập cho chỉ báo, backtest, footprint, profile, GEX)
-docs/        ảnh chụp giao diện dùng trong README
+docs/        plan/ (kế hoạch theo từng tính năng, sơ đồ tương tác), screenshots/ (ảnh dùng trong README)
 scripts/     web-deps.ps1, run-collectors.ps1, ...
 plan-viewer/ sơ đồ tương tác của kế hoạch
 ```
@@ -204,5 +204,5 @@ Dữ liệu nằm ngoài repo, trong `DATA_DIR`, dạng Parquet nén zstd theo `
 - File `.ps1` phải giữ ASCII thuần. Windows PowerShell 5.1 đọc UTF-8 không BOM theo bảng mã ANSI và làm hỏng chuỗi tiếng Việt.
 - Lightweight Charts theo giấy phép Apache-2.0 và yêu cầu ghi attribution.
 - Mỗi nguồn dữ liệu có điều khoản riêng. Dùng cá nhân. Đọc điều khoản trước khi chia sẻ dữ liệu hoặc công bố kết quả.
-- Engine Pine là một tập con tự viết, chưa đối chiếu với TradingView; script chạy được chưa có nghĩa là kết quả giống TradingView. Giới hạn nằm trong `NOTES.md`.
+- Engine Pine là một tập con tự viết, chưa đối chiếu với TradingView; script chạy được chưa có nghĩa là kết quả giống TradingView. Giới hạn nằm trong `docs/plan/08-pine-engine.md`.
 - Đây không phải lời khuyên đầu tư. Orderflow, heatmap và GEX là mô hình ước tính với giả định riêng. Xem giới hạn trong kế hoạch.

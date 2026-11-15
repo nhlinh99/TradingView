@@ -1,5 +1,7 @@
 # Ghi chú kỹ thuật
 
+Nhật ký theo thời gian: số đo gốc, lỗi đã sửa, quyết định đã đổi. Trạng thái và việc còn mở của từng tính năng nằm trong `01-*.md` đến `09-*.md` cùng thư mục.
+
 Quyết định đã đổi so với kế hoạch, số đo thật, và việc còn mở. Ngày đo: 14/11/2026.
 
 ## Quyết định đã đổi
@@ -61,7 +63,7 @@ Thấp hơn ước tính 15-25 MB trong kế hoạch, nhưng mẫu chỉ 14 phú
 - Khoảng hở lớn khi collector khởi động lâu sau lần ghi cuối: được lấp bằng REST ở luồng riêng (giãn 0,6 giây mỗi trang, khoảng 1,5 phút cho mỗi 100 nghìn dòng, tức khoảng 15 phút cho 900 nghìn id). Khoảng hở trên `max_gap` (5 triệu id) bị bỏ qua và ghi `skipped`, phải dùng `collector.backfill`.
 - Lỗi thật đã sửa khi chạy nhiều giờ: luồng lấp khoảng hở chết vì `PermissionError` khi đọc `config/symbols.toml` (file nằm trong OneDrive, bị khoá tạm thời) và không tự thử lại. Nguyên nhân gốc là `to_int_price` đọc lại file TOML cho từng tick. Đã thêm nhớ đệm theo mtime, tiến độ có thể tiếp tục và tự thử lại. Bài học: mọi thứ nằm trong OneDrive đều có thể bị khoá bất ngờ, nên không đọc cấu hình trong vòng lặp nóng.
 - Compaction chưa được cài lịch chạy. Xem README.
-- Giá Databento, phí SSI, điều khoản options GLD, gói Coinglass: chưa xác minh (xem `PLAN-CLAUDE-CODE.md`).
+- Giá Databento, phí SSI, điều khoản options GLD, gói Coinglass: chưa xác minh (xem `archive/spec-original.md`).
 - Đơn vị khối lượng của XAUUSDT: chưa xác minh (kho ghi `quantity` dạng số thập phân, tick 0,01, bước 0,001).
 
 ### Đo lại dung lượng sổ lệnh (1 giờ, 19:00-20:01 giờ máy)

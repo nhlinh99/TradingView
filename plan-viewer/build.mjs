@@ -13,6 +13,6 @@ const html = `<!doctype html><html lang="vi"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Kế hoạch chart cá nhân</title><style>${css}</style></head>
 <body><div id="root"></div><script>${js}</script></body></html>`;
-mkdirSync('dist', { recursive: true });
-writeFileSync('dist/plan.html', html);
-console.log('dist/plan.html', (html.length / 1024).toFixed(0) + ' KB');
+mkdirSync('../docs/plan', { recursive: true });
+writeFileSync('../docs/plan/plan.html', html);
+console.log('docs/plan/plan.html', (html.length / 1024).toFixed(0) + ' KB');

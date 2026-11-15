@@ -3,7 +3,7 @@
   - Danh sách VN100 và bảng giá 3 mức: SSI iBoard (`iboard-query.ssi.com.vn/stock/group/VN100`).
   - Nến lịch sử (1 phút trở lên, khoảng 1 năm): VNDirect dchart (`dchart-api.vndirect.com.vn/dchart/history`).
 Cả hai là endpoint không có tài liệu chính thức, phục vụ web của nhà cung cấp. Có thể đổi hoặc chặn bất cứ lúc nào;
-chỉ dùng cho mục đích cá nhân, gọi thưa (xem NOTES.md). Giá nến là nghìn đồng, đã điều chỉnh theo sự kiện doanh nghiệp.
+chỉ dùng cho mục đích cá nhân, gọi thưa (xem docs/plan/07-vn100.md). Giá nến là nghìn đồng, đã điều chỉnh theo sự kiện doanh nghiệp.
 
 Lệnh:
   python -m collector.vn refresh-vn100              # ghi config/vn100.json từ SSI

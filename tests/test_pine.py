@@ -1,4 +1,4 @@
-"""Test engine Pine: tính đúng so với công thức độc lập, và chạy được 5 script mẫu trong PLAN.md mục 4.
+"""Test engine Pine: tính đúng so với công thức độc lập, và chạy được 5 script mẫu trong docs/plan/archive/research-initial.md mục 4.
 
 Không dùng pandas (bị chính sách Application Control của Windows chặn trên máy này). SMA, độ lệch chuẩn,
 cực trị đối chiếu với hàm cửa sổ của DuckDB; EMA, RMA, RSI, ATR đối chiếu với bản cài đặt thuần Python viết riêng
@@ -306,7 +306,7 @@ plot(flip, "flip")
     assert set(plot(res, "flip")) == {70000.0}
 
 
-# ---------- 5 script mẫu trong PLAN.md mục 4 (file trong pine/examples) ----------
+# ---------- 5 script mẫu trong docs/plan/archive/research-initial.md mục 4 (file trong pine/examples) ----------
 
 from pathlib import Path
 

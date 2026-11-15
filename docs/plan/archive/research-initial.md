@@ -3,8 +3,8 @@
 > - XAUUSDT perpetual của Binance cho orderflow và heatmap vàng miễn phí, từ 11/12/2025.
 > - Open interest Deribit trễ 8 giờ (Deribit xác nhận).
 > - Cổ phiếu Việt Nam chỉ làm rổ VN100.
-> - Giá, dung lượng, backtest: xem `PLAN-CLAUDE-CODE.md` và `plan-viewer/dist/plan.html`.
-> Khi mâu thuẫn, hai file đó là bản đúng.
+> - Giá, dung lượng, backtest: xem `docs/plan/archive/spec-original.md` và `docs/plan/plan.html`.
+> Khi mâu thuẫn, các file `docs/plan/01-*.md` đến `09-*.md` là bản đúng. File này đã bị thay thế và chỉ giữ để tra cứu.
 
 # Phương án clone TradingView (đầy đủ tính năng Premium)
 

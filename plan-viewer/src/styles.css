@@ -111,3 +111,7 @@ dd { margin:0; }
 }
 
 .matrix h3.sub { font-size:16px; margin:20px 0 8px; }
+
+.sw.log { border-color:#8a94a6; border-top-style:dotted; }
+.phase-box .status { color:var(--mute); font-size:14px; }
+.phase-box code { font-size:13px; background:#eef2f6; padding:1px 6px; border-radius:4px; word-break:break-all; }

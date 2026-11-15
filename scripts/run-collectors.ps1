@@ -26,6 +26,12 @@ $jobs = [ordered]@{
 }
 $procs = @{}
 
+# One-shot catch-up of 1-minute candles (klines) for the time the collectors were not running.
+# Without it the chart has no candles for the gap until collector.daily runs (03:00).
+foreach ($sym in ($Symbols -split ',')) {
+  try { & $py -m collector.klines --symbol $sym --days 3 } catch { Write-Warning "klines catch-up failed for ${sym}: $_" }
+}
+
 try {
   while ($true) {
     foreach ($name in @($jobs.Keys)) {

@@ -1,5 +1,7 @@
 # Plan cho Claude Code: Chart cá nhân kiểu TradingView
 
+> Đặc tả gốc từng phase, giữ để tra cứu. Trạng thái hiện tại, số đo và việc còn mở nằm trong các file `docs/plan/01-*.md` đến `09-*.md`. Chỗ nào mâu thuẫn thì các file đó là bản đúng.
+
 Đối tượng đọc: Claude Code. Làm theo thứ tự. Mỗi phase có điều kiện nghiệm thu. Không sang phase sau khi phase trước chưa qua.
 
 ## Ràng buộc chung

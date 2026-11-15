@@ -1,0 +1,139 @@
+# Thu thập và lưu trữ dữ liệu
+
+Phase 0 và 1. Trạng thái: xong. Phần vận hành còn việc mở.
+
+Collector nhận dữ liệu từ Binance, Deribit và hai endpoint của VN100, rồi ghi xuống đĩa. Server và giao diện chỉ đọc từ đĩa. Nhờ vậy dữ liệu vẫn tích luỹ khi trình duyệt đóng.
+
+## Sơ đồ
+
+```mermaid
+flowchart LR
+  B[Binance Futures<br/>aggTrade, depth, klines] --> T[live_trades]
+  B --> K[live_book]
+  D[Deribit options] --> DR[deribit]
+  V[SSI iBoard, VNDirect] --> VB[vn_book, vn bars]
+  T --> P[(Parquet<br/>ticks, book, options, vn_book)]
+  K --> P
+  DR --> P
+  VB --> P
+  P --> H[hotmerge<br/>mỗi 30 phút]
+  H --> P
+  DY[daily<br/>03:00 mỗi ngày] --> BF[backfill từ data.binance.vision]
+  BF --> P
+  DY --> CP[compact<br/>gom nén theo retention]
+  CP --> P
+```
+
+Sơ đồ tương tác của toàn hệ thống: [`plan.html`](plan.html), tab "Thu thập và lưu trữ".
+
+## Quyết định
+
+| Điều | Kế hoạch ghi | Thực tế | Lý do |
+|---|---|---|---|
+| Định dạng cấu hình | YAML | TOML (`tomllib`) | PyYAML chưa có bản dựng sẵn cho Python 3.15 |
+| `uvicorn[standard]` | có | `uvicorn` thường | `[standard]` kéo theo PyYAML, mất tự reload |
+| Schema `ticks` | `ts, p, q, m` | thêm `id` (aggregate trade id) | Cần khoá để loại trùng giữa backfill và collector, và để phát hiện khoảng hở |
+| WebSocket aggTrade | `wss://fstream.binance.com/ws/...` | `/market/ws/<symbol>@aggTrade` | Binance chia đường dẫn và gỡ URL cũ ngày 2026-04-23. URL cũ im lặng với aggTrade |
+| WebSocket depth | như trên | `/public/ws/<symbol>@depth@100ms` | Như trên |
+| Cửa sổ sổ lệnh | ±1%, bucket 5 USD | ±0,15% (BTC), ±0,30% (vàng), bucket 1 USD hoặc 0,1 | Snapshot REST chỉ phủ khoảng ±0,2% |
+| `node_modules` của web | junction trực tiếp | cài ở `C:\tv-data\web-deps`, nối junction sau | `npm install` trong `web\` xoá junction và cài vào OneDrive. Luôn dùng `scripts\web-deps.ps1` |
+| File `.ps1` | có tiếng Việt | ASCII thuần | Windows PowerShell 5.1 đọc UTF-8 không BOM theo ANSI |
+
+Dữ liệu nằm ngoài OneDrive, trong `DATA_DIR` (ví dụ `C:\tv-data`). Code từ chối đường dẫn trong OneDrive, vì OneDrive đồng bộ hàng nghìn file và khoá file khi collector ghi. Một bài học liên quan: file cấu hình trong OneDrive cũng có thể bị khoá tạm thời. Luồng lấp khoảng hở từng chết vì `PermissionError` khi đọc `config/symbols.toml` trong vòng lặp nóng. Nay `to_int_price` nhớ đệm theo mtime.
+
+## Lưu trữ
+
+Parquet zstd mức 9, đặt tên `kind/symbol/date=YYYY-MM-DD.parquet`, đọc bằng DuckDB. Schema gọn: `ts` int64 mili giây, `p` int32 theo tick size, `q` float32, `m` bool. SQLite (`app.sqlite`) giữ watchlist, hình vẽ và cảnh báo.
+
+Dung lượng đo từ một ngày dữ liệu Binance (10/11/2026). Ngày biến động mạnh có thể gấp 2 đến 3 lần.
+
+| Một ngày | BTCUSDT | XAUUSDT |
+|---|---|---|
+| Số lệnh khớp (aggTrades) | 1.521.662 | 602.627 |
+| CSV gốc | 101,1 MB | 38,1 MB |
+| Parquet zstd, đủ cột | 6,65 MB | 2,85 MB |
+| Footprint gom 1 phút | 0,34 MB | 0,90 MB |
+| Sổ lệnh tự ghi, ngoại suy từ 1 giờ yên tĩnh | khoảng 13 MB | khoảng 7 MB, chưa gộp |
+
+| Cách lưu (BTC và XAUUSDT) | 1 năm | 5 năm |
+|---|---|---|
+| Giữ CSV gốc | khoảng 51 GB | khoảng 254 GB |
+| Parquet đủ cột, mọi tick | khoảng 3,5 GB | khoảng 17 GB |
+| Parquet, tick 30 ngày, sau đó footprint 1 phút | khoảng 0,7 GB | khoảng 2,5 GB |
+
+### Chính sách giữ dữ liệu
+
+File `config/retention.toml`. Tick 30 ngày, sau đó gom thành footprint 1 phút và xoá tick. Footprint 1 phút và nến 1 phút giữ mãi. Sổ lệnh tự ghi giữ 7 ngày ở mức 5 giây, sau đó gom thành 1 phút (giá trị lớn nhất mỗi bucket), giữ 180 ngày. Snapshot options giữ mỗi giờ trong 30 ngày, sau đó mỗi ngày một snapshot. Trần `MAX_DATA_GB` mặc định 20: vượt trần thì xoá tầng cũ nhất theo thứ tự sổ lệnh 1 phút, snapshot options, tick.
+
+Gom nén chỉ đụng các ngày đã qua và kiểm tra tổng mua, bán từng phút trước khi xoá bản gốc. Trên dữ liệu thật 3 ngày, footprint chiếm 5,8% (BTC) và 6,2% (XAU) dung lượng tick. Đích là dưới 10%. Sau khi gom, footprint dưới 1 phút chỉ dựng lại được bằng cách tải lại file ngày từ Binance.
+
+### Gộp nóng trong ngày
+
+Mỗi collector ghi một file con mỗi 60 giây, nên cuối ngày mỗi symbol có hàng trăm file. Một lần tải biểu đồ từng mất khoảng 15 giây với hơn 1000 file con. `collector.hotmerge` gộp file con của ngày hôm nay mỗi 30 phút khi có từ 40 file. Việc gộp chỉ đụng các file có mặt lúc bắt đầu, nên an toàn khi collector đang chạy. Thử trên dữ liệu thật: 1072 file còn 31.
+
+## Số đo
+
+Nến dựng từ tick so với kline (3 ngày, 4320 nến 1 phút mỗi symbol):
+
+| | BTCUSDT | XAUUSDT |
+|---|---|---|
+| Sai lệch tổng volume | 9,5e-9 | 1,2e-9 |
+| Sai lệch tổng mua chủ động | 1,8e-10 | 7,8e-11 |
+| Lệch lớn nhất một nến 1 phút | 27% | 350% (nến gần như không có volume) |
+| Lệch lớn nhất một giờ | 0,67% | 1,3e-8 |
+
+Tổng khớp gần tuyệt đối. Lệch từng nến đến theo cặp bù trừ: Binance gộp lệnh cùng giá trong 100 ms thành một aggTrade với thời điểm của lệnh đầu, còn kline xếp từng lệnh theo thời điểm riêng. Vì vậy nến 1 phút chuẩn lấy từ kline (kho `bars`), còn nến dựng từ tick dùng cho các khung khác. Tín hiệu dựa vào giá mở hoặc đóng của nến sát ranh giới có thể lệch nhẹ so với TradingView.
+
+Snapshot REST 1000 mức phủ -0,207% đến +0,199% (BTC) và -0,364% đến +0,352% (vàng). Collector lấy snapshot mới mỗi 60 giây và đổi sang sổ mới khi đồng bộ xong. Mép ngoài vẫn có thể thiếu nếu giá đi hơn khoảng 0,05% trong 60 giây. Chưa có dấu "không đầy đủ" cho các dòng này.
+
+## Nghiệm thu
+
+- Sau 10 phút chạy, số dòng bảng tick tăng đều. Đã qua.
+- Tổng `buy_vol + sell_vol` của nến 1 phút khớp kline, sai lệch dưới 0,1%. Đã qua (số trên).
+- Chạy lại `backfill` không tải lại ngày đã có, kiểm checksum. Đã qua.
+- `scripts/run-collectors.ps1` dựng lại tiến trình khi nó thoát. `collector.daily` chạy 9 bước trong 3 giây và thoát mã 0 trong lúc collector vẫn chạy. Đã qua ngày 2026-11-14.
+
+## Giới hạn
+
+Backfill hàng tháng (`monthly/`) của kho Binance chưa làm. `collector.backfill` từ chối hơn 366 ngày nếu thiếu `--yes`. Khoảng hở lớn khi collector khởi động lâu sau lần ghi cuối được lấp bằng REST ở luồng riêng, khoảng 15 phút cho 900 nghìn id. Khoảng hở trên 5 triệu id bị bỏ qua, ghi `skipped`, và phải dùng `collector.backfill`.
+
+### Khoảng trống khi máy hoặc collector dừng
+
+Ngày 2026-11-15 biểu đồ BTCUSDT thiếu khoảng 8 giờ (00:00 đến 08:00 giờ VN). Collector chạy trong phiên làm việc nên dừng cùng phiên. Có hai loại dữ liệu bị ảnh hưởng, và chúng lành khác nhau:
+
+| Dữ liệu | Khi collector dừng | Cách lấp |
+|---|---|---|
+| Nến 1 phút (`bars`) | Không có nến mới. Chỉ `collector.klines` hoặc `collector.daily` ghi nến | `run-collectors.ps1` nay chạy `collector.klines --days 3` một lần khi khởi động |
+| Tick (`ticks`) | Mất tick cho đến lần chạy kế | Khi khởi động, `live_trades` tự lấp khoảng hở bằng REST, khoảng 40 nghìn id mỗi phút (1,67 triệu id mất khoảng 40 phút) |
+| Sổ lệnh (`book`) | Mất vĩnh viễn, không có nguồn miễn phí để lấy lại | Không lấp được. Heatmap trống trong khoảng đó |
+
+Biểu đồ ghép nến đã lưu với phần đuôi dựng từ tick, nên khoảng hở tick cũng làm thủng nến cho tới khi lấp xong. Cách giữ dữ liệu đủ trong ngày: chạy `run-collectors.ps1` bằng Task Scheduler để nó khởi động cùng Windows và không phụ thuộc phiên làm việc (xem việc còn mở bên dưới), và để `collector.daily` chạy lúc 03:00 để sửa các khoảng hở còn sót.
+
+Mỗi collector hiện hai PID trong danh sách tiến trình vì venv Python 3.15 có một bộ khởi chạy và một tiến trình con. Đó là bình thường.
+
+## Việc còn mở
+
+- [ ] Chạy collector bằng Task Scheduler thay vì phiên làm việc: `scripts/run-collectors.ps1` và `python -m collector.daily --vn`. Mỗi ngày bỏ lỡ là mất tick, sổ lệnh và snapshot options vĩnh viễn. Lệnh `schtasks` có trong README gốc, mục Thu thập dữ liệu.
+- [ ] Cảnh báo khi collector im lặng hơn 5 phút. Đọc mốc ghi cuối của `ticks` và `book`, gửi qua cùng kênh với cảnh báo giá. Xem [09-alerts-drawing-backtest.md](09-alerts-drawing-backtest.md).
+- [ ] Sao lưu `C:\tv-data` (ngoài OneDrive nên chưa có bản sao): `robocopy` hằng tuần sang ổ khác, loại `logs` và file `.tmp`.
+- [ ] Bạn tự xoá thư mục thừa `C:\tv-data-bench`.
+- [ ] Đo lại dung lượng sổ lệnh lúc biến động mạnh. Mới đo một giờ yên tĩnh.
+- [ ] Phát hiện khi endpoint không chính thức đổi định dạng (SSI, VNDirect, Binance WS) và thông báo thay vì im lặng.
+- [ ] Theo dõi cập nhật Binance. URL WS cũ đã bị khai tử 2026-04-23.
+- [ ] Backfill hàng tháng cho lịch sử nhiều năm.
+
+## Nguồn dữ liệu và chi phí
+
+| Dữ liệu | Nguồn | Chi phí |
+|---|---|---|
+| BTC: nến, lệnh khớp, sổ lệnh | Binance Futures, API công khai | Miễn phí |
+| BTC: GEX | Deribit, open interest trễ 8 giờ | Miễn phí |
+| Vàng: orderflow, heatmap | Binance XAUUSDT, từ 11/12/2025 | Miễn phí |
+| Vàng: volume COMEX, options | Databento (GC1!) | Trả phí, chưa làm |
+| VN100: danh sách, bảng giá 3 mức | SSI iBoard, endpoint không chính thức | Miễn phí |
+| VN100: nến 1 phút, khoảng 270 ngày | VNDirect dchart, endpoint không chính thức | Miễn phí |
+| Sổ lệnh từng mức giá trước ngày bắt đầu ghi | Tardis.dev | Trả phí, khoảng $700/tháng, chưa xác nhận gói |
+| Lịch sử options Deribit | Không có | Chỉ từ lúc collector ghi |
+| XAUUSD spot có volume | Không tồn tại | Spot là thị trường OTC |
+
+Mỗi nguồn có điều khoản riêng. Dùng cá nhân. Đọc điều khoản trước khi chia sẻ dữ liệu.

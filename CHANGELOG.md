@@ -4,7 +4,14 @@ Theo dạng [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/). Dự án c
 
 ## [Chưa phát hành]
 
-Xem `TODO.md` cho việc còn mở. Việc quan trọng nhất: chạy collector bằng Task Scheduler, đo phiên giao dịch VN100 thật (Thứ Hai 16/11), đối chiếu engine Pine với TradingView.
+Xem `docs/plan/README.md` cho thứ tự ưu tiên và các file tính năng cho việc còn mở. Việc quan trọng nhất: chạy collector bằng Task Scheduler, đo phiên giao dịch VN100 thật (Thứ Hai 16/11), đối chiếu engine Pine với TradingView.
+
+## 2026-11-15 (tài liệu)
+
+### Thay đổi
+- Tài liệu kế hoạch gom vào `docs/plan/`, mỗi tính năng một file (có sơ đồ). `PLAN.md`, `PLAN-CLAUDE-CODE.md` chuyển vào `docs/plan/archive/`, `NOTES.md` thành `docs/plan/engineering-notes.md`, `TODO.md` chia vào từng file tính năng.
+- Sơ đồ tương tác `docs/plan/plan.html` có tab theo tính năng và nét đứt cho phần chưa làm.
+- `scripts/run-collectors.ps1` chạy `collector.klines --days 3` một lần khi khởi động để lấp nến 1 phút khi collector đã dừng.
 
 ## 2026-11-15
 
@@ -12,7 +19,7 @@ Xem `TODO.md` cho việc còn mở. Việc quan trọng nhất: chạy collector
 - Engine Pine chạy thêm 4 script thật: `ichimoku_future` (Pine v4), `cvd_range`, `volume_profile_total`, `instituitional_level_indicator` (SMC, 936 dòng). Bổ sung: `type` do người dùng định nghĩa, đọc và gán trường, gọi như phương thức, `import` với shim thư viện (`PineCoders/lower_tf`, `Time`, `VisibleChart`, `TradingView/ta`), `request.security_lower_tf`, `array<T>`, `for [i, x] in`, `if` làm biểu thức, `plotcandle`/`plotchar`/`plotarrow`, `chart.point`, `polyline`, `plot(offset=)`, `fill()`, `ta.supertrend`, `ta.sar`, `ta.highestbars`, hàm kiểu v4. (`09edd3b`)
 - 13 test đối chiếu độc lập cho 4 script trên (Ichimoku, CVD, volume profile; SMC chỉ kiểm bất biến). (`09edd3b`)
 - Web vẽ `fill` giữa hai plot, `polyline`, nến `plotcandle`, và tự chừa lề phải cho đối tượng nằm sau nến cuối. (`09edd3b`)
-- `TODO.md`. (`4d4aa4e`)
+- `TODO.md` (nay đã chia vào `docs/plan/`). (`4d4aa4e`)
 - `CHANGELOG.md`.
 
 ### Sửa
@@ -63,7 +70,7 @@ Xem `TODO.md` cho việc còn mở. Việc quan trọng nhất: chạy collector
 
 ### Thêm
 - **Phase 0 và 1**: khung dự án, kho Parquet (tick có `id`, tên file con không va chạm, loại trùng, gộp ngày), SQLite, client REST Binance và đồng bộ nến 1 phút, backfill từ `data.binance.vision` có kiểm checksum, nến dựng từ tick đối chiếu kline, collector tick trực tiếp, collector sổ lệnh (diff depth và snapshot REST), gom nén theo `retention.toml`, việc hằng đêm `collector.daily`, script `run-collectors.ps1`. (`b087a91` đến `d734885`)
-- Kế hoạch nghiên cứu (`PLAN.md`, `PLAN-CLAUDE-CODE.md`), trang kế hoạch tương tác, README, `NOTES.md`. (`ffa30b7`, `036e770`, `7130b55`)
+- Kế hoạch nghiên cứu (`PLAN.md`, `PLAN-CLAUDE-CODE.md`), trang kế hoạch tương tác, README, `NOTES.md` (nay ở `docs/plan/`). (`ffa30b7`, `036e770`, `7130b55`)
 
 ### Ghi nhận
-- Nhiều quyết định trong kế hoạch ban đầu đã được sửa sau khi kiểm chứng; xem `NOTES.md` mục "Quyết định đã đổi so với kế hoạch" và ghi chú đầu `PLAN.md`.
+- Nhiều quyết định trong kế hoạch ban đầu đã được sửa sau khi kiểm chứng; xem `docs/plan/engineering-notes.md` mục "Quyết định đã đổi so với kế hoạch" và ghi chú đầu `docs/plan/archive/research-initial.md`.
