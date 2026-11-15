@@ -24,7 +24,7 @@ Kế hoạch, điều kiện nghiệm thu, số đo và việc còn mở của t
 
 Sơ đồ tương tác của kế hoạch: mở `docs/plan/plan.html` bằng trình duyệt. Trang chạy offline. Dựng lại bằng `cd plan-viewer && npm install && node build.mjs`.
 
-Việc còn mở và thứ tự ưu tiên: xem [`docs/plan/README.md`](docs/plan/README.md), mục "Thứ tự nên làm". Lịch sử thay đổi: [`CHANGELOG.md`](CHANGELOG.md).
+Việc còn mở và thứ tự ưu tiên: xem [`TODO.md`](TODO.md). Kế hoạch từng tính năng: [`docs/plan/README.md`](docs/plan/README.md). Lịch sử thay đổi: [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Giao diện
 

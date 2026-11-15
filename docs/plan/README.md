@@ -1,6 +1,6 @@
 # Kế hoạch dự án
 
-Cập nhật 2026-11-15. Mỗi tính năng chính có một file. Mỗi file ghi mục tiêu, sơ đồ, quyết định, số đo, nghiệm thu và việc còn mở. Việc còn mở chỉ nằm trong file của tính năng đó, không có bản thứ hai ở nơi khác.
+Cập nhật 2026-11-15. Mỗi tính năng chính có một file. Mỗi file ghi mục tiêu, sơ đồ, quyết định, số đo, nghiệm thu và việc còn mở. Việc còn mở nằm trong mục "Việc còn mở" của từng file. Danh sách gộp theo mức ưu tiên và theo người làm là [`TODO.md`](../../TODO.md) ở thư mục gốc. Khi xong một việc, đánh dấu ở cả hai nơi.
 
 Sơ đồ tương tác của toàn hệ thống: mở [`plan.html`](plan.html) bằng trình duyệt. Trang chạy offline, có tab cho từng tính năng. Dựng lại bằng `cd plan-viewer && node build.mjs`.
 

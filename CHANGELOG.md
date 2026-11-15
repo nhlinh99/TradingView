@@ -4,7 +4,7 @@ Theo dạng [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/). Dự án c
 
 ## [Chưa phát hành]
 
-Xem `docs/plan/README.md` cho thứ tự ưu tiên và các file tính năng cho việc còn mở. Việc quan trọng nhất: chạy collector bằng Task Scheduler, đo phiên giao dịch VN100 thật (Thứ Hai 16/11), đối chiếu engine Pine với TradingView.
+Xem `TODO.md` cho việc còn mở và `docs/plan/README.md` cho kế hoạch từng tính năng. Việc quan trọng nhất: chạy collector bằng Task Scheduler, đo phiên giao dịch VN100 thật (Thứ Hai 16/11), đối chiếu engine Pine với TradingView.
 
 ## 2026-11-15 (tài liệu)
 
@@ -14,6 +14,7 @@ Xem `docs/plan/README.md` cho thứ tự ưu tiên và các file tính năng cho
 
 - Cài đặt chỉ báo kiểu TradingView: tab Tham số, Kiểu dáng (màu, độ đục, độ dày, nét, bật tắt cho từng đường, mức, tín hiệu, vùng tô), Hiển thị (theo khung thời gian, nhãn giá trị trên thang giá). Có trong bảng chỉ báo và trong hộp bánh răng trên biểu đồ.
 
+- `TODO.md` gộp mọi việc còn mở theo mức ưu tiên và theo người làm.
 - Hộp **Thêm chỉ báo và chiến lược** (phím `I`): tìm có tô khớp, phân loại, yêu thích bằng ngôi sao, mũi tên và Enter để thêm, hộp không đóng sau khi thêm.
 - Chú giải chỉ báo: giá trị cuối tô màu, tham số đầu, menu ⋯ (nhân bản, sửa mã), nhấp đúp mở cài đặt.
 - Hộp Cài đặt chỉ báo dạng cửa sổ có Huỷ, OK, Mặc định; thay đổi áp ngay để xem trước.
