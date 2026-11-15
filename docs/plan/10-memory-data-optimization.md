@@ -94,6 +94,28 @@ Ràng buộc từ bạn (2026-11-15): máy cá nhân không thể chạy suốt 
 
 Việc cần làm để chạy được trên thiết bị khác: collector là Python thuần và chạy trên Linux được; chỉ có hai chỗ gắn với Windows là toast trong `collector/alerts.py` (nên dùng Telegram) và các script `.ps1` giám sát (thay bằng systemd). Chưa làm, chưa chạy thử trên Linux.
 
+### Dùng máy khác bật liên tục và đưa dữ liệu về máy cá nhân
+
+Chỉ cần chuyển nhóm **không tải lại được**: `book` (sổ lệnh BTC, vàng), `options` (snapshot Deribit) và `vn_book`. Tick, nến, `bookDepth`, `metrics` máy cá nhân tự tải lại từ kho Binance, nên không phải chuyển. Nhóm cần chuyển nhỏ: sổ lệnh BTC khoảng 13 MB mỗi ngày và vàng khoảng 7 MB (ước tính từ phép đo 1 giờ yên tĩnh, chưa gom), options vài trăm KB, `vn_book` chưa đo. Vài chục MB mỗi ngày, đi qua mạng nhà bình thường. `app.sqlite` (danh sách theo dõi, hình vẽ, cảnh báo) là của máy cá nhân, không đồng bộ.
+
+Hai cách, chọn một:
+
+| | A. Chạy cả ứng dụng trên máy bật liên tục, xem từ xa | B. Máy bật liên tục chỉ thu thập, kéo dữ liệu về máy cá nhân |
+|---|---|---|
+| Cách làm | Cài cả server và web trên máy đó. Từ máy cá nhân mở trình duyệt qua mạng riêng (Tailscale hoặc đường hầm SSH) | Máy cá nhân kéo (pull) file đã chốt ngày về `DATA_DIR`, bằng `rclone` qua SFTP, hoặc qua kho lưu trữ đối tượng (Backblaze B2, S3) làm trung gian |
+| Chuyển dữ liệu | Không cần | Mỗi ngày một lần, khi máy cá nhân bật |
+| Ưu | Đơn giản nhất. Heatmap hôm nay xem được ngay. Không lo lệch dữ liệu | Máy cá nhân có đủ dữ liệu để chạy backtest và Pine bằng sức máy mình. Xem được khi máy kia hỏng |
+| Nhược | Ứng dụng không có đăng nhập, **không được mở ra Internet**, chỉ qua mạng riêng. Backtest và Pine chạy bằng máy nhỏ kia. Hình vẽ và layout nằm ở máy đó | Dữ liệu hôm nay chậm tới một ngày. Cần một công cụ nhập để trộn |
+
+**Cách B, chi tiết:**
+- **Chiều kéo, không đẩy:** máy cá nhân khởi tạo kết nối, nên máy nhà không phải mở cổng. Dùng khoá SSH chỉ đọc cho máy cá nhân. Đừng đồng bộ bằng OneDrive hay Google Drive (dự án cấm để dữ liệu trong OneDrive vì khoá file).
+- **Chỉ kéo file của ngày đã chốt** (`date=YYYY-MM-DD.parquet` của ngày trước hôm nay theo UTC), không kéo file con `.pNNN` của hôm nay, vì `hotmerge` gộp và xoá chúng liên tục. Việc gộp ngày cũ do `collector.daily` trên máy kia làm, nên sau khoảng một ngày file đã ổn định.
+- **Trộn an toàn:** nếu cả hai máy cùng ghi một ngày (máy cá nhân có lúc bật), chép đè file chuẩn sẽ mất phần của máy cá nhân. Nên nhập file kéo về như file con (`date=D.pNHAKHAC.parquet`) rồi để `merge_day` loại trùng theo khoá, như collector đang làm. Công cụ nhập này **chưa có**, cần viết (`python -m collector.pull`).
+- **Cùng phiên bản mã** ở hai máy, vì schema Parquet nằm trong `common/store.py`.
+- **Không dùng:** Syncthing hay đồng bộ hai chiều liên tục (file con bị ghi và xoá liên tục, dễ sinh xung đột), và đọc thẳng qua thư mục mạng (DuckDB quét hàng trăm file qua mạng sẽ chậm).
+
+**Khuyến nghị:** bắt đầu bằng cách A nếu máy kia đủ mạnh và bạn chủ yếu xem heatmap, GEX và sổ lệnh VN: ít việc nhất và không có dữ liệu để chuyển. Chuyển sang B khi bạn muốn backtest nặng trên máy cá nhân hoặc muốn có bản sao dữ liệu. Chưa chạy thử cách nào.
+
 ## Quyết định
 
 **Đã chọn (2026-11-15): để gom nén chạy, giữ `full_days = 30`.** Tick quá 30 ngày thành footprint 1 phút rồi xoá tick. Lý do bên dưới, giữ lại để biết cách đổi ý.

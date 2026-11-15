@@ -20,6 +20,7 @@ Ký hiệu: `[ ]` chưa làm, `[~]` làm dở, `[x]` xong. **Chặn** nghĩa là
 - [ ] Xoá thư mục thừa `C:\tv-data-bench`. [01](docs/plan/01-collector-storage.md)
 - [ ] Chọn giữ hai endpoint VN không chính thức (SSI iBoard, VNDirect dchart) hay chuyển sang SSI FastConnect. [07](docs/plan/07-vn100.md)
 - [ ] Thử giao diện chỉ báo mới trên điện thoại thật (đã kiểm bằng giả lập, chưa kiểm cảm ứng).
+- [ ] Nếu dùng máy khác bật liên tục: chọn cách A (chạy cả ứng dụng ở đó, xem qua mạng riêng) hay B (chỉ thu thập, kéo file ngày đã chốt về). B cần viết công cụ nhập `collector.pull`. [10](docs/plan/10-memory-data-optimization.md)
 
 ## 3. Chặn bởi điều kiện bên ngoài
 
