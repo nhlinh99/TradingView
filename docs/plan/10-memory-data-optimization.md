@@ -121,7 +121,14 @@ Hai cách, chọn một:
 1. **Không cần nơi trung gian**, nếu máy bật liên tục tới được từ máy cá nhân: VPS có địa chỉ công khai thì kéo thẳng bằng SFTP; máy mini ở nhà (sau NAT) thì dùng Tailscale (mạng riêng, bản cá nhân miễn phí theo hiểu biết của tôi, chưa kiểm). Ít thành phần nhất, không gửi dữ liệu cho bên thứ ba.
 2. **Kho đối tượng tương thích S3, nên là Cloudflare R2**, khi hai máy không tới được nhau, hoặc khi bạn muốn có luôn **bản sao ngoài** của dữ liệu không tải lại được. Máy bật liên tục đẩy lên mỗi đêm, máy cá nhân kéo về khi bật. Hai bên chỉ kết nối ra ngoài, máy kia hỏng thì dữ liệu đã đẩy vẫn còn. Tạo hai token riêng theo bucket: chỉ ghi cho máy bật liên tục, chỉ đọc cho máy cá nhân. `rclone` dùng được cho cả R2 và B2.
 3. **Backblaze B2** là lựa chọn thay thế, rẻ hơn khi lưu, có phí tải xuống (khoảng 0,01 USD mỗi GB theo các nguồn bên thứ ba, chưa kiểm trang giá chính thức).
-4. **Không dùng** OneDrive, Google Drive hay Dropbox làm trung gian: dự án cấm để dữ liệu trong OneDrive (khoá file khi ghi), và các dịch vụ này có hạn mức API và token đăng nhập hết hạn, không hợp cho việc chạy tự động không người ngồi.
+4. **Google Drive dùng được qua `rclone` (API), nếu chấp nhận vài rủi ro.** Không dùng ứng dụng đồng bộ thư mục (Drive for Desktop, OneDrive): dự án cấm để `DATA_DIR` trong thư mục đồng bộ vì khoá file khi ghi. Qua `rclone` thì không có thư mục đồng bộ nên ràng buộc đó không áp dụng. Rủi ro chính là **token hết hạn làm việc đồng bộ im lặng dừng**: theo diễn đàn rclone và các bài hướng dẫn, ứng dụng OAuth để ở chế độ "Testing" cho refresh token hết hạn sau 7 ngày. Cách giảm:
+   - Tạo OAuth client riêng trong Google Cloud thay vì dùng client dùng chung của rclone, và để màn hình đồng ý ở trạng thái "In production" (không cần xác minh khi chỉ bạn dùng, theo một số người dùng rclone; có ý kiến trái chiều, chưa kiểm).
+   - Dùng một tài khoản Google riêng cho dữ liệu này.
+   - Công cụ kéo và đẩy phải **báo lỗi qua Telegram khi xác thực hỏng**, giống cảnh báo collector im lặng, để không mất dữ liệu mà không biết.
+   - Gộp mỗi ngày thành một file nén trước khi đẩy: Drive chậm với hàng trăm file nhỏ.
+   - Dung lượng miễn phí 15 GB dùng chung với Gmail và Ảnh. Chưa kiểm tài khoản dịch vụ (service account) có hạn mức lưu trữ riêng không, nên chưa khuyến nghị cách đó.
+
+   So với R2: Drive không phải trả tiền thêm và bạn đã có, nhưng phải tự giữ cho xác thực không hỏng; R2 dùng khoá truy cập cố định, không hết hạn.
 
 Chi phí không phải yếu tố quyết định. Kho trung gian chỉ cần giữ vài tuần gần nhất (xoá file cũ khi máy cá nhân đã kéo), dưới khoảng 1 GB, trong mức miễn phí 10 GB của R2 theo các nguồn bên thứ ba. Giá niêm yết theo các nguồn đó: R2 khoảng 0,015 USD mỗi GB mỗi tháng và không tính phí tải xuống, B2 khoảng 0,006 USD mỗi GB mỗi tháng. Chưa kiểm trên trang giá chính thức của hai bên, kiểm trước khi đăng ký. Tải xuống mỗi tháng chỉ khoảng vài trăm MB đến 1 GB, nên cả hai đều gần như miễn phí.
 
