@@ -2,7 +2,7 @@
 # Ctrl+C stops both. Logs: <DATA_DIR>\logs\<name>-<timestamp>.log (INFO and above).
 # Symbols: pass -Symbols 'BTCUSDT,XAUUSDT' (default). They must exist in config\symbols.toml.
 # NOTE: keep this file ASCII-only (Windows PowerShell 5.1 reads UTF-8 without BOM as ANSI).
-param([string]$Symbols = 'BTCUSDT,XAUUSDT')
+param([string]$Symbols = 'BTCUSDT,XAUUSDT', [switch]$SkipCatchup)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 
@@ -26,10 +26,16 @@ $jobs = [ordered]@{
 }
 $procs = @{}
 
-# One-shot catch-up of 1-minute candles (klines) for the time the collectors were not running.
-# Without it the chart has no candles for the gap until collector.daily runs (03:00).
-foreach ($sym in ($Symbols -split ',')) {
-  try { & $py -m collector.klines --symbol $sym --days 3 } catch { Write-Warning "klines catch-up failed for ${sym}: $_" }
+# Catch-up crawl on every start, in the background so the live collectors start at once.
+# collector.daily = 1-minute candles, last 3 days of archive data (fixes gaps from the time the
+# collectors were not running), VN100 candles, compaction. Safe to run while collectors write.
+# -SkipCatchup turns it off. Log: <DATA_DIR>\logs\catchup-<timestamp>.log
+$catchup = $null
+if (-not $SkipCatchup) {
+  $clog = Join-Path $logs ("catchup-" + (Get-Date -Format 'yyyyMMdd-HHmmss') + ".log")
+  $catchup = Start-Process -FilePath $py -WorkingDirectory $root -NoNewWindow -PassThru -RedirectStandardError $clog `
+    -ArgumentList '-m', 'collector.daily', '--symbols', $Symbols, '--vn'
+  Write-Host "started catch-up (pid $($catchup.Id)), log $clog"
 }
 
 try {
@@ -48,6 +54,7 @@ try {
   }
 }
 finally {
+  if ($catchup -and -not $catchup.HasExited) { & taskkill.exe /PID $catchup.Id /T /F | Out-Null }
   foreach ($p in $procs.Values) {
     if ($p -and -not $p.HasExited) { & taskkill.exe /PID $p.Id /T /F | Out-Null }
   }

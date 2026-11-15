@@ -11,7 +11,7 @@ Xem `docs/plan/README.md` cho thứ tự ưu tiên và các file tính năng cho
 ### Thay đổi
 - Tài liệu kế hoạch gom vào `docs/plan/`, mỗi tính năng một file (có sơ đồ). `PLAN.md`, `PLAN-CLAUDE-CODE.md` chuyển vào `docs/plan/archive/`, `NOTES.md` thành `docs/plan/engineering-notes.md`, `TODO.md` chia vào từng file tính năng.
 - Sơ đồ tương tác `docs/plan/plan.html` có tab theo tính năng và nét đứt cho phần chưa làm.
-- `scripts/run-collectors.ps1` chạy `collector.klines --days 3` một lần khi khởi động để lấp nến 1 phút khi collector đã dừng.
+- Mỗi lần khởi động tự crawl bù dữ liệu: `scripts/run-collectors.ps1` chạy nền `collector.daily --vn` (tắt bằng `-SkipCatchup`), `dev.ps1` đồng bộ nến 1 phút 3 ngày trước khi mở server.
 
 ## 2026-11-15
 

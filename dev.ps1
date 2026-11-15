@@ -20,6 +20,12 @@ function Stop-Tree($p) {
   if ($p -and -not $p.HasExited) { & taskkill.exe /PID $p.Id /T /F | Out-Null }
 }
 
+# Catch-up of 1-minute candles on every start (a few seconds), so the chart has no hole for the time
+# the collectors were not running. Full catch-up (archive gaps, VN100) runs in scriptsun-collectors.ps1.
+foreach ($sym in @('BTCUSDT', 'XAUUSDT')) {
+  try { & $py -m collector.klines --symbol $sym --days 3 } catch { Write-Warning "klines catch-up failed for ${sym}: $_" }
+}
+
 $api = Start-Process -FilePath $py -WorkingDirectory $root -NoNewWindow -PassThru `
   -ArgumentList '-m', 'uvicorn', 'server.main:app', '--host', '127.0.0.1', '--port', '8000'
 $web = Start-Process -FilePath 'npm.cmd' -WorkingDirectory (Join-Path $root 'web') -NoNewWindow -PassThru `

@@ -136,9 +136,11 @@ Ngày 2026-11-15 biểu đồ BTCUSDT thiếu khoảng 8 giờ (00:00 đến 08:
 
 | Dữ liệu | Khi collector dừng | Cách lấp |
 |---|---|---|
-| Nến 1 phút (`bars`) | Không có nến mới. Chỉ `collector.klines` hoặc `collector.daily` ghi nến | `run-collectors.ps1` nay chạy `collector.klines --days 3` một lần khi khởi động |
+| Nến 1 phút (`bars`) | Không có nến mới. Chỉ `collector.klines` hoặc `collector.daily` ghi nến | Mỗi lần khởi động: `dev.ps1` đồng bộ nến 3 ngày trước khi mở server (vài giây), `run-collectors.ps1` chạy nền `collector.daily --vn` |
 | Tick (`ticks`) | Mất tick cho đến lần chạy kế | Khi khởi động, `live_trades` tự lấp khoảng hở bằng REST, khoảng 40 nghìn id mỗi phút (1,67 triệu id mất khoảng 40 phút) |
 | Sổ lệnh (`book`) | Mất vĩnh viễn, không có nguồn miễn phí để lấy lại | Không lấp được. Heatmap trống trong khoảng đó |
+
+Việc chạy nền lúc khởi động (`collector.daily --vn`) gồm: nến 1 phút, tải lại 3 ngày từ kho Binance, nến VN100, gom nén. Kho Binance công bố file của ngày UTC hôm qua sau vài giờ, nên khoảng hở tick của hôm nay do `live_trades` lấp bằng REST, và file ngày chuẩn được thử lại ở lần khởi động hoặc 03:00 kế tiếp. Tắt bằng `-SkipCatchup`. Log nằm ở `DATA_DIR\logs\catchup-*.log`.
 
 Biểu đồ ghép nến đã lưu với phần đuôi dựng từ tick, nên khoảng hở tick cũng làm thủng nến cho tới khi lấp xong. Cách giữ dữ liệu đủ trong ngày: chạy `run-collectors.ps1` bằng Task Scheduler để nó khởi động cùng Windows và không phụ thuộc phiên làm việc (xem việc còn mở bên dưới), và để `collector.daily` chạy lúc 03:00 để sửa các khoảng hở còn sót.
 
