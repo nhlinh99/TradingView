@@ -83,7 +83,7 @@ def bars_with_last_id(
         FROM ({src})
         GROUP BY 1 ORDER BY 1
     """
-    con = duckdb.connect()
+    con = store.query_conn()
     try:
         return con.execute(sql).fetchall()
     finally:

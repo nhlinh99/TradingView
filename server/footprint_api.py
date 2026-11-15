@@ -78,7 +78,7 @@ def get_footprint(symbol: str, tf: str, start_ms: int | None, end_ms: int | None
     sql = footprint_sql(symbol, tf_ms, start_ms, end_ms, mult)
     rows: list[list] = []
     if sql:
-        con = duckdb.connect()
+        con = store.query_conn()
         try:
             data = con.execute(sql + f" LIMIT {MAX_ROWS + 1}").fetchall()
         finally:
@@ -114,7 +114,7 @@ def get_profile(symbol: str, start_ms: int, end_ms: int, mult: int) -> dict:
     sql = footprint_sql(symbol, 10**12, start_ms, end_ms, mult)
     rows: list[list] = []
     if sql:
-        con = duckdb.connect()
+        con = store.query_conn()
         try:
             data = con.execute(f"SELECT p, sum(buy), sum(sell) FROM ({sql}) GROUP BY p ORDER BY p").fetchall()
         finally:

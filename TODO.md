@@ -7,7 +7,8 @@ Ký hiệu: `[ ]` chưa làm, `[~]` làm dở, `[x]` xong. **Chặn** nghĩa là
 ## 1. Quyết định và việc có rủi ro mất dữ liệu
 
 - [ ] **Quyết định giữ tick một năm hay gom nén.** Bạn vừa tải 1 năm tick BTCUSDT (2,4 GB) và 340 ngày XAUUSDT (0,5 GB). Chính sách `config/retention.toml` đặt `full_days = 30`: lần `collector.daily` kế tiếp (mỗi lần khởi động `run-collectors.ps1`, hoặc 03:00 khi đã lên lịch) sẽ gom tick cũ hơn 30 ngày thành footprint 1 phút rồi xoá tick. Muốn giữ tick đầy đủ thì tăng `full_days` lên 400 trước khi chạy lại. Gom nén vẫn là lựa chọn hợp lý nếu chỉ cần footprint 1 phút (giảm xuống khoảng 6% dung lượng). [01](docs/plan/01-collector-storage.md)
-- [ ] **Khởi động lại `dev.ps1`.** Server Python không tự nạp lại, và bản đang chạy chưa có sửa lỗi `input(defval=hlc3)` (ô Source hiện thành số). Phần web đã tự cập nhật. [08](docs/plan/08-pine-engine.md)
+- [ ] **Khởi động lại `dev.ps1` một lần nữa** để nạp giới hạn bộ nhớ DuckDB và bộ giám sát bộ nhớ của server. Server Python không tự nạp lại. [01](docs/plan/01-collector-storage.md)
+- [ ] **Theo dõi bộ nhớ server khi chạy nhiều giờ.** Chưa biết nguyên nhân thật của lần phình 28 GB ngày 15/11; xem dòng cảnh báo `server.mem` nếu server tự thoát (mã 75). [01](docs/plan/01-collector-storage.md)
 - [ ] **Chạy collector bằng Task Scheduler** thay vì phiên làm việc: `scripts/run-collectors.ps1` (nay có crawl bù khi khởi động) và `python -m collector.daily --vn` lúc 03:00. Sáng 15/11 mất 8 giờ sổ lệnh vì collector dừng theo phiên, và không lấy lại được. Lệnh `schtasks` có trong README. Cần bạn đồng ý vì đây là thay đổi hệ thống. [01](docs/plan/01-collector-storage.md)
 
 ## 2. Việc của bạn

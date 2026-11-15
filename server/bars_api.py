@@ -85,7 +85,7 @@ def aggregate_minutes(symbol: str, tf_ms: int, start_ms: int, end_ms: int, live:
     src = store.range_select("bars", symbol, start_ms, end_ms)
     last_kline = None
     if src is not None:
-        con = duckdb.connect()
+        con = store.query_conn()
         try:
             last_kline = con.execute(f"SELECT max(ts) FROM ({src})").fetchall()[0][0]
         finally:
@@ -94,7 +94,7 @@ def aggregate_minutes(symbol: str, tf_ms: int, start_ms: int, end_ms: int, live:
     tail, last_id = tick_bars(symbol, MINUTE, first, end_ms, live)
     if src is None and not tail:
         return [], last_id
-    con = duckdb.connect()
+    con = store.query_conn()
     try:
         con.execute("CREATE TEMP TABLE tail (ts BIGINT, o INTEGER, h INTEGER, l INTEGER, c INTEGER, "
                     "v DOUBLE, buy_v DOUBLE, sell_v DOUBLE)")

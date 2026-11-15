@@ -130,6 +130,19 @@ Snapshot REST 1000 mức phủ -0,207% đến +0,199% (BTC) và -0,364% đến +
 
 Backfill hàng tháng (`monthly/`) của kho Binance chưa làm. `collector.backfill` từ chối hơn 366 ngày nếu thiếu `--yes`. Khoảng hở lớn khi collector khởi động lâu sau lần ghi cuối được lấp bằng REST ở luồng riêng, khoảng 15 phút cho 900 nghìn id. Khoảng hở trên 5 triệu id bị bỏ qua, ghi `skipped`, và phải dùng `collector.backfill`.
 
+### Bộ nhớ của server
+
+Ngày 2026-11-15 server uvicorn chạy nhiều giờ giữ 27,9 GB bộ nhớ cam kết (private bytes) trong khi RAM thật chỉ 2,5 GB. Commit của Windows lên 52,1 trên 52,6 GB (99%), nên các chương trình khác có thể bị lỗi cấp phát. Tắt tiến trình đó thì commit về 24 GB.
+
+Nguyên nhân chưa xác định. Thử trên server mới với các yêu cầu nặng (nến mọi khung, footprint, heatmap, bong bóng, profile, GEX, hai script Pine dài, 40 lần nối WebSocket, mỗi vòng lặp 3 lần), bộ nhớ cam kết dao động 83 đến 376 MB và không tăng dần. Số đối tượng Python giữ nguyên sau 10 lần chạy Pine, nên không phải rò rỉ trong engine Pine. Phần còn lại cần theo dõi khi chạy dài. Vì vậy đã thêm biện pháp giới hạn thiệt hại thay vì sửa một nguyên nhân cụ thể:
+
+- **Một instance DuckDB dùng chung** cho mọi truy vấn đọc (`store.query_conn()`), trần 1 GB (`DUCKDB_MEMORY_LIMIT`), 4 luồng (`DUCKDB_THREADS`), tràn ra `DATA_DIR\tmp`. Trước đó mỗi yêu cầu tạo một instance mới với trần mặc định 80% RAM. Cùng bộ thử, đỉnh còn 221 MB thay vì 376 MB.
+- **Bộ giám sát trong server** (`server/memguard.py`): mỗi 30 giây đo bộ nhớ cam kết, ghi cảnh báo khi tăng từ 200 MB trở lên hoặc vượt 75% trần, kèm 5 đường dẫn được gọi nhiều nhất. Vượt `SERVER_MEM_LIMIT_MB` (mặc định 3072) thì server thoát với mã 75.
+- **`dev.ps1` tự khởi động lại server** khi nó thoát, dừng nếu thoát hơn 5 lần trong 2 phút.
+- `/health` trả thêm `private_mb`, `threads` và `limit_mb` để theo dõi.
+
+Nếu server lại phình, dòng cảnh báo của `server.mem` trong cửa sổ `dev.ps1` cho biết đường dẫn nào được gọi ngay trước đó.
+
 ### Khoảng trống khi máy hoặc collector dừng
 
 Ngày 2026-11-15 biểu đồ BTCUSDT thiếu khoảng 8 giờ (00:00 đến 08:00 giờ VN). Collector chạy trong phiên làm việc nên dừng cùng phiên. Có hai loại dữ liệu bị ảnh hưởng, và chúng lành khác nhau:

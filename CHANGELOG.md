@@ -20,6 +20,8 @@ Xem `TODO.md` cho việc còn mở và `docs/plan/README.md` cho kế hoạch t�
 - Hộp Cài đặt chỉ báo dạng cửa sổ có Huỷ, OK, Mặc định; thay đổi áp ngay để xem trước.
 
 ### Sửa
+- Server phình tới 27,9 GB bộ nhớ cam kết sau nhiều giờ chạy (Windows commit 99%). Nay dùng một instance DuckDB dùng chung có trần 1 GB, có bộ giám sát bộ nhớ tự thoát khi vượt trần, `dev.ps1` tự khởi động lại server. Nguyên nhân gốc chưa xác định.
+- `dev.ps1` bị vỡ do ký tự `\r` trong một comment (đã sửa ở `71809a5`).
 - Mã Pine tràn ra ngoài khung trong bảng chỉ báo: luật CSS của trình soạn gắn nhầm vào `.pine` nên không áp dụng cho bảng mới. Nay mã cuộn trong khung, có số dòng.
 - `--hover`, `--veil`, `--focus` ở giao diện sáng tự tham chiếu nên mất màu (chú giải chỉ báo trong suốt).
 - `input(defval=hlc3)` kiểu cũ hiện thành ô số thay vì ô chọn nguồn giá (cần khởi động lại server).

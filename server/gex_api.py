@@ -24,7 +24,7 @@ def get_gex(ts: int | None, band: float) -> dict:
     sql = store.range_select("options", SYMBOL, end - LOOKBACK_MS, end)
     if not sql:
         raise HTTPException(404, "chưa có snapshot quyền chọn; chạy python -m collector.deribit")
-    con = duckdb.connect()
+    con = store.query_conn()
     try:
         snap = con.execute(f"SELECT max(ts) FROM ({sql})").fetchone()[0]
         if snap is None:

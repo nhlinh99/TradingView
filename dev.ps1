@@ -32,9 +32,27 @@ $web = Start-Process -FilePath 'npm.cmd' -WorkingDirectory (Join-Path $root 'web
   -ArgumentList 'run', 'dev'
 
 Write-Host 'server: http://127.0.0.1:8000/health   web: http://localhost:5173   (Ctrl+C to stop)'
+function Start-Api {
+  Start-Process -FilePath $py -WorkingDirectory $root -NoNewWindow -PassThru `
+    -ArgumentList '-m', 'uvicorn', 'server.main:app', '--host', '127.0.0.1', '--port', '8000'
+}
+# The server exits with code 75 when it passes its memory cap (see server/memguard.py). Restart it
+# instead of leaving the app without an API. Give up after 5 restarts within 2 minutes (crash loop).
+$restarts = @()
 try {
-  while (-not $api.HasExited -and -not $web.HasExited) { Start-Sleep -Seconds 1 }
-  if ($api.HasExited) { Write-Warning "server exited with code $($api.ExitCode)" }
+  while (-not $web.HasExited) {
+    Start-Sleep -Seconds 1
+    if ($api.HasExited) {
+      Write-Warning "server exited with code $($api.ExitCode)"
+      Stop-Tree $api
+      $now = Get-Date
+      $restarts = @($restarts | Where-Object { ($now - $_).TotalSeconds -lt 120 }) + $now
+      if ($restarts.Count -gt 5) { Write-Warning 'server keeps exiting; not restarting. Check the log above.'; break }
+      Start-Sleep -Seconds 2
+      $api = Start-Api
+      Write-Host "server restarted (pid $($api.Id))"
+    }
+  }
   if ($web.HasExited) { Write-Warning "web exited with code $($web.ExitCode)" }
 }
 finally {

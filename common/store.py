@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import json
 import re
+import threading
 import time
 import tomllib
 from datetime import date
@@ -126,6 +127,35 @@ def _check(kind: str, symbol: str) -> None:
 
 _SYMBOLS_FILE = ROOT / "config" / "symbols.toml"
 VN100_FILE = ROOT / "config" / "vn100.json"
+_shared: "duckdb.DuckDBPyConnection | None" = None
+_shared_lock = threading.Lock()
+
+
+def query_conn() -> "duckdb.DuckDBPyConnection":
+    """Con trỏ DuckDB cho truy vấn đọc, từ MỘT instance dùng chung (có trần bộ nhớ và số luồng).
+
+    Mỗi `duckdb.connect()` tạo một instance mới với bộ đệm và luồng riêng, mặc định được phép dùng tới 80% RAM; tạo mới cho mỗi yêu cầu
+    làm bộ nhớ cam kết của server phình theo thời gian. Instance dùng chung giữ trần cố định, dùng lại bộ đệm siêu dữ liệu Parquet,
+    và tràn ra thư mục tạm khi thiếu chỗ. Bảng tạm (CREATE TEMP TABLE) vẫn riêng cho từng con trỏ. Gọi `.close()` chỉ đóng con trỏ.
+    Chỉ dùng cho truy vấn đọc; ghi file Parquet dùng `duckdb.connect()` riêng để tên bảng không va nhau.
+    """
+    global _shared
+    with _shared_lock:
+        if _shared is None:
+            con = duckdb.connect()
+            con.execute(f"SET memory_limit='{os.environ.get('DUCKDB_MEMORY_LIMIT', '1GB')}'")
+            con.execute(f"SET threads={int(os.environ.get('DUCKDB_THREADS', '4'))}")
+            con.execute("SET preserve_insertion_order=false")
+            try:
+                tmp = data_dir() / "tmp"
+                tmp.mkdir(parents=True, exist_ok=True)
+                con.execute(f"SET temp_directory='{tmp.as_posix()}'")
+            except Exception:  # noqa: BLE001 - không có thư mục dữ liệu thì dùng mặc định của DuckDB
+                pass
+            _shared = con
+        return _shared.cursor()
+
+
 _symbols_cache: tuple[tuple[int, int], dict] | None = None   # ((mtime toml, mtime vn100), nội dung)
 
 # Mã VN100 không cần khai từng mã trong symbols.toml: lấy từ vn100.json với cấu hình chung.
@@ -450,7 +480,7 @@ def read(
         return []
     sel = ", ".join(columns) if columns else "*"
     sql = f"SELECT {sel} FROM ({base}) ORDER BY {ORDER[kind]}"
-    con = duckdb.connect()
+    con = query_conn()
     try:
         return con.execute(sql).fetchall()
     finally:

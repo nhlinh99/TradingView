@@ -123,6 +123,28 @@ Cần Python 3.11 trở lên (đã chạy trên 3.15.2) và Node.js (đã chạy
    ```
    Luôn thêm gói qua script này (`-Add 'tên-gói'`). `npm install` chạy thẳng trong `web\` sẽ xoá junction và cài vào OneDrive.
 
+## Tài nguyên máy
+
+Đo ngày 2026-11-15 trên máy 12 luồng CPU, 15,3 GB RAM, Windows 11, khi chạy đủ bộ collector và mở giao diện.
+
+**Bộ nhớ.** Số liệu là bộ nhớ cam kết (private bytes) của từng tiến trình. Đây là số cần theo dõi, vì Windows chặn cấp phát khi tổng commit chạm trần, dù RAM thật vẫn còn.
+
+| Tiến trình | Bộ nhớ | Ghi chú |
+|---|---|---|
+| `live_trades` | khoảng 80 MB | Nhận tick BTCUSDT và XAUUSDT |
+| `live_book` | khoảng 100 MB | Giữ sổ lệnh trong bộ nhớ, ghi mỗi 5 giây |
+| `hotmerge` | khoảng 125 MB | Tăng khi gộp file lớn |
+| `deribit`, `alerts`, `vn_book` | 30 đến 45 MB mỗi cái | |
+| Server (`uvicorn`) | 80 đến 400 MB | Dao động theo yêu cầu. **Tự thoát nếu vượt 3 GB** (mã 75), `dev.ps1` khởi động lại |
+| Web (`vite`) | khoảng 180 MB | Chỉ khi phát triển |
+| **Tổng** | **khoảng 1 GB** | |
+
+Server dùng một instance DuckDB dùng chung, trần 1 GB (`DUCKDB_MEMORY_LIMIT`) và 4 luồng (`DUCKDB_THREADS`), tràn ra `DATA_DIR\tmp`. Trần của server đặt bằng `SERVER_MEM_LIMIT_MB` (mặc định 3072, 0 là tắt). `/health` trả `private_mb` để theo dõi. Ngày 2026-11-15 một server chạy nhiều giờ từng phình tới 27,9 GB bộ nhớ cam kết; nguyên nhân chưa xác định, xem [`docs/plan/01-collector-storage.md`](docs/plan/01-collector-storage.md).
+
+**Đĩa.** `DATA_DIR` (ngoài OneDrive) hiện khoảng 3,4 GB sau khi tải 1 năm lịch sử, trong đó `ticks` 2,9 GB, `bookdepth` 0,24 GB, `bars` 0,06 GB. Môi trường Python (`.venv`) khoảng 100 MB, thư viện web (`web-deps`) khoảng 85 MB. Tăng thêm mỗi năm khi chạy 24/7 với chính sách giữ dữ liệu mặc định: khoảng 1,6 GB ngày yên tĩnh, khoảng 2,8 GB ngày biến động mạnh; không gom nén thì khoảng 11 GB và 22 đến 33 GB. Trần `max_data_gb` mặc định 20. Chi tiết và cách tính ở [`docs/plan/01-collector-storage.md`](docs/plan/01-collector-storage.md).
+
+**CPU và mạng.** Chưa đo mức CPU của collector. Truy vấn nặng nhất là chạy script Pine dài (1 đến 2 giây cho 1000 nến) và heatmap 24 giờ (khoảng 0,2 giây). Tải lịch sử 1 năm BTCUSDT mất khoảng 30 phút (ước tính tải xuống khoảng 6,7 GB file nén); Binance giới hạn 2400 trọng số mỗi phút, nên script tải giãn nhịp. Máy cần mạng ổn định liên tục, vì tick và sổ lệnh ghi trong lúc máy tắt không lấy lại được (sổ lệnh) hoặc phải tải bù (tick).
+
 ## Chạy
 
 ```powershell

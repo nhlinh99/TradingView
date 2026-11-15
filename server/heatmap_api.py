@@ -55,7 +55,7 @@ def get_heatmap(symbol: str, start_ms: int, end_ms: int, tbucket_ms: int, mult: 
     rows: list[list] = []
     scale = 0.0
     if sql:
-        con = duckdb.connect()
+        con = store.query_conn()
         try:
             con.execute(f"CREATE TEMP TABLE g AS {sql}")  # tính một lần, dùng cho cả dữ liệu và phân vị
             n = con.execute("SELECT count(*) FROM g").fetchone()[0]
@@ -100,7 +100,7 @@ def get_bubbles(symbol: str, start_ms: int, end_ms: int, tbucket_ms: int, top: i
     ticks = store.range_select("ticks", symbol, start_ms, end_ms)
     rows: list[list] = []
     if ticks:
-        con = duckdb.connect()
+        con = store.query_conn()
         try:
             data = con.execute(
                 f"SELECT (ts // {tbucket_ms}) * {tbucket_ms} AS t, (p // {base}) * {base} AS p, m, sum(q::DOUBLE) AS q, count(*) AS n "
@@ -146,7 +146,7 @@ def get_icebergs(symbol: str, start_ms: int, end_ms: int, tbucket_ms: int, facto
     ticks = store.range_select("ticks", symbol, start_ms, end_ms)
     rows: list[list] = []
     if book_sql and ticks:
-        con = duckdb.connect()
+        con = store.query_conn()
         try:
             data = con.execute(
                 f"WITH b AS ({book_sql}), "
