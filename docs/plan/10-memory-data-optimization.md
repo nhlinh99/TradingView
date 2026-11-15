@@ -37,7 +37,7 @@ Hiện trạng đo ngày 2026-11-15: các collector tổng khoảng 400 MB (`liv
 | Giới hạn số yêu cầu nặng chạy đồng thời (Pine, footprint, profile, heatmap, bong bóng, iceberg): `server/limits.py`, mặc định 3 (`HEAVY_CONCURRENCY`), chờ tối đa 60 giây rồi trả 503 kèm `Retry-After` | Chặn đỉnh bộ nhớ khi giao diện bắn nhiều yêu cầu cùng lúc (đổi khung với nhiều chỉ báo). `/health` trả `heavy_active`, `heavy_peak` | **Đã làm** (2026-11-15) |
 | Bộ nhớ đệm kết quả Pine theo (script, symbol, khung, tham số, nến cuối) có trần theo byte | Giảm CPU, nhưng tốn bộ nhớ: phải đặt trần, ví dụ 200 MB | Đề xuất. Xem TODO |
 | Chế độ chẩn đoán `SERVER_MEM_DIAG=1`: bật `tracemalloc` khi khởi động, và khi bộ nhớ vượt nửa trần (hoặc ngay trước khi thoát vì vượt trần) ghi báo cáo: nơi cấp phát nhiều nhất, loại đối tượng Python nhiều nhất, luồng theo loại | Tìm nguyên nhân thật của lần phình 28 GB. Chỉ thấy phần Python cấp phát, không thấy DuckDB. Làm chậm server, chỉ bật khi đang tìm nguyên nhân | **Đã làm** (2026-11-15) |
-| Chạy thử dài với yêu cầu luân phiên giống giao diện: `python scripts/soak_server.py --minutes 360`, lấy mẫu `/health` mỗi phút, báo hệ số tăng MB mỗi giờ | Biết server có phình theo thời gian không | Script đã có. Đã chạy thử 30 phút, xem mục Kết quả chạy thử dài. **Cần chạy 6 giờ trước khi coi vấn đề đã đóng** |
+| Chạy thử dài với yêu cầu luân phiên giống giao diện: `python scripts/soak_server.py --minutes 360`, lấy mẫu `/health` mỗi phút, báo hệ số tăng MB mỗi giờ | Biết server có phình theo thời gian không | Script đã có. Đã chạy 30 phút (mục Kết quả chạy thử dài 30 phút): 0 lỗi, đỉnh 544 MB, tăng +56 MB mỗi giờ nhưng quá ít mẫu để kết luận. **Cần chạy 6 giờ, có tải đồng thời, trước khi coi vấn đề đã đóng** |
 
 Đo lại ngay sau khi khởi động lại bằng mã mới (2026-11-15 11:35, bộ nhớ cam kết): `live_trades` 58 MB, `live_book` 45 MB, `hotmerge` 32 MB, `deribit` 37 MB, `alerts` 28 MB, `vn_book` 30 MB, server 91 MB. Thấp hơn lần đo trước (80, 100, 125, 45, 30, 30, 80 đến 400), nhưng đây là tiến trình mới khởi động nên chưa so được cùng điều kiện: cần đo lại sau vài giờ chạy, đặc biệt `hotmerge` chỉ lớn khi có file để gộp.
 
@@ -93,6 +93,19 @@ Ràng buộc từ bạn (2026-11-15): máy cá nhân không thể chạy suốt 
 3. Không nên: giữ máy cá nhân bật liên tục chỉ để heatmap.
 
 Việc cần làm để chạy được trên thiết bị khác: collector là Python thuần và chạy trên Linux được; chỉ có hai chỗ gắn với Windows là toast trong `collector/alerts.py` (nên dùng Telegram) và các script `.ps1` giám sát (thay bằng systemd). Chưa làm, chưa chạy thử trên Linux.
+
+### Kết quả chạy thử dài 30 phút (2026-11-15)
+
+`python scripts/soak_server.py --minutes 30` trên server mới (cổng 8003, mã có `memguard`, DuckDB dùng chung và `limits`), gọi luân phiên nến mọi khung, footprint, heatmap, bong bóng, profile, GEX, bốn script Pine (Ichimoku, SMC, Viprasol, volume profile) và nối ngắt WebSocket.
+
+| | Kết quả |
+|---|---|
+| Số yêu cầu | 1.748, **0 lỗi 5xx** |
+| Bộ nhớ cam kết, mẫu mỗi phút | dao động 190 đến 422 MB; `memguard` ghi nhận đỉnh 544 MB giữa hai lần lấy mẫu |
+| Hệ số tăng (nửa sau phiên) | **+56 MB mỗi giờ**, dưới ngưỡng 100 MB mỗi giờ của script |
+| Yêu cầu chậm nhất | Pine 2,5 giây, nến 0,8 giây, footprint và profile 1,3 giây |
+
+Cách đọc: bộ nhớ lên xuống kiểu răng cưa (cấp phát rồi trả), không leo thẳng. Hệ số +56 MB mỗi giờ tính trên 15 phút nên rất nhiễu, **không đủ để kết luận có hay không có rò rỉ**. Đây vẫn là bằng chứng yếu cho "không phình nhanh", chưa phải bằng chứng cho "không phình". Hai hạn chế của bài thử: (1) script gửi yêu cầu **tuần tự**, nên `heavy_peak` chỉ lên 1 và giới hạn 3 yêu cầu nặng chưa được thử dưới tải đồng thời; (2) 30 phút, trong khi lần phình 28 GB xảy ra sau nhiều giờ. Vẫn cần chạy 6 giờ, nên thêm chế độ gửi song song (3 luồng).
 
 ### Dùng máy khác bật liên tục và đưa dữ liệu về máy cá nhân
 
