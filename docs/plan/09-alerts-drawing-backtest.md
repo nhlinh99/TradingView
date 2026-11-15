@@ -23,6 +23,12 @@ Tiến trình nền `python -m collector.alerts` (có trong `run-collectors.ps1`
 
 Chưa kiểm bằng mắt: lệnh toast trả mã thành công nhưng chưa xác nhận thông báo hiện trên màn hình. Telegram chưa thử với khoá thật, chỉ có test với máy chủ giả.
 
+## Cảnh báo collector im lặng
+
+`collector/watchdog.py` chạy trong tiến trình `collector.alerts`, kiểm mỗi 60 giây và gửi qua cùng kênh với cảnh báo giá (toast Windows, Telegram). Mốc ghi cuối là thời điểm sửa của file con mới nhất của `ticks` và `book` hôm nay hoặc hôm qua. Collector ghi một file con mỗi 60 giây, nên hơn 5 phút không có file mới nghĩa là tiến trình đã dừng, kẹt hoặc mất mạng. Báo một lần khi bắt đầu im, nhắc lại mỗi 30 phút nếu vẫn im, báo một lần khi phục hồi.
+
+Giới hạn: chỉ theo dõi symbol crypto đang được ghi (cặp có file trong 7 ngày gần đây); cổ phiếu VN chỉ ghi trong giờ giao dịch nên chưa theo dõi. File đã gộp bởi `hotmerge` không tính, vì việc gộp làm mới mtime dù collector đã chết. Nếu cả máy tắt hoặc ngủ thì tiến trình cảnh báo cũng dừng, nên không có tin nào được gửi. Biến môi trường: `WATCHDOG_SILENCE_S` (300), `WATCHDOG_REMIND_S` (1800), `WATCHDOG_ENABLED=0` để tắt, hoặc cờ `--no-watchdog`.
+
 ## Công cụ vẽ
 
 Đường xu hướng, đường ngang, hộp, Fibonacci, văn bản. Lưu trong SQLite theo symbol. Điểm neo là (thời gian, giá) nên đúng ở mọi khung. Bản vẽ dùng chung cho mọi ô của symbol đó, chưa có layout đặt tên. Chưa kéo sửa điểm neo.
@@ -74,7 +80,7 @@ Không có miễn phí: sổ lệnh từng mức giá trong quá khứ, lịch s
 
 - [ ] Bạn xác nhận toast Windows có hiện lên màn hình.
 - [ ] Thêm `TELEGRAM_BOT_TOKEN` và `TELEGRAM_CHAT_ID` vào `.env`, thử một cảnh báo thật.
-- [ ] Cảnh báo khi collector im lặng hơn 5 phút: đọc mốc ghi cuối của `ticks` và `book`, gửi qua cùng kênh. Xem [01-collector-storage.md](01-collector-storage.md).
+- [x] Cảnh báo khi collector im lặng hơn 5 phút (2026-11-15). Cần khởi động lại `run-collectors.ps1` để tiến trình `alerts` nạp mã mới. Chưa thử gửi thật qua toast và Telegram.
 - [ ] Cảnh báo theo điều kiện orderflow (delta, CVD, imbalance, GEX flip). Hiện chỉ có giá, cắt mức và `alertcondition` của Pine.
 - [ ] `strategy.exit` với stop và limit, nhiều lệnh cùng lúc, pyramiding, trượt giá theo thanh khoản.
 - [ ] Sửa điểm neo của hình vẽ.

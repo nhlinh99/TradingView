@@ -197,7 +197,7 @@ Mỗi collector hiện hai PID trong danh sách tiến trình vì venv Python 3.
 ## Việc còn mở
 
 - [ ] Chạy collector bằng Task Scheduler thay vì phiên làm việc: `scripts/run-collectors.ps1` và `python -m collector.daily --vn`. Mỗi ngày bỏ lỡ là mất tick, sổ lệnh và snapshot options vĩnh viễn. Lệnh `schtasks` có trong README gốc, mục Thu thập dữ liệu.
-- [ ] Cảnh báo khi collector im lặng hơn 5 phút. Đọc mốc ghi cuối của `ticks` và `book`, gửi qua cùng kênh với cảnh báo giá. Xem [09-alerts-drawing-backtest.md](09-alerts-drawing-backtest.md).
+- [x] Cảnh báo khi collector im lặng hơn 5 phút (2026-11-15). Xem [09-alerts-drawing-backtest.md](09-alerts-drawing-backtest.md).
 - [ ] Sao lưu `C:\tv-data` (ngoài OneDrive nên chưa có bản sao): `robocopy` hằng tuần sang ổ khác, loại `logs` và file `.tmp`.
 - [ ] Bạn tự xoá thư mục thừa `C:\tv-data-bench`.
 - [ ] Đo lại dung lượng sổ lệnh lúc biến động mạnh. Mới đo một giờ yên tĩnh.

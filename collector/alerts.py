@@ -10,7 +10,9 @@ xét) lưu trong chính JSON nên khởi động lại tiến trình không làm
 Kênh gửi: thông báo Windows (toast) và Telegram nếu `.env` có TELEGRAM_BOT_TOKEN và TELEGRAM_CHAT_ID. Lỗi một kênh
 không chặn kênh khác; kết quả ghi trong `alert_events.sent`.
 
-Chạy:  python -m collector.alerts [--interval 15]
+Chạy:  python -m collector.alerts [--interval 15] [--no-watchdog]
+
+Cùng tiến trình này báo khi collector im lặng hơn 5 phút (collector/watchdog.py).
 """
 from __future__ import annotations
 
@@ -29,6 +31,7 @@ from common import appdb, store
 log = logging.getLogger("collector.alerts")
 
 INTERVAL_S = 15
+WATCHDOG_EVERY_S = 60
 
 
 # ---------- logic điều kiện (thuần) ----------
@@ -236,13 +239,21 @@ def tick(prices: dict[str, float] | Callable[[set[str]], dict[str, float]] = lat
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--interval", type=float, default=INTERVAL_S)
+    ap.add_argument("--no-watchdog", action="store_true", help="không báo khi collector im lặng hơn 5 phút")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    from collector import watchdog
+    dog = watchdog.Watchdog()
+    use_dog = not args.no_watchdog and os.environ.get("WATCHDOG_ENABLED", "1") != "0"
+    last_dog = 0.0
     while True:
         try:
             tick()
         except Exception:  # noqa: BLE001
             log.exception("lượt kiểm lỗi")
+        if use_dog and time.time() - last_dog >= WATCHDOG_EVERY_S:
+            last_dog = time.time()
+            watchdog.run_once(dog, notify)
         time.sleep(args.interval)
 
 

@@ -29,7 +29,7 @@ Ký hiệu: `[ ]` chưa làm, `[~]` làm dở, `[x]` xong. **Chặn** nghĩa là
 ## 4. Tôi làm được tiếp
 
 Việc vận hành và độ tin cậy:
-- [ ] Cảnh báo khi collector im lặng hơn 5 phút (đọc mốc ghi cuối của `ticks` và `book`, gửi qua kênh cảnh báo giá). Đây là việc nên làm trước, vì chính nó sẽ báo ngay lần thủng dữ liệu như sáng 15/11. [01](docs/plan/01-collector-storage.md), [09](docs/plan/09-alerts-drawing-backtest.md)
+- [x] Cảnh báo khi collector im lặng hơn 5 phút: xong, nằm trong tiến trình `collector.alerts`. Cần khởi động lại `run-collectors.ps1` để có hiệu lực, và cần kiểm toast, Telegram thật. [09](docs/plan/09-alerts-drawing-backtest.md)
 - [ ] Script sao lưu `C:\tv-data` bằng `robocopy`, loại `logs` và file `.tmp`. Viết script, không đặt lịch. [01](docs/plan/01-collector-storage.md)
 - [ ] Phát hiện khi SSI, VNDirect hoặc Binance WS đổi định dạng và thông báo thay vì im lặng. [01](docs/plan/01-collector-storage.md)
 - [ ] Backfill hàng tháng (`monthly/`) cho lịch sử nhiều năm. Hiện `collector.backfill` từ chối hơn 366 ngày nếu thiếu `--yes`. [01](docs/plan/01-collector-storage.md)

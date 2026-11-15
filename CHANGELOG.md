@@ -19,6 +19,8 @@ Xem `TODO.md` cho việc còn mở và `docs/plan/README.md` cho kế hoạch t�
 - Chú giải chỉ báo: giá trị cuối tô màu, tham số đầu, menu ⋯ (nhân bản, sửa mã), nhấp đúp mở cài đặt.
 - Hộp Cài đặt chỉ báo dạng cửa sổ có Huỷ, OK, Mặc định; thay đổi áp ngay để xem trước.
 
+- Cảnh báo khi collector im lặng hơn 5 phút (`collector/watchdog.py`), chạy trong tiến trình `collector.alerts`, gửi qua toast và Telegram; nhắc lại mỗi 30 phút, báo khi phục hồi.
+
 ### Sửa
 - Server phình tới 27,9 GB bộ nhớ cam kết sau nhiều giờ chạy (Windows commit 99%). Nay dùng một instance DuckDB dùng chung có trần 1 GB, có bộ giám sát bộ nhớ tự thoát khi vượt trần, `dev.ps1` tự khởi động lại server. Nguyên nhân gốc chưa xác định.
 - `dev.ps1` bị vỡ do ký tự `\r` trong một comment (đã sửa ở `71809a5`).
