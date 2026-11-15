@@ -24,6 +24,7 @@ Xem `TODO.md` cho việc còn mở và `docs/plan/README.md` cho kế hoạch t�
 - Chụp lại toàn bộ ảnh giao diện trong `docs/screenshots/` theo giao diện mới, thêm ảnh hộp thêm chỉ báo và hộp cài đặt chỉ báo; README mô tả lại phần chỉ báo.
 
 ### Sửa
+- Phương án tối ưu bộ nhớ và dữ liệu: `docs/plan/10-memory-data-optimization.md`, tóm tắt trong README (mục Tài nguyên máy).
 - Ghi chú GEX bị thanh vẽ che: chuyển sang góc trên bên phải.
 - Layout nhiều ô: thanh vẽ nằm ngang, không phủ hết chiều cao của ô nhỏ.
 - Cột phải của bảng soạn mã rộng hơn để đủ 5 tab của chiến lược; hộp Cài đặt không còn viền focus trên tab đầu.

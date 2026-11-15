@@ -6,7 +6,7 @@ Ký hiệu: `[ ]` chưa làm, `[~]` làm dở, `[x]` xong. **Chặn** nghĩa là
 
 ## 1. Quyết định và việc có rủi ro mất dữ liệu
 
-- [ ] **Quyết định giữ tick một năm hay gom nén.** Bạn vừa tải 1 năm tick BTCUSDT (2,4 GB) và 340 ngày XAUUSDT (0,5 GB). Chính sách `config/retention.toml` đặt `full_days = 30`: lần `collector.daily` kế tiếp (mỗi lần khởi động `run-collectors.ps1`, hoặc 03:00 khi đã lên lịch) sẽ gom tick cũ hơn 30 ngày thành footprint 1 phút rồi xoá tick. Muốn giữ tick đầy đủ thì tăng `full_days` lên 400 trước khi chạy lại. Gom nén vẫn là lựa chọn hợp lý nếu chỉ cần footprint 1 phút (giảm xuống khoảng 6% dung lượng). [01](docs/plan/01-collector-storage.md)
+- [ ] **Quyết định giữ tick một năm hay gom nén.** Khuyến nghị: để gom nén chạy, vì tick tải lại được miễn phí (xem [10](docs/plan/10-memory-data-optimization.md)). Bạn vừa tải 1 năm tick BTCUSDT (2,4 GB) và 340 ngày XAUUSDT (0,5 GB). Chính sách `config/retention.toml` đặt `full_days = 30`: lần `collector.daily` kế tiếp (mỗi lần khởi động `run-collectors.ps1`, hoặc 03:00 khi đã lên lịch) sẽ gom tick cũ hơn 30 ngày thành footprint 1 phút rồi xoá tick. Muốn giữ tick đầy đủ thì tăng `full_days` lên 400 trước khi chạy lại. Gom nén vẫn là lựa chọn hợp lý nếu chỉ cần footprint 1 phút (giảm xuống khoảng 6% dung lượng). [01](docs/plan/01-collector-storage.md)
 - [ ] **Khởi động lại `dev.ps1` một lần nữa** để nạp giới hạn bộ nhớ DuckDB và bộ giám sát bộ nhớ của server. Server Python không tự nạp lại. [01](docs/plan/01-collector-storage.md)
 - [ ] **Theo dõi bộ nhớ server khi chạy nhiều giờ.** Chưa biết nguyên nhân thật của lần phình 28 GB ngày 15/11; xem dòng cảnh báo `server.mem` nếu server tự thoát (mã 75). [01](docs/plan/01-collector-storage.md)
 - [ ] **Chạy collector bằng Task Scheduler** thay vì phiên làm việc: `scripts/run-collectors.ps1` (nay có crawl bù khi khởi động) và `python -m collector.daily --vn` lúc 03:00. Sáng 15/11 mất 8 giờ sổ lệnh vì collector dừng theo phiên, và không lấy lại được. Lệnh `schtasks` có trong README. Cần bạn đồng ý vì đây là thay đổi hệ thống. [01](docs/plan/01-collector-storage.md)
@@ -29,6 +29,8 @@ Ký hiệu: `[ ]` chưa làm, `[~]` làm dở, `[x]` xong. **Chặn** nghĩa là
 ## 4. Tôi làm được tiếp
 
 Việc vận hành và độ tin cậy:
+- [ ] Tối ưu bộ nhớ: áp trần DuckDB cho collector, semaphore cho yêu cầu nặng, chế độ chẩn đoán `SERVER_MEM_DIAG`, chạy thử 6 giờ để biết server có phình không. [10](docs/plan/10-memory-data-optimization.md)
+- [ ] Tối ưu dữ liệu: gom sổ lệnh quá 180 ngày thành 5 phút, bỏ cột `id` của tick đã gom, coi `bookDepth` là bộ đệm, cảnh báo đĩa thấp, sao lưu nhóm dữ liệu không tải lại được. [10](docs/plan/10-memory-data-optimization.md)
 - [x] Cảnh báo khi collector im lặng hơn 5 phút: xong, nằm trong tiến trình `collector.alerts`. Cần khởi động lại `run-collectors.ps1` để có hiệu lực, và cần kiểm toast, Telegram thật. [09](docs/plan/09-alerts-drawing-backtest.md)
 - [ ] Script sao lưu `C:\tv-data` bằng `robocopy`, loại `logs` và file `.tmp`. Viết script, không đặt lịch. [01](docs/plan/01-collector-storage.md)
 - [ ] Phát hiện khi SSI, VNDirect hoặc Binance WS đổi định dạng và thông báo thay vì im lặng. [01](docs/plan/01-collector-storage.md)

@@ -18,6 +18,7 @@ flowchart LR
   SV --> PN[Engine Pine 08]
   PN --> AB[Cảnh báo, vẽ,<br/>replay, backtest 09]
   C --> AB
+  C -.-> OP[Tối ưu tài nguyên 10]
   S -.-> GD[Vàng 06]
   S -.-> VN[VN100 07]
 ```
@@ -35,6 +36,7 @@ flowchart LR
 | [07-vn100.md](07-vn100.md) | Cổ phiếu VN100 | 7 | Chưa đo phiên giao dịch thật |
 | [08-pine-engine.md](08-pine-engine.md) | Engine Pine | 8 | Xong, chưa đối chiếu TradingView |
 | [09-alerts-drawing-backtest.md](09-alerts-drawing-backtest.md) | Cảnh báo, vẽ, replay, backtest | 9 | Xong. Kênh thông báo chưa kiểm bằng mắt |
+| [10-memory-data-optimization.md](10-memory-data-optimization.md) | Tối ưu bộ nhớ và dữ liệu | Xuyên suốt | Bộ nhớ server đã giới hạn. Phần còn lại là phương án chờ quyết định |
 
 Ghi chú kỹ thuật theo thời gian (số đo gốc, lỗi đã sửa): [engineering-notes.md](engineering-notes.md). Tài liệu gốc, giữ để tra cứu: [archive/spec-original.md](archive/spec-original.md) là đặc tả từng phase cho Claude Code, và [archive/research-initial.md](archive/research-initial.md) là bản nghiên cứu đầu tiên, nhiều nhận định đã được sửa. Khi mâu thuẫn, các file `01` đến `09` là bản đúng.
 
