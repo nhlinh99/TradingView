@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Chart, { type Flow } from './Chart'
 import IndicatorDock from './IndicatorDock'
 import IndicatorLegend from './IndicatorLegend'
+import IndicatorPicker from './IndicatorPicker'
 import { useIndicators, visibleResults } from './indicators'
 import FlowMenu from './FlowMenu'
 import SymbolSearch from './SymbolSearch'
@@ -78,6 +79,7 @@ export default function App() {
   const ind = useIndicators(symbol, tf)
   const [selectedInd, setSelectedInd] = useState<string | null>(null)
   const [alertsOpen, setAlertsOpen] = useState(() => pref('alertsOpen', '0', ['0', '1']) === '1')
+  const [pickerOpen, setPickerOpen] = useState(false)
   const [dockOpen, setDockOpen] = useState(() => pref('dockOpen', '0', ['0', '1']) === '1')
   const [state, setState] = useState<StreamState>('connecting')
   const [err, setErr] = useState<string | null>(null)
@@ -136,7 +138,7 @@ export default function App() {
       if (typing || e.ctrlKey || e.metaKey || e.altKey) return
       if (e.key === '/') { e.preventDefault(); setSearchOpen(true) }
       else if (e.key === '?') { setHelpOpen((v) => !v) }
-      else if (e.key.toLowerCase() === 'i') { setDockOpen((v) => { savePref('dockOpen', v ? '0' : '1'); return !v }) }
+      else if (e.key.toLowerCase() === 'i') { e.preventDefault(); setPickerOpen(true) }
       else if (e.key === 'Escape') { setHelpOpen(false) }
       else if (e.key === '[' || e.key === ']') {
         const i = TIMEFRAMES.indexOf(tf as (typeof TIMEFRAMES)[number])
@@ -210,7 +212,7 @@ export default function App() {
           <div className="seg" role="group" aria-label="Công cụ">
             <button aria-pressed={replay !== null} title="Phát lại từng nến" onClick={() => { setPlaying(false); setReplay((r) => (r === null ? Math.max(2, total - 100) : null)) }}>Replay</button>
             <button aria-pressed={alertsOpen} title="Cảnh báo giá" onClick={() => { const n = !alertsOpen; setAlertsOpen(n); savePref('alertsOpen', n ? '1' : '0') }}>Cảnh báo</button>
-            <button aria-pressed={dockOpen} title="Quản lý chỉ báo Pine (phím I)" onClick={() => { const n = !dockOpen; setDockOpen(n); savePref('dockOpen', n ? '1' : '0') }}>
+            <button aria-pressed={pickerOpen} aria-haspopup="dialog" title="Thêm chỉ báo (phím I)" onClick={() => setPickerOpen(true)}>
               Chỉ báo{ind.list.length > 0 && <span className="badge">{ind.list.length}</span>}
             </button>
           </div>
@@ -244,12 +246,10 @@ export default function App() {
         {symbol && (
           <div className={`cells cells-${layout}`}>
             <div className="cell">
-              <Chart symbol={symbol} tf={tf} tz={tz} flow={flow} pines={visibleResults(ind.list, ind.runs, tf)} indLegend={<IndicatorLegend list={ind.list} runs={ind.runs} onToggle={ind.toggle} onRemove={ind.remove}
-                onInput={(id, t, v) => ind.update(id, { inputs: { ...(ind.list.find((x) => x.id === id)?.inputs ?? {}), [t]: v } })}
-                onResetInputs={(id) => ind.update(id, { inputs: {} })}
+              <Chart symbol={symbol} tf={tf} tz={tz} flow={flow} pines={visibleResults(ind.list, ind.runs, tf)} indLegend={<IndicatorLegend list={ind.list} runs={ind.runs} onToggle={ind.toggle} onRemove={ind.remove} tf={tf}
+                onPatch={(id, p, rerun) => ind.update(id, p, rerun ?? false)} onDuplicate={(id) => { ind.duplicate(id) }}
                 onEdit={(id) => { setSelectedInd(id); setDockOpen(true); savePref('dockOpen', '1') }}
-                onAdd={() => { setDockOpen(true); savePref('dockOpen', '1') }}
-                onPatch={(id, p) => ind.update(id, p, false)} tf={tf} />} replay={replay} onTotal={setTotal} sync={sync.current} cellId={0} theme={theme} onState={onState} />
+                onAdd={() => setPickerOpen(true)} />} replay={replay} onTotal={setTotal} sync={sync.current} cellId={0} theme={theme} onState={onState} />
             </div>
             {extra.map((c, i) => (
               <div className="cell" key={i}>
@@ -275,6 +275,11 @@ export default function App() {
             onClose={() => { setDockOpen(false); savePref('dockOpen', '0') }} />
         )}
       </section>
+      {pickerOpen && (
+        <IndicatorPicker library={ind.library} list={ind.list} fav={ind.fav} onToggleFav={ind.toggleFav}
+          onAdd={(src, name) => { const id = ind.add(src, name); setSelectedInd(id); return id }}
+          onClose={() => setPickerOpen(false)} onOpenEditor={() => { setDockOpen(true); savePref('dockOpen', '1') }} />
+      )}
       {searchOpen && <SymbolSearch all={all} watch={watch} current={symbol} onPick={pickSymbol} onClose={() => setSearchOpen(false)} />}
       {helpOpen && (
         <div className="modal" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setHelpOpen(false) }}>
@@ -284,7 +289,7 @@ export default function App() {
               <dt><kbd>/</kbd> hoặc <kbd>Ctrl</kbd>+<kbd>K</kbd></dt><dd>Tìm hoặc thêm symbol</dd>
               <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Khung thời gian nhỏ hơn / lớn hơn</dd>
               <dt><kbd>T</kbd></dt><dd>Đổi giao diện sáng/tối</dd>
-              <dt><kbd>I</kbd></dt><dd>Mở hoặc đóng bảng quản lý chỉ báo</dd>
+              <dt><kbd>I</kbd></dt><dd>Mở hộp thêm chỉ báo (tìm, bấm để thêm, mũi tên và Enter)</dd>
               <dt><kbd>?</kbd></dt><dd>Mở hoặc đóng bảng này</dd>
               <dt><kbd>Esc</kbd></dt><dd>Đóng bảng đang mở</dd>
               <dt><kbd>Ctrl</kbd>+<kbd>Enter</kbd></dt><dd>Áp dụng mã đang sửa trong bảng chỉ báo</dd>

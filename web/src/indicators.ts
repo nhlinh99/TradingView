@@ -64,6 +64,7 @@ export function useIndicators(symbol: string, tf: string) {
   const [list, setList] = useState<Indicator[]>(() => load<Indicator[]>('ind.list', []))
   const [runs, setRuns] = useState<Record<string, RunState>>({})
   const [lib, setLib] = useState<{ name: string; source: string }[]>(() => load('ind.lib', []))
+  const [fav, setFav] = useState<string[]>(() => load<string[]>('ind.fav', []))
   const [examples, setExamples] = useState<{ name: string; source: string }[]>([])
   const token = useRef<Record<string, number>>({})
   const ctx = useRef({ symbol, tf })
@@ -72,6 +73,7 @@ export function useIndicators(symbol: string, tf: string) {
   useEffect(() => { fetchPineExamples().then(setExamples).catch(() => setExamples([])) }, [])
   useEffect(() => save('ind.list', list), [list])
   useEffect(() => save('ind.lib', lib), [lib])
+  useEffect(() => save('ind.fav', fav), [fav])
 
   const run = useCallback(async (ind: Indicator) => {
     const my = (token.current[ind.id] = (token.current[ind.id] ?? 0) + 1)
@@ -109,6 +111,17 @@ export function useIndicators(symbol: string, tf: string) {
     if (rerun && next.visible) void run(next)
   }, [run])
 
+  const duplicate = useCallback((id: string): string | null => {
+    const cur = listRef.current.find((x) => x.id === id)
+    if (!cur) return null
+    const copy: Indicator = { ...cur, id: uid(), inputs: { ...cur.inputs }, style: cur.style ? { ...cur.style } : undefined, bt: { ...cur.bt } }
+    setList((l) => { const i = l.findIndex((x) => x.id === id); return [...l.slice(0, i + 1), copy, ...l.slice(i + 1)] })
+    void run(copy)
+    return copy.id
+  }, [run])
+
+  const toggleFav = useCallback((name: string) => setFav((f) => (f.includes(name) ? f.filter((x) => x !== name) : [...f, name])), [])
+
   const toggle = useCallback((id: string) => {
     const cur = listRef.current.find((x) => x.id === id)
     if (!cur) return
@@ -130,7 +143,7 @@ export function useIndicators(symbol: string, tf: string) {
     ...lib.map((x) => ({ ...x, mine: true })),
     ...examples.map((x) => ({ name: x.name, source: x.source, mine: false })),
   ]
-  return { list, runs, library, add, update, toggle, remove, run, saveToLibrary, removeFromLibrary }
+  return { list, runs, library, fav, toggleFav, add, update, duplicate, toggle, remove, run, saveToLibrary, removeFromLibrary }
 }
 
 /** Màu mới theo tuỳ chỉnh: giữ ô trống (không vẽ), đổi mọi ô có màu sang màu đã chọn. Độ đục mặc định lấy từ màu gốc. */

@@ -436,3 +436,69 @@ kbd { font: 11px ui-monospace, Consolas, monospace; border: 1px solid var(--line
 .swrow input[type='checkbox']:checked { background: var(--accent); }
 .swrow input[type='checkbox']:checked::after { transform: translateX(14px); }
 @media (prefers-reduced-motion: reduce) { .sline input[type='checkbox']::after, .swrow input[type='checkbox']::after { transition: none; } }
+
+/* Hộp thêm chỉ báo, hộp cài đặt, chú giải có giá trị (tương tác theo TradingView) */
+.modal { z-index: 60; }
+.picker, .setdlg { background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; }
+.picker { width: min(760px, calc(100vw - 24px)); height: min(560px, calc(100vh - 14vh - 16px)); }
+.picker header, .setdlg header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px 8px 18px; }
+.picker h2, .setdlg h2 { margin: 0; font-size: 17px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.psearch { padding: 0 16px 10px; }
+.psearch input { width: 100%; padding: 10px 14px; font-size: 15px; border: 1px solid var(--line); border-radius: 10px; background: var(--chip); color: var(--ink); outline: none; }
+.psearch input:focus { border-color: var(--accent); background: var(--bg); }
+.pbody { flex: 1; min-height: 0; display: grid; grid-template-columns: 200px minmax(0, 1fr); border-top: 1px solid var(--line); }
+.pbody nav { padding: 8px 8px; border-right: 1px solid var(--line); overflow: auto; }
+.pbody nav h3 { margin: 10px 8px 4px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--mute); font-weight: 600; }
+.pbody nav button { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 7px 10px; border: 0; background: none; color: var(--ink); text-align: left; border-radius: 8px; cursor: pointer; font-size: 13px; }
+.pbody nav button:hover { background: var(--hover); }
+.pbody nav button.on { background: var(--hover); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
+.plist { list-style: none; margin: 0; padding: 4px 6px; overflow: auto; }
+.plist li { display: flex; align-items: center; border-radius: 8px; }
+.plist li.on { background: var(--hover); }
+.pitem { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 9px 10px; border: 0; background: none; color: var(--ink); cursor: pointer; text-align: left; font-size: 14px; }
+.pname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: capitalize; }
+.pname mark { background: none; color: var(--accent); font-weight: 700; }
+.pitem em.tag { flex: none; font-style: normal; font-size: 11px; color: var(--mute); background: var(--chip); border-radius: 999px; padding: 0 8px; line-height: 18px; }
+.pitem em.tag.strat { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.pitem em.tag.mine { color: #9a6700; background: color-mix(in srgb, #e5a50a 18%, transparent); }
+.pitem .added { margin-left: auto; flex: none; color: var(--ok); font-size: 12px; font-weight: 600; }
+.ibtn.star { opacity: .45; } .plist li:hover .ibtn.star, .ibtn.star.on, .ibtn.star:focus-visible { opacity: 1; }
+.ibtn.star.on { color: #e5a50a; } .ibtn.star.on svg { fill: currentColor; }
+.pempty { padding: 24px 16px; color: var(--mute); justify-content: center; text-align: center; }
+.picker footer, .setdlg footer { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line); }
+.picker footer button, .setdlg footer button:not(.linkbtn) { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); cursor: pointer; font-size: 13px; }
+.picker footer button:hover, .setdlg footer button:not(.linkbtn):hover { border-color: var(--accent); }
+.setdlg footer button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; min-width: 72px; justify-content: center; }
+.ptoast { margin-left: 8px; color: var(--ok); font-size: 12px; min-height: 1em; }
+.phint { margin-left: auto; color: var(--mute); font-size: 12px; white-space: nowrap; }
+
+.setdlg { width: min(460px, calc(100vw - 24px)); max-height: calc(100vh - 14vh - 16px); }
+.setdlg .tabs.line { display: flex; gap: 4px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+.setdlg .tabs.line button { border: 0; background: none; color: var(--mute); padding: 8px 12px; cursor: pointer; font-size: 13px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.setdlg .tabs.line button.on { color: var(--ink); font-weight: 600; border-bottom-color: var(--accent); }
+.setbody { flex: 1; min-height: 160px; overflow: auto; padding: 8px 16px 12px; }
+.setdlg footer .sp { flex: 1; }
+
+.indval { margin-left: 6px; font-variant-numeric: tabular-nums; font-weight: 600; }
+.indsum { color: var(--mute); font-weight: 400; }
+.inderr { color: var(--bad); }
+.indbtns { display: flex; align-items: center; gap: 0; margin-left: 2px; }
+.indrow { position: relative; }
+.indrow .indbtns button { font-size: 14px; line-height: 1; }
+.indrow:not(:hover):not(:focus-within) .indbtns { visibility: hidden; position: absolute; }
+.indrow:hover .indbtns, .indrow:focus-within .indbtns { visibility: visible; position: static; }
+.indmenu { position: absolute; z-index: 9; top: 100%; right: 0; min-width: 170px; margin-top: 2px; padding: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); display: grid; }
+.indmenu button { width: auto; height: auto; display: block; text-align: left; padding: 7px 10px; opacity: 1; font-size: 13px; color: var(--ink); border-radius: 6px; }
+.indmenu button:hover { background: var(--hover); }
+.indmenu button.danger { color: var(--bad); }
+@media (max-width: 700px) {
+  .modal { padding-top: 4vh; }
+  .picker { height: calc(100vh - 6vh); }
+  .pbody { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  .pbody nav { display: flex; gap: 4px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); padding: 6px; }
+  .pbody nav > div { display: contents; } .pbody nav h3 { display: none; }
+  .pbody nav button { width: auto; white-space: nowrap; }
+  .phint { display: none; }
+  .indrow .indbtns { visibility: visible !important; position: static !important; }
+}
+@media (hover: none) { .indrow .indbtns { visibility: visible !important; position: static !important; } }
