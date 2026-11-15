@@ -130,6 +130,20 @@ Hai cách, chọn một:
 
    So với R2: Drive không phải trả tiền thêm và bạn đã có, nhưng phải tự giữ cho xác thực không hỏng; R2 dùng khoá truy cập cố định, không hết hạn.
 
+**Thử nghiệm Google Drive (2026-11-15): chưa làm được, đang chờ bạn đăng nhập.** Bạn đã tạo thư mục `data_vnstock` và dán liên kết chia sẻ. Kiểm tra:
+
+- Thư mục mở được **không cần đăng nhập** (HTTP 200, tiêu đề trang hiện tên thư mục), nghĩa là chia sẻ kiểu "bất kỳ ai có liên kết". Nên đổi sang "Hạn chế" và chỉ thêm đúng tài khoản dùng cho việc này, vì ai có liên kết cũng xem được.
+- Ghi vào Drive cần danh tính: gọi Drive API không đăng nhập bị từ chối (HTTP 403, "callers without established identity"). Liên kết chia sẻ không cho tôi hay một script ghi vào. Phải có token OAuth do chính bạn đăng nhập tạo ra.
+- Máy này chưa cài `rclone`. Chưa cài gì.
+
+Các bước để thử (bạn làm phần đăng nhập, tôi làm phần còn lại):
+1. Cài `rclone` (ví dụ `winget install Rclone.Rclone`).
+2. Chạy `rclone config`, tạo remote `gdrive` loại `drive`, đăng nhập bằng trình duyệt, đặt `root_folder_id` là mã thư mục trong liên kết để rclone chỉ làm việc trong thư mục đó. Mã thư mục là đoạn sau `/folders/` và trước dấu `?`. Phạm vi `drive` đọc được thư mục có sẵn; phạm vi `drive.file` hẹp hơn nhưng chỉ thấy file do chính rclone tạo, nên không thấy thư mục bạn tạo bằng tay. Dùng tài khoản Google riêng để giảm thiệt hại nếu token lộ.
+3. Tạo OAuth client riêng và để trạng thái "In production", để token không hết hạn sau 7 ngày (xem trên).
+4. Khi có remote, tôi thử: ghi một file 1 MB, liệt kê, tải về, so khớp, xoá, đo tốc độ, và kiểm `rclone about` để biết còn bao nhiêu chỗ.
+
+**Với 3 GB trống:** chỉ đẩy nhóm không tải lại được (`book`, `options`, `vn_book`), không đẩy tick và nến. Ước tính (chưa đo đủ): sổ lệnh trạng thái ổn định khoảng 0,44 GB theo chính sách giữ dữ liệu (7 ngày ở 5 giây, 180 ngày ở 1 phút), options vài MB, `vn_book` chưa đo. Vậy bản sao một năm khoảng 0,5 đến 1 GB, vừa trong 3 GB. Nếu dùng làm kho trung gian thì chỉ giữ 14 ngày gần nhất (dưới 0,3 GB) và xoá file đã kéo. File Parquet đã nén nên nén thêm không giảm đáng kể. Công cụ đồng bộ phải kiểm dung lượng còn lại và báo khi dưới 20%.
+
 Chi phí không phải yếu tố quyết định. Kho trung gian chỉ cần giữ vài tuần gần nhất (xoá file cũ khi máy cá nhân đã kéo), dưới khoảng 1 GB, trong mức miễn phí 10 GB của R2 theo các nguồn bên thứ ba. Giá niêm yết theo các nguồn đó: R2 khoảng 0,015 USD mỗi GB mỗi tháng và không tính phí tải xuống, B2 khoảng 0,006 USD mỗi GB mỗi tháng. Chưa kiểm trên trang giá chính thức của hai bên, kiểm trước khi đăng ký. Tải xuống mỗi tháng chỉ khoảng vài trăm MB đến 1 GB, nên cả hai đều gần như miễn phí.
 
 Dữ liệu là bản ghi từ nguồn công khai dùng cho cá nhân: đẩy lên kho riêng làm bản sao thì ổn, đừng chia sẻ công khai (điều khoản của Binance, Deribit, SSI chưa đọc).
