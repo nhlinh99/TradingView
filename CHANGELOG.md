@@ -26,6 +26,7 @@ Xem `TODO.md` cho việc còn mở và `docs/plan/README.md` cho kế hoạch t�
 ### Sửa
 - Tối ưu bộ nhớ: trần DuckDB cho đường ghi và collector (`store.work_conn()`), giới hạn 3 yêu cầu nặng cùng lúc (`server/limits.py`, 503 khi chờ quá 60 giây), chế độ chẩn đoán `SERVER_MEM_DIAG=1`, `scripts/soak_server.py` để chạy thử dài.
 - Đã chạy gom nén theo quyết định giữ `full_days = 30`: 644 ngày tick của BTCUSDT và XAUUSDT thành footprint 1 phút, giải phóng 2,65 GB; `DATA_DIR` từ khoảng 3,4 GB còn 0,7 GB.
+- Đã thử FireAnt: đăng nhập nặc danh lấy được token, `historical-quotes` cho dữ liệu ngày VN từ 2006 (có dòng tiền ngoại, tự doanh, đặt mua và đặt bán), không có sổ lệnh hay tick. Chưa tích hợp vào kho. Xem `docs/plan/07-vn100.md`.
 - Phương án tối ưu bộ nhớ và dữ liệu: `docs/plan/10-memory-data-optimization.md`, tóm tắt trong README (mục Tài nguyên máy).
 - Ghi chú GEX bị thanh vẽ che: chuyển sang góc trên bên phải.
 - Layout nhiều ô: thanh vẽ nằm ngang, không phủ hết chiều cao của ô nhỏ.
