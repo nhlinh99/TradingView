@@ -502,3 +502,21 @@ kbd { font: 11px ui-monospace, Consolas, monospace; border: 1px solid var(--line
   .indrow .indbtns { visibility: visible !important; position: static !important; }
 }
 @media (hover: none) { .indrow .indbtns { visibility: visible !important; position: static !important; } }
+
+/* Ghi chú GEX nằm góc trên bên phải, để không bị thanh vẽ và chú giải chỉ báo che */
+.gexnote { left: auto; right: 64px; top: 6px; max-width: min(520px, calc(100% - 420px)); text-align: right; }
+@media (max-width: 900px) { .gexnote { left: 56px; right: auto; top: 28px; max-width: calc(100% - 130px); text-align: left; } }
+
+/* Cột phải rộng hơn để đủ 5 tab của chiến lược (Tham số, Kiểu dáng, Hiển thị, Backtest, Kết quả) */
+.dock-body { grid-template-columns: 260px minmax(0, 1fr) 352px; }
+.dock-right .tabs button { padding: 5px 7px; font-size: 12px; }
+@media (max-width: 1100px) { .dock-body { grid-template-columns: 220px minmax(0, 1fr) 320px; } }
+@media (max-width: 900px) { .dock-body { grid-template-columns: 1fr; } }
+.setdlg:focus { outline: none; }
+
+/* Layout nhiều ô: thanh vẽ nằm ngang để không phủ hết chiều cao của ô nhỏ */
+.cells-2 .draw-tools, .cells-4 .draw-tools { flex-direction: row; width: auto; top: 30px; left: 6px; padding: 2px; }
+.cells-2 .draw-tools .sep, .cells-4 .draw-tools .sep { width: 1px; height: 20px; margin: 0 3px; }
+.cells-2 .draw-tools button, .cells-4 .draw-tools button { width: 26px; height: 26px; }
+.cells-2 .legend, .cells-4 .legend { left: 10px; }
+.cells-2 .indlegend, .cells-4 .indlegend { top: 64px; left: 8px; }

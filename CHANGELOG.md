@@ -21,7 +21,12 @@ Xem `TODO.md` cho việc còn mở và `docs/plan/README.md` cho kế hoạch t�
 
 - Cảnh báo khi collector im lặng hơn 5 phút (`collector/watchdog.py`), chạy trong tiến trình `collector.alerts`, gửi qua toast và Telegram; nhắc lại mỗi 30 phút, báo khi phục hồi.
 
+- Chụp lại toàn bộ ảnh giao diện trong `docs/screenshots/` theo giao diện mới, thêm ảnh hộp thêm chỉ báo và hộp cài đặt chỉ báo; README mô tả lại phần chỉ báo.
+
 ### Sửa
+- Ghi chú GEX bị thanh vẽ che: chuyển sang góc trên bên phải.
+- Layout nhiều ô: thanh vẽ nằm ngang, không phủ hết chiều cao của ô nhỏ.
+- Cột phải của bảng soạn mã rộng hơn để đủ 5 tab của chiến lược; hộp Cài đặt không còn viền focus trên tab đầu.
 - Server phình tới 27,9 GB bộ nhớ cam kết sau nhiều giờ chạy (Windows commit 99%). Nay dùng một instance DuckDB dùng chung có trần 1 GB, có bộ giám sát bộ nhớ tự thoát khi vượt trần, `dev.ps1` tự khởi động lại server. Nguyên nhân gốc chưa xác định.
 - `dev.ps1` bị vỡ do ký tự `\r` trong một comment (đã sửa ở `71809a5`).
 - Mã Pine tràn ra ngoài khung trong bảng chỉ báo: luật CSS của trình soạn gắn nhầm vào `.pine` nên không áp dụng cho bảng mới. Nay mã cuộn trong khung, có số dòng.

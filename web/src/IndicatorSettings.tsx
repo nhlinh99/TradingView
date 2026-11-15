@@ -20,28 +20,28 @@ type Tab = 'inputs' | 'style' | 'vis'
 export default function IndicatorSettings({ ind, run, onPatch, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('inputs')
   const snap = useRef({ inputs: ind.inputs, style: ind.style, tfs: ind.tfs, scaleLabels: ind.scaleLabels })
-  const first = useRef<HTMLButtonElement>(null)
+  const box = useRef<HTMLDivElement>(null)
   const cancel = () => {
     const s = snap.current
     const inputsChanged = JSON.stringify(s.inputs) !== JSON.stringify(ind.inputs)
     onPatch({ inputs: s.inputs, style: s.style, tfs: s.tfs, scaleLabels: s.scaleLabels }, inputsChanged)
     onClose()
   }
-  useEffect(() => { first.current?.focus() }, [])
+  useEffect(() => { box.current?.focus() }, [])
   const res = run?.result
   const dirty = Object.keys(ind.inputs).length > 0 || Object.keys(ind.style ?? {}).length > 0 || !!ind.tfs || !!ind.scaleLabels
 
   return createPortal(
     <div className="modal" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="setdlg" role="dialog" aria-modal="true" aria-label={`Cài đặt ${ind.name}`}
+      <div className="setdlg" ref={box} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`Cài đặt ${ind.name}`}
         onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); cancel() } }}>
         <header>
           <h2 title={ind.name}>{ind.name}</h2>
           <button className="ibtn" onClick={cancel} aria-label="Đóng và huỷ thay đổi" title="Huỷ (Esc)"><Icon name="x" size={16} /></button>
         </header>
         <div className="tabs line" role="tablist" aria-label="Thiết lập">
-          {([['inputs', 'Tham số'], ['style', 'Kiểu dáng'], ['vis', 'Hiển thị']] as [Tab, string][]).map(([id, label], i) => (
-            <button key={id} ref={i === 0 ? first : undefined} role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>{label}</button>
+          {([['inputs', 'Tham số'], ['style', 'Kiểu dáng'], ['vis', 'Hiển thị']] as [Tab, string][]).map(([id, label]) => (
+            <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>{label}</button>
           ))}
         </div>
         <div className="setbody">

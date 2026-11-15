@@ -28,11 +28,11 @@ Việc còn mở và thứ tự ưu tiên: xem [`TODO.md`](TODO.md). Kế hoạc
 
 ## Giao diện
 
-Thanh trên cùng chỉ có một hàng: symbol và trạng thái trực tiếp, khung thời gian, nút **Chỉ báo**, bố cục 1/2/4 ô, múi giờ, Replay, Cảnh báo, Pine, đổi sáng/tối. Mọi tính năng orderflow nằm trong bảng **Chỉ báo**: có 4 mẫu dựng sẵn (Sạch, Footprint, Bookmap, Profile), công tắc có mô tả một dòng, thanh trượt cho ngưỡng cắt, cỡ chấm, imbalance; tuỳ chọn chi tiết chỉ hiện khi bật tính năng; tính năng không dùng được cho symbol hiện tại (ví dụ cổ phiếu VN không có tick) bị làm mờ kèm giải thích. Bảng đóng bằng Esc hoặc bấm ra ngoài. Thanh vẽ ở mép trái dùng biểu tượng kèm gợi ý khi rê chuột; trên điện thoại thanh này nằm ngang và các nút tự gọn lại.
+Thanh trên cùng chỉ có một hàng: symbol và trạng thái trực tiếp, khung thời gian, nút **Orderflow**, bố cục 1/2/4 ô, múi giờ, Replay, Cảnh báo, **Chỉ báo** (Pine), đổi sáng/tối. Mọi tính năng orderflow nằm trong bảng **Orderflow**: có 4 mẫu dựng sẵn (Sạch, Footprint, Bookmap, Profile), công tắc có mô tả một dòng, thanh trượt cho ngưỡng cắt, cỡ chấm, imbalance; tuỳ chọn chi tiết chỉ hiện khi bật tính năng; tính năng không dùng được cho symbol hiện tại (ví dụ cổ phiếu VN không có tick) bị làm mờ kèm giải thích. Bảng đóng bằng Esc hoặc bấm ra ngoài. Thanh vẽ ở mép trái dùng biểu tượng kèm gợi ý khi rê chuột; trên điện thoại thanh này nằm ngang và các nút tự gọn lại.
 
-![Bảng Chỉ báo](docs/screenshots/indicators-menu.png)
+![Bảng Orderflow](docs/screenshots/indicators-menu.png)
 
-**Tìm symbol và phím tắt**: bấm `/` hoặc `Ctrl+K` để tìm theo mã (gõ một phần là lọc, mũi tên chọn, Enter mở; mã chưa theo dõi sẽ được thêm). `[` và `]` đổi khung thời gian, `T` đổi sáng/tối, `?` xem danh sách phím, `Ctrl+Enter` chạy script Pine, `Esc` đóng bảng.
+**Tìm symbol và phím tắt**: bấm `/` hoặc `Ctrl+K` để tìm theo mã (gõ một phần là lọc, mũi tên chọn, Enter mở; mã chưa theo dõi sẽ được thêm). `[` và `]` đổi khung thời gian, `T` đổi sáng/tối, `I` mở hộp thêm chỉ báo, `?` xem danh sách phím, `Ctrl+Enter` chạy script Pine, `Esc` đóng bảng.
 
 ![Tìm symbol](docs/screenshots/symbol-search.png)
 
@@ -68,7 +68,15 @@ Kiểu màu **Mua/Bán**: lệnh mua chờ màu xanh lá, lệnh bán chờ màu
 
 ![Pine và backtest](docs/screenshots/pine-backtest.png)
 
-**Nhiều chỉ báo Pine cùng lúc**: nút **Chỉ báo** (phím `I`) mở bảng quản lý. Bên trái là danh sách đang dùng (ẩn/hiện, xoá) và Thư viện có ô tìm, thêm một chạm; giữa là trình soạn mã; bên phải là tham số tự sinh từ script (nhóm theo `group`, thanh trượt khi có min/max, ô tìm khi có nhiều tham số), backtest và thống kê. Trên biểu đồ có chú giải chỉ báo (ẩn/hiện, cài đặt nhanh, sửa mã, xoá). Danh sách chỉ báo, tham số và script của bạn (Lưu vào thư viện) nhớ trong trình duyệt; đổi symbol hoặc khung thì mọi chỉ báo đang hiện tự chạy lại.
+**Thêm chỉ báo**: nút **Chỉ báo** hoặc phím `I` mở hộp thêm chỉ báo. Ô tìm tự focus, phần khớp được tô màu, cột trái phân loại (tất cả, yêu thích, script của tôi, chỉ báo và chiến lược có sẵn). Bấm một dòng hoặc nhấn Enter để thêm, hộp không đóng nên thêm được nhiều chỉ báo liền nhau; dấu ✓ cho biết đã có trên biểu đồ. Ngôi sao ghim script yêu thích.
+
+![Thêm chỉ báo](docs/screenshots/indicator-picker.png)
+
+**Chú giải và cài đặt**: mỗi chỉ báo có một dòng trên biểu đồ với tham số và giá trị cuối tô theo màu đường. Rê chuột để hiện nút ẩn, cài đặt, sửa mã, xoá và menu ⋯ (nhân bản). Nhấp đúp vào tên hoặc bấm bánh răng để mở hộp **Cài đặt** với ba tab: Tham số (tự sinh từ script, nhóm theo `group`, thanh trượt khi có min/max), Kiểu dáng (bật tắt, màu, độ đục, độ dày, nét cho từng đường, mức ngang, tín hiệu và vùng tô) và Hiển thị (chỉ hiện ở những khung nào, nhãn giá trị trên thang giá). Thay đổi áp ngay để xem trước; Huỷ trả về lúc mở hộp, OK giữ lại, Mặc định đặt lại.
+
+![Cài đặt chỉ báo](docs/screenshots/indicator-settings.png)
+
+**Soạn mã Pine**: nút `</>` trên chú giải hoặc "Soạn mã" trong hộp thêm chỉ báo mở bảng ở dưới biểu đồ. Bên trái là danh sách đang dùng và thư viện, giữa là trình soạn mã có số dòng và dòng lỗi đánh dấu đỏ, bên phải là tham số, kiểu dáng, hiển thị, và với chiến lược thêm tab Backtest và Kết quả. Kéo thanh trên cùng để đổi chiều cao. Danh sách chỉ báo, tham số, kiểu dáng và script của bạn (Lưu vào thư viện) nhớ trong trình duyệt; đổi symbol hoặc khung thì mọi chỉ báo đang hiện tự chạy lại.
 
 ![Quản lý chỉ báo](docs/screenshots/indicators-manager.png)
 
