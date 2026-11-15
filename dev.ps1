@@ -21,7 +21,7 @@ function Stop-Tree($p) {
 }
 
 # Catch-up of 1-minute candles on every start (a few seconds), so the chart has no hole for the time
-# the collectors were not running. Full catch-up (archive gaps, VN100) runs in scriptsun-collectors.ps1.
+# the collectors were not running. Full catch-up (archive gaps, VN100) runs in scripts/run-collectors.ps1.
 foreach ($sym in @('BTCUSDT', 'XAUUSDT')) {
   try { & $py -m collector.klines --symbol $sym --days 3 } catch { Write-Warning "klines catch-up failed for ${sym}: $_" }
 }
