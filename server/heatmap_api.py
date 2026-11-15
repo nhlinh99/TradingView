@@ -13,6 +13,7 @@ import duckdb
 from fastapi import APIRouter, HTTPException, Query
 
 from common import store
+from . import limits
 
 router = APIRouter()
 
@@ -81,7 +82,8 @@ def heatmap_endpoint(
     tbucket: int = Query(60_000, ge=1, description="độ rộng ô thời gian, ms (làm tròn lên bội của 5000)"),
     mult: int = Query(1, ge=1, le=100000, description="nhân bucket giá"),
 ) -> dict:
-    return get_heatmap(symbol.upper(), from_, to, tbucket, mult)
+    with limits.heavy():
+        return get_heatmap(symbol.upper(), from_, to, tbucket, mult)
 
 
 def get_bubbles(symbol: str, start_ms: int, end_ms: int, tbucket_ms: int, top: int) -> dict:
@@ -121,7 +123,8 @@ def bubbles_endpoint(
     tbucket: int = Query(10_000, ge=1),
     top: int = Query(300, ge=1, le=5000),
 ) -> dict:
-    return get_bubbles(symbol.upper(), from_, to, tbucket, top)
+    with limits.heavy():
+        return get_bubbles(symbol.upper(), from_, to, tbucket, top)
 
 
 def get_icebergs(symbol: str, start_ms: int, end_ms: int, tbucket_ms: int, factor: float, min_qty: float, top: int = 40) -> dict:
@@ -172,4 +175,5 @@ def icebergs_endpoint(
     min_qty: float = Query(0.0, ge=0),
     top: int = Query(40, ge=1, le=500, description="chỉ giữ `top` ô có khối lượng khớp lớn nhất, vì dòng lệnh thường cũng vượt ngưỡng ở rất nhiều ô"),
 ) -> dict:
-    return get_icebergs(symbol.upper(), from_, to, tbucket, factor, min_qty, top)
+    with limits.heavy():
+        return get_icebergs(symbol.upper(), from_, to, tbucket, factor, min_qty, top)

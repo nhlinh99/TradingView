@@ -33,11 +33,11 @@ Hiện trạng đo ngày 2026-11-15: các collector tổng khoảng 400 MB (`liv
 | Một instance DuckDB dùng chung cho truy vấn đọc, trần 1 GB, 4 luồng, tràn ra `DATA_DIR\tmp` | Đỉnh 221 MB thay vì 376 MB trong cùng bài thử | **Đã làm** |
 | `memguard`: đo bộ nhớ cam kết mỗi 30 giây, ghi cảnh báo kèm 5 đường dẫn gọi nhiều nhất, tự thoát ở 3 GB, `dev.ps1` tự khởi động lại | Giới hạn thiệt hại ở 3 GB thay vì 28 GB | **Đã làm** |
 | `/health` trả `private_mb`, `threads`, `limit_mb` | Theo dõi từ ngoài | **Đã làm** |
-| Áp trần DuckDB cho collector (`hotmerge`, `compact`, `backfill`, ghi file con): hiện vẫn dùng `duckdb.connect()` riêng với trần mặc định 80% RAM | Giảm bộ nhớ của `hotmerge` (125 MB), và gom nén file lớn không bao giờ chiếm hết RAM. Chưa đo mức giảm | Đề xuất. Cần hàm `store.work_conn(limit)` riêng cho ghi, vì ghi dùng bảng tên cố định |
-| Giới hạn số yêu cầu nặng chạy đồng thời (Pine, heatmap 24 giờ, footprint) bằng semaphore 2 đến 3 | Chặn đỉnh bộ nhớ khi giao diện bắn nhiều yêu cầu cùng lúc (đổi khung với nhiều chỉ báo) | Đề xuất |
+| Trần DuckDB cho đường ghi và collector (`hotmerge`, `compact`, `backfill`, ghi file con): `store.work_conn()`, 512 MB và 2 luồng (`DUCKDB_WORK_MEMORY_LIMIT`, `DUCKDB_WORK_THREADS`), tràn ra `DATA_DIR\tmp`. Đường đọc của `live_trades` dùng `store.query_conn()` | Gom nén file lớn không bao giờ chiếm tới 80% RAM. Chưa đo mức giảm bộ nhớ của `hotmerge` (125 MB) | **Đã làm** (2026-11-15). Cần khởi động lại `run-collectors.ps1` để các collector nạp mã mới |
+| Giới hạn số yêu cầu nặng chạy đồng thời (Pine, footprint, profile, heatmap, bong bóng, iceberg): `server/limits.py`, mặc định 3 (`HEAVY_CONCURRENCY`), chờ tối đa 60 giây rồi trả 503 kèm `Retry-After` | Chặn đỉnh bộ nhớ khi giao diện bắn nhiều yêu cầu cùng lúc (đổi khung với nhiều chỉ báo). `/health` trả `heavy_active`, `heavy_peak` | **Đã làm** (2026-11-15) |
 | Bộ nhớ đệm kết quả Pine theo (script, symbol, khung, tham số, nến cuối) có trần theo byte | Giảm CPU, nhưng tốn bộ nhớ: phải đặt trần, ví dụ 200 MB | Đề xuất. Xem TODO |
-| Chế độ chẩn đoán `SERVER_MEM_DIAG=1`: khi vượt 1,5 GB thì ghi `tracemalloc` top 20 và số luồng ra log trước khi thoát | Tìm nguyên nhân thật của lần phình 28 GB | Đề xuất |
-| Chạy thử 6 giờ với giao diện mở và đổi khung liên tục, lấy mẫu `/health` mỗi phút | Biết server có phình theo thời gian không | Đề xuất. Cần làm trước khi coi vấn đề đã đóng |
+| Chế độ chẩn đoán `SERVER_MEM_DIAG=1`: bật `tracemalloc` khi khởi động, và khi bộ nhớ vượt nửa trần (hoặc ngay trước khi thoát vì vượt trần) ghi báo cáo: nơi cấp phát nhiều nhất, loại đối tượng Python nhiều nhất, luồng theo loại | Tìm nguyên nhân thật của lần phình 28 GB. Chỉ thấy phần Python cấp phát, không thấy DuckDB. Làm chậm server, chỉ bật khi đang tìm nguyên nhân | **Đã làm** (2026-11-15) |
+| Chạy thử dài với yêu cầu luân phiên giống giao diện: `python scripts/soak_server.py --minutes 360`, lấy mẫu `/health` mỗi phút, báo hệ số tăng MB mỗi giờ | Biết server có phình theo thời gian không | Script đã có. Đã chạy thử 30 phút, xem mục Kết quả chạy thử dài. **Cần chạy 6 giờ trước khi coi vấn đề đã đóng** |
 
 Cách đo: `curl http://127.0.0.1:8000/health` cho `private_mb` của server. Bộ nhớ cam kết toàn máy: `Get-Counter '\Memory\Committed Bytes','\Memory\Commit Limit'`. Cần theo dõi commit, không chỉ RAM thật, vì Windows từ chối cấp phát khi commit chạm trần.
 
@@ -83,10 +83,11 @@ Một việc phụ thuộc quyết định này: sau gom nén, footprint dưới
 ## Việc còn mở
 
 - [x] Quyết định `full_days`: giữ 30, để gom nén chạy (2026-11-15).
-- [ ] Hàm `store.work_conn(limit)` và áp trần cho `hotmerge`, `compact`, `backfill`.
-- [ ] Semaphore cho yêu cầu nặng của server.
-- [ ] Chế độ chẩn đoán `SERVER_MEM_DIAG`.
-- [ ] Chạy thử 6 giờ và đọc log `server.mem` để biết server có phình không.
+- [x] `store.work_conn()` và áp trần cho `hotmerge`, `compact`, `backfill` (2026-11-15).
+- [x] Giới hạn yêu cầu nặng của server (`server/limits.py`).
+- [x] Chế độ chẩn đoán `SERVER_MEM_DIAG`.
+- [ ] Chạy thử 6 giờ (`scripts/soak_server.py --minutes 360`) và đọc log `server.mem` để biết server có phình không.
+- [ ] Đo bộ nhớ của `hotmerge` trước và sau khi áp trần.
 - [ ] Gom sổ lệnh quá 180 ngày thành 5 phút thay vì xoá. Đo dung lượng thật trước khi chọn.
 - [ ] Bỏ cột `id` của tick đã gom, và coi `bookDepth`, `metrics` là bộ đệm.
 - [ ] Cảnh báo đĩa thấp trong watchdog.

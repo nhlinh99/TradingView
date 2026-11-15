@@ -15,7 +15,7 @@ from common import store
 from pine import runner
 from pine.interp import Bars, PineRuntimeError, tf_to_ms
 from pine.lexer import PineSyntaxError
-from . import bars_api
+from . import bars_api, limits
 
 router = APIRouter()
 
@@ -113,7 +113,8 @@ def run_pine(body: RunBody) -> dict:
 
 @router.post("/api/pine/run")
 def pine_run(body: RunBody) -> dict:
-    return run_pine(body)
+    with limits.heavy():
+        return run_pine(body)
 
 
 @router.get("/api/pine/examples")

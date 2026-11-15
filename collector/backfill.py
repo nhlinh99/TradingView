@@ -114,7 +114,7 @@ def build_select(dataset: str, symbol: str, day: date, csv_path: Path) -> tuple[
     """
     day_start = int(datetime(day.year, day.month, day.day, tzinfo=timezone.utc).timestamp() * 1000)
     day_end = day_start + DAY_MS
-    con = duckdb.connect()
+    con = store.work_conn()
     try:
         if dataset == "aggTrades":
             src = _read_csv_expr(csv_path, AGG_COLS)

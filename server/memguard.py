@@ -5,15 +5,19 @@ Lý do: ngày 2026-11-15 một server chạy nhiều giờ giữ 27,9 GB bộ nh
 giới hạn thiệt hại bất kể nguyên nhân, và log bên dưới giúp truy ra nguyên nhân lần sau.
 
 Cấu hình (biến môi trường): SERVER_MEM_LIMIT_MB (mặc định 3072, 0 = không giới hạn), SERVER_MEM_INTERVAL_S (mặc định 30).
+SERVER_MEM_DIAG=1 bật chế độ chẩn đoán: bật `tracemalloc` ngay khi khởi động (làm chậm và tốn thêm bộ nhớ, chỉ dùng khi đang tìm nguyên nhân)
+và khi bộ nhớ vượt SERVER_MEM_DIAG_MB (mặc định một nửa trần) thì ghi một báo cáo: nơi cấp phát nhiều nhất, loại đối tượng Python nhiều nhất, luồng.
 Mã thoát 75 nghĩa là "vượt trần, hãy chạy lại".
 """
 from __future__ import annotations
 
+import gc
 import logging
 import os
 import sys
 import threading
 import time
+import tracemalloc
 from collections import Counter
 
 log = logging.getLogger("server.mem")
@@ -21,6 +25,9 @@ log = logging.getLogger("server.mem")
 EXIT_CODE = 75
 LIMIT_MB = int(os.environ.get("SERVER_MEM_LIMIT_MB", "3072"))
 INTERVAL_S = float(os.environ.get("SERVER_MEM_INTERVAL_S", "30"))
+
+DIAG = os.environ.get("SERVER_MEM_DIAG", "0") == "1"
+DIAG_MB = int(os.environ.get("SERVER_MEM_DIAG_MB", str(LIMIT_MB // 2 if LIMIT_MB else 1536)))
 
 hits: Counter = Counter()          # số yêu cầu theo đường dẫn từ lần ghi log trước
 slow: dict[str, float] = {}        # yêu cầu chậm nhất theo đường dẫn từ lần ghi log trước (giây)
@@ -51,6 +58,23 @@ def private_mb() -> int | None:
     return int(p.PrivateUsage // 2**20) if ok else None
 
 
+def diag_report(top: int = 15) -> str:
+    """Báo cáo chẩn đoán bộ nhớ: nơi cấp phát nhiều nhất (cần tracemalloc), loại đối tượng Python nhiều nhất, các luồng."""
+    lines = [f"BÁO CÁO CHẨN ĐOÁN: bộ nhớ cam kết {private_mb()} MB, {threading.active_count()} luồng"]
+    if tracemalloc.is_tracing():
+        cur, peak = tracemalloc.get_traced_memory()
+        lines.append(f"tracemalloc: hiện {cur // 2**20} MB, đỉnh {peak // 2**20} MB (chỉ phần Python cấp phát, không gồm DuckDB và thư viện gốc)")
+        for st in tracemalloc.take_snapshot().statistics("lineno")[:top]:
+            lines.append(f"  {st.size // 1024:>8} KB  {st.count:>7} khối  {st.traceback[0]}")
+    else:
+        lines.append("tracemalloc chưa bật: đặt SERVER_MEM_DIAG=1 rồi chạy lại để có nơi cấp phát")
+    kinds = Counter(type(o).__name__ for o in gc.get_objects())
+    lines.append("đối tượng Python nhiều nhất: " + ", ".join(f"{k} x{n}" for k, n in kinds.most_common(8)))
+    names = Counter(t.name.split("_")[0].split("-")[0] for t in threading.enumerate())
+    lines.append("luồng theo loại: " + ", ".join(f"{k} x{n}" for k, n in names.most_common(6)))
+    return "\n".join(lines)
+
+
 def note_request(path: str, seconds: float) -> None:
     hits[path] += 1
     if seconds > slow.get(path, 0.0):
@@ -58,11 +82,13 @@ def note_request(path: str, seconds: float) -> None:
 
 
 def snapshot() -> dict:
-    return {"private_mb": private_mb(), "threads": threading.active_count(), "limit_mb": LIMIT_MB}
+    from server import limits
+    return {"private_mb": private_mb(), "threads": threading.active_count(), "limit_mb": LIMIT_MB, "diag": DIAG, **limits.stats()}
 
 
 def _loop() -> None:
     last = 0
+    reported = False
     while True:
         time.sleep(INTERVAL_S)
         mb = private_mb()
@@ -72,9 +98,16 @@ def _loop() -> None:
         if abs(mb - last) >= 200 or (LIMIT_MB and mb > LIMIT_MB * 0.75):
             log.warning("bộ nhớ cam kết %d MB (trần %d), %d luồng; yêu cầu gần đây: %s", mb, LIMIT_MB, threading.active_count(), top)
             last = mb
+        if DIAG and mb > DIAG_MB and not reported:
+            reported = True
+            log.warning("%s", diag_report())
+        elif mb < DIAG_MB * 0.8:
+            reported = False
         hits.clear()
         slow.clear()
         if LIMIT_MB and mb > LIMIT_MB:
+            if DIAG:
+                log.error("%s", diag_report())
             log.error("vượt trần bộ nhớ %d MB > %d MB, thoát với mã %d để dev.ps1 khởi động lại", mb, LIMIT_MB, EXIT_CODE)
             logging.shutdown()
             os._exit(EXIT_CODE)
@@ -85,4 +118,6 @@ def start() -> None:
     if _started or sys.platform != "win32":
         return
     _started = True
+    if DIAG and not tracemalloc.is_tracing():
+        tracemalloc.start(8)
     threading.Thread(target=_loop, name="memguard", daemon=True).start()

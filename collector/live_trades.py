@@ -49,7 +49,7 @@ def last_stored_id(symbol: str) -> int | None:
     folder = store.data_dir() / "ticks" / symbol
     if not folder.exists() or not any(folder.glob("date=*.parquet")):
         return None
-    con = duckdb.connect()
+    con = store.query_conn()
     try:
         return con.execute(f"SELECT max(id) FROM {store.scan_sql('ticks', symbol)}").fetchall()[0][0]
     finally:

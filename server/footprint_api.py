@@ -16,6 +16,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from common import bars as tickbars
 from common import store
+from . import limits
 
 router = APIRouter()
 
@@ -100,7 +101,8 @@ def footprint_endpoint(
     limit: int = Query(100, ge=1, le=MAX_BARS, description="số nến khi không có from"),
     mult: int = Query(1, ge=1, le=1000, description="nhân bucket giá"),
 ) -> dict:
-    return get_footprint(symbol.upper(), tf, from_, to, limit, mult)
+    with limits.heavy():
+        return get_footprint(symbol.upper(), tf, from_, to, limit, mult)
 
 
 def get_profile(symbol: str, start_ms: int, end_ms: int, mult: int) -> dict:
@@ -131,4 +133,5 @@ def profile_endpoint(
     to: int = Query(...),
     mult: int = Query(1, ge=1, le=100000),
 ) -> dict:
-    return get_profile(symbol.upper(), from_, to, mult)
+    with limits.heavy():
+        return get_profile(symbol.upper(), from_, to, mult)

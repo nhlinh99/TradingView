@@ -96,7 +96,7 @@ def _footprint_select(symbol: str, day: date) -> str:
 def _verify_footprint(symbol: str, day: date) -> None:
     raw = store.day_select("ticks", symbol, day)
     fp = store.partition_path("footprint_1m", symbol, day)
-    con = duckdb.connect()
+    con = store.work_conn()
     try:
         rows = con.execute(f"""
             WITH r AS (SELECT (t.ts // 60000) * 60000 AS minute,
@@ -169,7 +169,7 @@ def compact_book(symbol: str, now: datetime, raw_days: int, agg_days: int, dry: 
         sel = (f"SELECT (ts // 60000) * 60000 AS ts, p, max(bid)::FLOAT AS bid, max(ask)::FLOAT AS ask "
                f"FROM ({raw}) GROUP BY 1, 2")
         store.write_partition("book_1m", symbol, day, sel)
-        con = duckdb.connect()
+        con = store.work_conn()
         try:
             n_out, mb, ma = con.execute(
                 f"SELECT count(*), max(bid), max(ask) FROM read_parquet({store._sql_str(out)})").fetchall()[0]

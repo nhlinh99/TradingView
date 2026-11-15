@@ -156,6 +156,25 @@ def query_conn() -> "duckdb.DuckDBPyConnection":
         return _shared.cursor()
 
 
+def work_conn() -> "duckdb.DuckDBPyConnection":
+    """Kết nối DuckDB riêng cho việc ghi và gom file (bảng tạm tên cố định nên không dùng chung được), có trần bộ nhớ và số luồng.
+
+    Mặc định 512 MB và 2 luồng (DUCKDB_WORK_MEMORY_LIMIT, DUCKDB_WORK_THREADS). Thiếu chỗ thì DuckDB tràn ra `DATA_DIR/tmp`
+    thay vì chiếm tới 80% RAM như mặc định.
+    """
+    con = duckdb.connect()
+    con.execute(f"SET memory_limit='{os.environ.get('DUCKDB_WORK_MEMORY_LIMIT', '512MB')}'")
+    con.execute(f"SET threads={int(os.environ.get('DUCKDB_WORK_THREADS', '2'))}")
+    con.execute("SET preserve_insertion_order=false")
+    try:
+        tmp = data_dir() / "tmp"
+        tmp.mkdir(parents=True, exist_ok=True)
+        con.execute(f"SET temp_directory='{tmp.as_posix()}'")
+    except Exception:  # noqa: BLE001
+        pass
+    return con
+
+
 _symbols_cache: tuple[tuple[int, int], dict] | None = None   # ((mtime toml, mtime vn100), nội dung)
 
 # Mã VN100 không cần khai từng mã trong symbols.toml: lấy từ vn100.json với cấu hình chung.
@@ -278,7 +297,7 @@ def write_partition(
     final = partition_path(kind, symbol, day, part)
     final.parent.mkdir(parents=True, exist_ok=True)
     tmp = final.with_name(final.name + ".tmp")
-    con = duckdb.connect()
+    con = work_conn()
     try:
         con.execute("CREATE TABLE t (" + ", ".join(f"{n} {t}" for n, t in cols) + ")")
         if isinstance(data, str):
@@ -371,7 +390,7 @@ def merge_day(kind: str, symbol: str, day: date) -> Path | None:
     src = f"read_parquet({flist}, union_by_name=true)"
     tmp = canonical.with_name(canonical.name + ".tmp")
     try:
-        con = duckdb.connect()
+        con = work_conn()
         try:
             merged_sql = _dedupe_from(kind, src)
             con.execute(f"COPY ({merged_sql} ORDER BY {ORDER[kind]}) TO {_sql_str(tmp)} {_COPY_OPTS}")
