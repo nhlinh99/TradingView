@@ -116,6 +116,17 @@ Hai cách, chọn một:
 
 **Khuyến nghị:** bắt đầu bằng cách A nếu máy kia đủ mạnh và bạn chủ yếu xem heatmap, GEX và sổ lệnh VN: ít việc nhất và không có dữ liệu để chuyển. Chuyển sang B khi bạn muốn backtest nặng trên máy cá nhân hoặc muốn có bản sao dữ liệu. Chưa chạy thử cách nào.
 
+**Lưu trữ trung gian cho cách B.** Thứ tự ưu tiên:
+
+1. **Không cần nơi trung gian**, nếu máy bật liên tục tới được từ máy cá nhân: VPS có địa chỉ công khai thì kéo thẳng bằng SFTP; máy mini ở nhà (sau NAT) thì dùng Tailscale (mạng riêng, bản cá nhân miễn phí theo hiểu biết của tôi, chưa kiểm). Ít thành phần nhất, không gửi dữ liệu cho bên thứ ba.
+2. **Kho đối tượng tương thích S3, nên là Cloudflare R2**, khi hai máy không tới được nhau, hoặc khi bạn muốn có luôn **bản sao ngoài** của dữ liệu không tải lại được. Máy bật liên tục đẩy lên mỗi đêm, máy cá nhân kéo về khi bật. Hai bên chỉ kết nối ra ngoài, máy kia hỏng thì dữ liệu đã đẩy vẫn còn. Tạo hai token riêng theo bucket: chỉ ghi cho máy bật liên tục, chỉ đọc cho máy cá nhân. `rclone` dùng được cho cả R2 và B2.
+3. **Backblaze B2** là lựa chọn thay thế, rẻ hơn khi lưu, có phí tải xuống (khoảng 0,01 USD mỗi GB theo các nguồn bên thứ ba, chưa kiểm trang giá chính thức).
+4. **Không dùng** OneDrive, Google Drive hay Dropbox làm trung gian: dự án cấm để dữ liệu trong OneDrive (khoá file khi ghi), và các dịch vụ này có hạn mức API và token đăng nhập hết hạn, không hợp cho việc chạy tự động không người ngồi.
+
+Chi phí không phải yếu tố quyết định. Kho trung gian chỉ cần giữ vài tuần gần nhất (xoá file cũ khi máy cá nhân đã kéo), dưới khoảng 1 GB, trong mức miễn phí 10 GB của R2 theo các nguồn bên thứ ba. Giá niêm yết theo các nguồn đó: R2 khoảng 0,015 USD mỗi GB mỗi tháng và không tính phí tải xuống, B2 khoảng 0,006 USD mỗi GB mỗi tháng. Chưa kiểm trên trang giá chính thức của hai bên, kiểm trước khi đăng ký. Tải xuống mỗi tháng chỉ khoảng vài trăm MB đến 1 GB, nên cả hai đều gần như miễn phí.
+
+Dữ liệu là bản ghi từ nguồn công khai dùng cho cá nhân: đẩy lên kho riêng làm bản sao thì ổn, đừng chia sẻ công khai (điều khoản của Binance, Deribit, SSI chưa đọc).
+
 ## Quyết định
 
 **Đã chọn (2026-11-15): để gom nén chạy, giữ `full_days = 30`.** Tick quá 30 ngày thành footprint 1 phút rồi xoá tick. Lý do bên dưới, giữ lại để biết cách đổi ý.
