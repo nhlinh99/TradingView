@@ -61,6 +61,39 @@ Dung lượng đo từ một ngày dữ liệu Binance (10/11/2026). Ngày biế
 | Parquet đủ cột, mọi tick | khoảng 3,5 GB | khoảng 17 GB |
 | Parquet, tick 30 ngày, sau đó footprint 1 phút | khoảng 0,7 GB | khoảng 2,5 GB |
 
+### Dung lượng hiện tại
+
+Đo ngày 2026-11-15 trên `C:\tv-data`: 502 MB, trong đó dữ liệu khoảng 320 MB. Phần còn lại là `.venv` (102 MB) và `web-deps` (84 MB).
+
+| Thư mục | Dung lượng | Số file | Phạm vi |
+|---|---|---|---|
+| `ticks` | 228 MB (BTC 167, XAU 66) | 194 | 32 ngày, từ 2026-10-15 |
+| `bars` | 61 MB | 13.162 | BTC, XAU 32 ngày. 100 mã VN100 khoảng 0,6 MB mỗi mã, 270 ngày |
+| `bookdepth` | 23 MB | 60 | 30 ngày, dữ liệu tải về từ Binance |
+| `book` | 6 MB | 145 | Mới ghi từ 2026-11-14, nhiều file con chưa gộp |
+| `metrics` | 1 MB | 33 | 30 ngày |
+| `options` | 1 MB | 8 | Mới ghi từ 2026-11-14 |
+| `logs` | 1 MB | 11 | |
+| `vn_book` | 0 MB | 0 | Chưa có phiên giao dịch |
+| `app.sqlite` | 0,08 MB | 1 | |
+
+### Ước tính khi lấy dữ liệu theo năm
+
+Giả định collector chạy liên tục 24/7 cho BTCUSDT và XAUUSDT, kèm VN100. Nguồn số: dung lượng một ngày yên tĩnh ở bảng trên (tick 9,5 MB, sổ lệnh khoảng 20 MB, `bookdepth` 0,78 MB, nến 1 phút khoảng 35 KB mỗi symbol, nến VN100 khoảng 80 MB một năm). Ngày biến động mạnh làm tick và sổ lệnh gấp 2 đến 3 lần. Chưa có số đo cho `vn_book` và `options`, nên hai mục này không nằm trong tổng.
+
+| Một năm | Dung lượng yên tĩnh | Biến động mạnh |
+|---|---|---|
+| Tick, giữ mọi tick | khoảng 3,5 GB | 7 đến 10 GB |
+| Sổ lệnh 5 giây, giữ mọi snapshot | khoảng 7,3 GB | 15 đến 22 GB |
+| `bookdepth` Binance | khoảng 0,29 GB | như cũ |
+| Nến 1 phút (BTC, XAU, VN100) và `metrics` | khoảng 0,12 GB | như cũ |
+| **Tổng, không gom nén** | **khoảng 11 GB** | **22 đến 33 GB** |
+| **Tổng, theo chính sách giữ dữ liệu** | **khoảng 1,6 GB** | **khoảng 2,8 GB** |
+
+Theo chính sách giữ dữ liệu, năm đầu gồm: footprint 1 phút 0,45 GB, cửa sổ tick 30 ngày 0,29 GB, sổ lệnh 0,44 GB (7 ngày ở 5 giây cộng 180 ngày ở 1 phút), `bookdepth` 0,29 GB, nến và `metrics` 0,12 GB. Chỉ footprint, `bookdepth` và nến tăng thêm mỗi năm, còn tick và sổ lệnh có trần. Sau 5 năm tổng khoảng 5 GB, hoặc khoảng 3,6 GB nếu xoá `bookdepth` (tải lại miễn phí được). Cả hai đều dưới trần `MAX_DATA_GB` mặc định 20.
+
+Ngày 2026-11-15 `book` mới có 6 MB sau hơn một ngày ghi có gián đoạn, nên chưa dùng để ước tính. Số 20 MB mỗi ngày lấy từ phép đo 1 giờ.
+
 ### Chính sách giữ dữ liệu
 
 File `config/retention.toml`. Tick 30 ngày, sau đó gom thành footprint 1 phút và xoá tick. Footprint 1 phút và nến 1 phút giữ mãi. Sổ lệnh tự ghi giữ 7 ngày ở mức 5 giây, sau đó gom thành 1 phút (giá trị lớn nhất mỗi bucket), giữ 180 ngày. Snapshot options giữ mỗi giờ trong 30 ngày, sau đó mỗi ngày một snapshot. Trần `MAX_DATA_GB` mặc định 20: vượt trần thì xoá tầng cũ nhất theo thứ tự sổ lệnh 1 phút, snapshot options, tick.
