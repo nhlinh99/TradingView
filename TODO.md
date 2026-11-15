@@ -52,6 +52,7 @@ Cảnh báo:
 VN100 (không cần chờ phiên):
 - [ ] Lịch sử sổ lệnh VN100: không có nguồn miễn phí (đã thử 15/11, gồm đọc đặc tả FireAnt, xem [07](docs/plan/07-vn100.md)); chỉ có từ phiên đầu `vn_book` chạy.
 - [ ] Tích hợp FireAnt `historical-quotes` (token nặc danh đã thử được, dữ liệu ngày từ 2006): backfill lịch sử ngày VN100 (giá, volume, dòng tiền ngoại, tự doanh, đặt mua và đặt bán) vào kho, và dùng làm volume ngày chuẩn để chốt nguyên nhân nến 1 phút lệch. Cần đọc điều khoản trước. [07](docs/plan/07-vn100.md)
+- [ ] Hỏi giá FiinQuant (cần tài khoản): có lịch sử dòng tiền chủ động theo nến 1 đến 15 phút, tức delta thật cho VN, và luồng sổ lệnh theo sự kiện. Xem [07](docs/plan/07-vn100.md).
 - [ ] Delta xấp xỉ cho VN từ hiệu của `bu` và `sd` giữa hai lần lấy mẫu. Hiện delta và CVD của VN bằng 0. [07](docs/plan/07-vn100.md)
 - [ ] Tìm nguyên nhân volume nến 1 phút lệch volume ngày (trung vị 0 đến 0,85%, xấu nhất 4 đến 13%). Nếu không giải thích được, dùng nến ngày của dchart làm chuẩn cho khung `1d`. [07](docs/plan/07-vn100.md)
 
