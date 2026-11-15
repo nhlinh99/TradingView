@@ -391,3 +391,7 @@ kbd { font: 11px ui-monospace, Consolas, monospace; border: 1px solid var(--line
   .indlegend { left: 8px; top: 44px; }
   .legend { left: 10px; }
 }
+
+.draw-del { position: absolute; z-index: 6; display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px 0 7px; border: 1px solid var(--bad); border-radius: 8px; background: var(--bg); color: var(--bad); font-size: 12px; font-weight: 600; cursor: pointer; box-shadow: var(--shadow); }
+.draw-del:hover { background: var(--bad); color: #fff; }
+.draw-del svg { width: 14px; height: 14px; }

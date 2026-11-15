@@ -53,6 +53,8 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
   const hover = useRef<DrawPoint | null>(null)
   const itemsRef = useRef<Drawing[]>([])
   const [selected, setSelected] = useState<number | null>(null)
+  const [chip, setChip] = useState<{ x: number; y: number } | null>(null)
+  const chipRef = useRef<{ x: number; y: number } | null>(null)
   const selRef = useRef<number | null>(null)
   const toolRef = useRef<Tool>('cursor')
   const redraw = useRef<() => void>(() => {})
@@ -137,6 +139,7 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
         const kind = toolRef.current as DrawKind
         if (kind in NEED) shapes.push({ d: { kind, payload: { points: [...pending.current, hv].slice(0, NEED[kind]) } }, preview: true })
       }
+      let anchor: { x: number; y: number } | null = null
       for (const { d, preview } of shapes) {
         const col = d.payload.color ?? COLOR
         const pts = d.payload.points.map((p) => toScreen(g, p))
@@ -146,6 +149,11 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
         ctx.strokeStyle = col
         ctx.fillStyle = col
         const isSel = !preview && (d as Drawing).id === selRef.current
+        if (isSel) {
+          const ax = d.kind === 'hline' ? plotW - 64 : Math.max(...P.map((q) => q.x))
+          const ay = d.kind === 'hline' ? P[0].y : Math.min(...P.map((q) => q.y))
+          anchor = { x: Math.min(Math.max(ax + 6, 8), plotW - 62), y: Math.min(Math.max(ay - 30, 4), h - 34) }
+        }
         ctx.lineWidth = isSel ? 3 : 1.5
         if (isSel) { ctx.shadowColor = col; ctx.shadowBlur = 8 }
         ctx.setLineDash(preview ? [5, 4] : [])
@@ -184,6 +192,8 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
         }
         ctx.restore()
       }
+      const prev = chipRef.current
+      if (!anchor ? prev !== null : !prev || Math.abs(prev.x - anchor.x) > 1 || Math.abs(prev.y - anchor.y) > 1) { chipRef.current = anchor; setChip(anchor) }
     }
     redraw.current = () => draw(true)
     raf = requestAnimationFrame(() => draw(true))
@@ -237,6 +247,7 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
     let down: { x: number; y: number } | null = null
     const onDown = (e: PointerEvent) => { down = { x: e.clientX, y: e.clientY } }
     const onUp = (e: PointerEvent) => {
+      if ((e.target as HTMLElement | null)?.closest?.('.draw-del, .draw-tools')) { down = null; return }
       if (!down || toolRef.current !== 'cursor') return
       const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4
       down = null
@@ -281,6 +292,7 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
         const d = await createDrawing(symbol, t, payload)
         setItems((l) => [...l, d])
         setSelected(d.id)
+        setTool('cursor')
         setErr(null)
       } catch (x) { setErr(String(x)) }
     }
@@ -300,6 +312,11 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
         onPointerDown={(e) => void onDown(e)}
         onPointerMove={(e) => { if (pending.current.length > 0) { hover.current = pointAt(e); redraw.current() } }}
       />
+      {selected !== null && chip && (
+        <button className="draw-del" style={{ left: chip.x, top: chip.y }} onClick={() => void remove(selected)} title="Xoá hình này (Delete)" aria-label="Xoá hình đang chọn">
+          <Icon id="clear" /> Xoá
+        </button>
+      )}
       <div className="draw-tools" role="toolbar" aria-label="Công cụ vẽ">
         {TOOLS.map((t) => (
           <button key={t.id} title={t.title} aria-label={t.title} aria-pressed={tool === t.id} className={tool === t.id ? 'on' : ''} onClick={() => setTool(t.id)}>

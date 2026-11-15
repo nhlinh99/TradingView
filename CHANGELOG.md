@@ -9,6 +9,7 @@ Xem `docs/plan/README.md` cho thứ tự ưu tiên và các file tính năng cho
 ## 2026-11-15 (tài liệu)
 
 ### Thêm
+- Vẽ xong một hình thì tự quay về chế độ Trỏ. Hình đang chọn có nút "Xoá" nổi bên cạnh, bấm một lần là xoá.
 - Xoá hình vẽ: bấm vào hình ở chế độ Trỏ để chọn, `Delete` hoặc `Backspace` để xoá, `Esc` để bỏ chọn, nút "Xoá hình đang chọn" trên thanh vẽ. Hình vừa vẽ được chọn sẵn.
 
 ### Sửa
