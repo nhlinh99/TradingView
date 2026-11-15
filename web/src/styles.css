@@ -362,7 +362,7 @@ kbd { font: 11px ui-monospace, Consolas, monospace; border: 1px solid var(--line
 
 /* cột phải: tham số, backtest, kết quả */
 .dock-right { display: flex; flex-direction: column; border-left: 1px solid var(--line); padding: 6px 10px 8px; }
-.dock-right .tabs { flex: none; display: flex; gap: 2px; padding: 2px; margin-bottom: 6px; border-radius: 9px; background: var(--chip); }
+.dock-right .tabs { overflow-x: auto; scrollbar-width: none; flex: none; display: flex; gap: 2px; padding: 2px; margin-bottom: 6px; border-radius: 9px; background: var(--chip); }
 .dock-right .tabs button { flex: 1; border: 0; background: none; color: var(--mute); padding: 5px 8px; border-radius: 7px; cursor: pointer; font-size: 12px; }
 .dock-right .tabs button.on { background: var(--bg); color: var(--ink); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
 .tabbody { flex: 1; min-height: 0; overflow: auto; padding-right: 2px; }
@@ -395,3 +395,44 @@ kbd { font: 11px ui-monospace, Consolas, monospace; border: 1px solid var(--line
 .draw-del { position: absolute; z-index: 6; display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px 0 7px; border: 1px solid var(--bad); border-radius: 8px; background: var(--bg); color: var(--bad); font-size: 12px; font-weight: 600; cursor: pointer; box-shadow: var(--shadow); }
 .draw-del:hover { background: var(--bad); color: #fff; }
 .draw-del svg { width: 14px; height: 14px; }
+
+/* Kiểu dáng và hiển thị của chỉ báo (giống hộp Cài đặt của TradingView) */
+.dock-right .tabs button { white-space: nowrap; padding: 5px 9px; }
+.tabs.mini { display: flex; gap: 2px; padding: 2px; margin-bottom: 8px; border-radius: 9px; background: var(--chip); }
+.tabs.mini button { flex: 1; border: 0; background: none; color: var(--mute); padding: 4px 6px; border-radius: 7px; cursor: pointer; font-size: 12px; white-space: nowrap; }
+.tabs.mini button.on { background: var(--bg); color: var(--ink); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+.styleform { display: grid; gap: 4px; }
+.styleform h4, .visform h4 { margin: 10px 0 4px; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--mute); }
+.srow { border-radius: 8px; }
+.srow.off .sname { opacity: .45; }
+.sline { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; align-items: center; gap: 8px; padding: 4px 2px; }
+.sline input[type='checkbox'] { appearance: none; -webkit-appearance: none; width: 28px; height: 16px; margin: 0; border-radius: 999px; background: var(--line); position: relative; cursor: pointer; }
+.sline input[type='checkbox']::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s; }
+.sline input[type='checkbox']:checked { background: var(--accent); }
+.sline input[type='checkbox']:checked::after { transform: translateX(12px); }
+.sname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.sname.changed::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-right: 6px; }
+.swatch { width: 26px; height: 22px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; padding: 0; background-clip: padding-box; box-shadow: inset 0 0 0 2px var(--bg); }
+.swatch[aria-expanded='true'] { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sline select { padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font-size: 12px; }
+.clrpanel { margin: 2px 2px 8px 36px; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); box-shadow: var(--shadow); display: grid; gap: 8px; }
+.swatches { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+.swatches button { height: 22px; border: 1px solid var(--line); border-radius: 5px; cursor: pointer; padding: 0; }
+.swatches button.on { outline: 2px solid var(--accent); outline-offset: 1px; }
+.clrrow { display: grid; gap: 6px; font-size: 12px; color: var(--mute); }
+.clrrow label { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.clrrow input[type='color'] { width: 34px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer; }
+.clrrow .op { display: grid; grid-template-columns: auto 1fr 36px; }
+.clrrow .op input { accent-color: var(--accent); }
+.clrrow output { text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; }
+.visform { display: grid; gap: 4px; }
+.tfgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.tfgrid label { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 5px 6px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; font-size: 12px; color: var(--mute); }
+.tfgrid label.on { border-color: var(--accent); color: var(--ink); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.tfgrid input { accent-color: var(--accent); }
+.swrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; padding: 4px 2px; }
+.swrow input[type='checkbox'] { appearance: none; -webkit-appearance: none; width: 32px; height: 18px; margin: 0; border-radius: 999px; background: var(--line); position: relative; cursor: pointer; flex: none; }
+.swrow input[type='checkbox']::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s; }
+.swrow input[type='checkbox']:checked { background: var(--accent); }
+.swrow input[type='checkbox']:checked::after { transform: translateX(14px); }
+@media (prefers-reduced-motion: reduce) { .sline input[type='checkbox']::after, .swrow input[type='checkbox']::after { transition: none; } }

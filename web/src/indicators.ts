@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchPineExamples, runPine, type BacktestOpts, type PineResult } from './api'
+import { parseColor, rgba } from './colors'
 
 export type Backtest = { capital: string; fee: string; slip: string; from: string; to: string }
 export type Indicator = {
@@ -9,7 +10,12 @@ export type Indicator = {
   inputs: Record<string, unknown>   // giá trị người dùng đã chỉnh, theo tiêu đề của input
   visible: boolean
   bt: Backtest
+  style?: Record<string, PlotStyle>   // tuỳ chỉnh kiểu dáng theo phần tử: plot:0, hline:1, shape:0, fill:0, bg:0, candle:0
+  tfs?: string[]                      // chỉ hiện ở các khung này (bỏ trống: mọi khung)
+  scaleLabels?: boolean               // hiện nhãn giá trị cuối trên thang giá
 }
+export type Dash = 'solid' | 'dashed' | 'dotted'
+export type PlotStyle = { visible?: boolean; color?: string; opacity?: number; width?: number; dash?: Dash }
 export type RunState = { status: 'idle' | 'loading' | 'ok' | 'error'; result?: PineResult; error?: { message: string; line?: number } }
 export type LibraryScript = { name: string; source: string; mine: boolean }
 
@@ -127,7 +133,51 @@ export function useIndicators(symbol: string, tf: string) {
   return { list, runs, library, add, update, toggle, remove, run, saveToLibrary, removeFromLibrary }
 }
 
-/** Kết quả của các chỉ báo đang hiện, theo thứ tự thêm vào, để vẽ lên biểu đồ. */
-export function visibleResults(list: Indicator[], runs: Record<string, RunState>): { id: string; result: PineResult }[] {
-  return list.flatMap((i) => (i.visible && runs[i.id]?.result ? [{ id: i.id, result: runs[i.id].result as PineResult }] : []))
+/** Màu mới theo tuỳ chỉnh: giữ ô trống (không vẽ), đổi mọi ô có màu sang màu đã chọn. Độ đục mặc định lấy từ màu gốc. */
+function recolor(colors: (string | null)[], st: PlotStyle): (string | null)[] {
+  if (!st.color) return colors
+  const baseA = parseColor(colors.find((c) => c))?.a ?? 1
+  const col = rgba(st.color, st.opacity ?? baseA)
+  return colors.map((c) => (c ? col : c))
+}
+
+const cache = new WeakMap<PineResult, { key: string; out: PineResult }>()
+
+/** Áp tuỳ chỉnh kiểu dáng của người dùng lên kết quả chạy. Có nhớ đệm để không dựng lại khi không đổi, tránh vẽ lại cả biểu đồ. */
+export function styledResult(res: PineResult, ind: Pick<Indicator, 'style' | 'scaleLabels'>): PineResult {
+  const style = ind.style ?? {}
+  const key = JSON.stringify([style, !!ind.scaleLabels])
+  const hit = cache.get(res)
+  if (hit && hit.key === key) return hit.out
+  if (Object.keys(style).length === 0 && !ind.scaleLabels) { cache.set(res, { key, out: res }); return res }
+  const g = (k: string): PlotStyle => style[k] ?? {}
+  const out: PineResult = {
+    ...res,
+    scaleLabels: !!ind.scaleLabels,
+    plots: res.plots.map((p, i) => {
+      const s = g(`plot:${i}`)
+      return { ...p, colors: recolor(p.colors, s), linewidth: s.width ?? p.linewidth, dash: s.dash ?? p.dash, hidden: s.visible === false }
+    }),
+    hlines: res.hlines.map((h, i) => {
+      const s = g(`hline:${i}`)
+      const c = s.color ? rgba(s.color, s.opacity ?? parseColor(h.color)?.a ?? 1) : h.color
+      return { ...h, color: c, dash: s.dash ?? h.dash, width: s.width ?? h.width, hidden: s.visible === false }
+    }),
+    shapes: res.shapes.map((sh, i) => { const s = g(`shape:${i}`); return { ...sh, colors: recolor(sh.colors, s), hidden: s.visible === false } }),
+    bgcolors: res.bgcolors.map((b, i) => { const s = g(`bg:${i}`); return { ...b, colors: recolor(b.colors, s), hidden: s.visible === false } }),
+    fills: res.fills?.map((f, i) => { const s = g(`fill:${i}`); return { ...f, colors: recolor(f.colors, s), hidden: s.visible === false } }),
+    candles: res.candles?.filter((_, i) => g(`candle:${i}`).visible !== false),
+  }
+  cache.set(res, { key, out })
+  return out
+}
+
+/** Kết quả của các chỉ báo đang hiện ở khung `tf`, theo thứ tự thêm vào, đã áp kiểu dáng, để vẽ lên biểu đồ. */
+export function visibleResults(list: Indicator[], runs: Record<string, RunState>, tf?: string): { id: string; result: PineResult }[] {
+  return list.flatMap((i) => {
+    const r = runs[i.id]?.result
+    if (!i.visible || !r) return []
+    if (tf && i.tfs && i.tfs.length > 0 && !i.tfs.includes(tf)) return []
+    return [{ id: i.id, result: styledResult(r, i) }]
+  })
 }

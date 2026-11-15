@@ -244,11 +244,12 @@ export default function App() {
         {symbol && (
           <div className={`cells cells-${layout}`}>
             <div className="cell">
-              <Chart symbol={symbol} tf={tf} tz={tz} flow={flow} pines={visibleResults(ind.list, ind.runs)} indLegend={<IndicatorLegend list={ind.list} runs={ind.runs} onToggle={ind.toggle} onRemove={ind.remove}
+              <Chart symbol={symbol} tf={tf} tz={tz} flow={flow} pines={visibleResults(ind.list, ind.runs, tf)} indLegend={<IndicatorLegend list={ind.list} runs={ind.runs} onToggle={ind.toggle} onRemove={ind.remove}
                 onInput={(id, t, v) => ind.update(id, { inputs: { ...(ind.list.find((x) => x.id === id)?.inputs ?? {}), [t]: v } })}
                 onResetInputs={(id) => ind.update(id, { inputs: {} })}
                 onEdit={(id) => { setSelectedInd(id); setDockOpen(true); savePref('dockOpen', '1') }}
-                onAdd={() => { setDockOpen(true); savePref('dockOpen', '1') }} />} replay={replay} onTotal={setTotal} sync={sync.current} cellId={0} theme={theme} onState={onState} />
+                onAdd={() => { setDockOpen(true); savePref('dockOpen', '1') }}
+                onPatch={(id, p) => ind.update(id, p, false)} tf={tf} />} replay={replay} onTotal={setTotal} sync={sync.current} cellId={0} theme={theme} onState={onState} />
             </div>
             {extra.map((c, i) => (
               <div className="cell" key={i}>

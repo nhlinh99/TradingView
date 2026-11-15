@@ -121,15 +121,16 @@ export type PineResult = {
   symbol: string; tf: string; times: number[]
   meta: { kind: string; title: string; overlay: boolean }
   inputs: PineInput[]
-  plots: { title: string; style: string; linewidth: number; offset?: number; values: (number | null)[]; colors: (string | null)[] }[]
-  shapes: { title: string; shape: string; location: string; text: string; values: boolean[]; colors: (string | null)[] }[]
-  bgcolors: { colors: (string | null)[] }[]
-  hlines: { price: number | null; title: string; color: string | null }[]
+  plots: { title: string; style: string; linewidth: number; offset?: number; values: (number | null)[]; colors: (string | null)[]; dash?: 'solid' | 'dashed' | 'dotted'; hidden?: boolean }[]
+  shapes: { title: string; shape: string; location: string; text: string; values: boolean[]; colors: (string | null)[]; hidden?: boolean }[]
+  bgcolors: { colors: (string | null)[]; hidden?: boolean }[]
+  hlines: { price: number | null; title: string; color: string | null; dash?: 'solid' | 'dashed' | 'dotted'; width?: number; hidden?: boolean }[]
   alerts: { title: string; message: string; bars: number[] }[]
   alert_events?: { bar: number; message: string }[]
   future_bars?: number
+  scaleLabels?: boolean      // do giao diện đặt: hiện nhãn giá trị cuối trên thang giá
   candles?: { title: string; ohlc: (number[] | null)[]; color: (string | null)[]; wick: (string | null)[]; border: (string | null)[] }[]
-  fills?: { a: number; b: number; title: string; colors: (string | null)[] }[]
+  fills?: { a: number; b: number; title: string; colors: (string | null)[]; hidden?: boolean }[]
   objects?: {
     lines: Record<string, unknown>[]; labels: Record<string, unknown>[]; boxes: Record<string, unknown>[]
     polylines?: { points: { index: number | null; time: number | null; price: number | null }[]; line_color?: string | null; line_width?: number; line_style?: string; closed?: boolean; fill_color?: string | null }[]

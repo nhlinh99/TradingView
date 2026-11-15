@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Icon from './Icons'
 import InputsForm from './InputsForm'
+import { StyleForm, VisibilityForm } from './StyleForm'
 import type { Indicator, RunState } from './indicators'
 
 type Props = {
@@ -12,6 +13,8 @@ type Props = {
   onResetInputs: (id: string) => void
   onEdit: (id: string) => void
   onAdd: () => void
+  onPatch: (id: string, patch: Partial<Indicator>) => void
+  tf: string
 }
 
 const dot = (s: RunState | undefined) => (s?.status === 'loading' ? 'loading' : s?.status === 'error' ? 'error' : s?.status === 'ok' ? 'ok' : 'idle')
@@ -20,9 +23,10 @@ const dot = (s: RunState | undefined) => (s?.status === 'loading' ? 'loading' : 
  * Chú giải chỉ báo trên biểu đồ (như TradingView): mỗi chỉ báo một dòng có nút ẩn/hiện, cài đặt, sửa mã, xoá.
  * Từ 5 chỉ báo trở lên tự thu gọn thành một dòng tóm tắt để không che biểu đồ.
  */
-export default function IndicatorLegend({ list, runs, onToggle, onRemove, onInput, onResetInputs, onEdit, onAdd }: Props) {
+export default function IndicatorLegend({ list, runs, onToggle, onRemove, onInput, onResetInputs, onEdit, onAdd, onPatch, tf }: Props) {
   const [open, setOpen] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState(false)
+  const [tab, setTab] = useState<'inputs' | 'style' | 'vis'>('inputs')
   const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!open) return
@@ -48,11 +52,11 @@ export default function IndicatorLegend({ list, runs, onToggle, onRemove, onInpu
       {shown.map((ind) => {
         const st = runs[ind.id]
         return (
-          <div key={ind.id} className={`indrow ${ind.visible ? '' : 'off'}`}>
+          <div key={ind.id} className={`indrow ${ind.visible && !(ind.tfs && ind.tfs.length > 0 && !ind.tfs.includes(tf)) ? '' : 'off'}`} title={(ind.tfs && ind.tfs.length > 0 && !ind.tfs.includes(tf)) ? `Đang ẩn ở khung ${tf}` : undefined}>
             <span className={`sdot ${dot(st)}`} title={st?.status === 'error' ? st.error?.message : st?.status === 'loading' ? 'Đang chạy...' : st?.status === 'ok' ? 'Đã chạy' : ''} />
             <span className="indname" title={ind.name}>{ind.name}</span>
             <button aria-label={`${ind.visible ? 'Ẩn' : 'Hiện'} ${ind.name}`} title={ind.visible ? 'Ẩn' : 'Hiện'} onClick={() => onToggle(ind.id)}><Icon name={ind.visible ? 'eye' : 'eyeoff'} size={14} /></button>
-            <button aria-label={`Cài đặt ${ind.name}`} title="Cài đặt" aria-expanded={open === ind.id} onClick={() => setOpen(open === ind.id ? null : ind.id)}><Icon name="gear" size={14} /></button>
+            <button aria-label={`Cài đặt ${ind.name}`} title="Cài đặt" aria-expanded={open === ind.id} onClick={() => { setOpen(open === ind.id ? null : ind.id); setTab('inputs') }}><Icon name="gear" size={14} /></button>
             <button aria-label={`Sửa mã ${ind.name}`} title="Sửa mã" onClick={() => onEdit(ind.id)}><Icon name="code" size={14} /></button>
             <button aria-label={`Xoá ${ind.name}`} title="Xoá khỏi biểu đồ" onClick={() => onRemove(ind.id)}><Icon name="x" size={13} /></button>
           </div>
@@ -63,7 +67,14 @@ export default function IndicatorLegend({ list, runs, onToggle, onRemove, onInpu
           <header><b>{cur.name}</b><button className="linkbtn" onClick={() => setOpen(null)} aria-label="Đóng"><Icon name="x" size={13} /></button></header>
           {res?.status === 'error' && <p className="status bad" role="alert">{res.error?.line ? `Dòng ${res.error.line}: ` : ''}{res.error?.message}</p>}
           {res?.status === 'loading' && !res.result && <p className="mute">Đang chạy...</p>}
-          <InputsForm defs={res?.result?.inputs ?? []} values={cur.inputs} onChange={(t, v) => onInput(cur.id, t, v)} onReset={() => onResetInputs(cur.id)} />
+          <div className="tabs mini" role="tablist" aria-label="Thiết lập">
+            {([['inputs', 'Tham số'], ['style', 'Kiểu dáng'], ['vis', 'Hiển thị']] as const).map(([id, label]) => (
+              <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>{label}</button>
+            ))}
+          </div>
+          {tab === 'inputs' && <InputsForm defs={res?.result?.inputs ?? []} values={cur.inputs} onChange={(t, v) => onInput(cur.id, t, v)} onReset={() => onResetInputs(cur.id)} />}
+          {tab === 'style' && <StyleForm ind={cur} result={res?.result} onPatch={(p) => onPatch(cur.id, p)} />}
+          {tab === 'vis' && <VisibilityForm ind={cur} onPatch={(p) => onPatch(cur.id, p)} />}
         </div>
       )}
     </div>

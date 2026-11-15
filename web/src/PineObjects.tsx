@@ -80,6 +80,7 @@ export default function PineObjects({ result, tf, chart, candles, bars, version 
 
       // fill giữa hai plot (ví dụ đám mây Ichimoku): tô từng đoạn giữa hai nến liên tiếp theo màu của nến đó
       for (const f of result.fills ?? []) {
+        if (f.hidden) continue
         const A = result.plots[f.a]?.values
         const B = result.plots[f.b]?.values
         if (!A || !B) continue

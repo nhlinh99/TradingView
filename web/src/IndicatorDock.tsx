@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createAlert } from './api'
 import Icon from './Icons'
 import InputsForm from './InputsForm'
+import { StyleForm, VisibilityForm } from './StyleForm'
 import { highlightPine } from './logic'
 import { NEW_SCRIPT, isStrategy, type Indicator, type LibraryScript, type RunState } from './indicators'
 
@@ -27,7 +28,7 @@ const MIN_H = 220
 const loadH = () => { try { const n = Number(localStorage.getItem('dockH')); return Number.isFinite(n) && n >= MIN_H ? n : 360 } catch { return 360 } }
 const maxH = () => Math.round(window.innerHeight * 0.8)
 
-type Tab = 'inputs' | 'bt' | 'stats'
+type Tab = 'inputs' | 'style' | 'vis' | 'bt' | 'stats'
 
 /**
  * Bảng quản lý chỉ báo. Trái: chỉ báo đang dùng và thư viện. Giữa: trình soạn mã có số dòng. Phải: tham số, backtest, thống kê.
@@ -181,19 +182,19 @@ export default function IndicatorDock({ symbol, tf, list, runs, library, selecte
         <aside className="dock-right">
           {sel && (
             <>
-              {strat ? (
-                <div className="tabs" role="tablist" aria-label="Thiết lập chỉ báo">
-                  <button role="tab" aria-selected={tab === 'inputs'} className={tab === 'inputs' ? 'on' : ''} onClick={() => setTab('inputs')}>Tham số</button>
-                  <button role="tab" aria-selected={tab === 'bt'} className={tab === 'bt' ? 'on' : ''} onClick={() => setTab('bt')}>Backtest</button>
-                  <button role="tab" aria-selected={tab === 'stats'} className={tab === 'stats' ? 'on' : ''} onClick={() => setTab('stats')}>Kết quả</button>
-                </div>
-              ) : <h3 className="rh">Tham số</h3>}
+              <div className="tabs" role="tablist" aria-label="Thiết lập chỉ báo">
+                {([['inputs', 'Tham số'], ['style', 'Kiểu dáng'], ['vis', 'Hiển thị'], ...(strat ? [['bt', 'Backtest'], ['stats', 'Kết quả']] : [])] as [Tab, string][]).map(([id, label]) => (
+                  <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>{label}</button>
+                ))}
+              </div>
               <div className="tabbody">
                 {tab === 'inputs' && (
                   <InputsForm defs={res?.inputs ?? []} values={sel.inputs}
                     onChange={(t, v) => onUpdate(sel.id, { inputs: { ...sel.inputs, [t]: v } })}
                     onReset={() => onUpdate(sel.id, { inputs: {} })} />
                 )}
+                {tab === 'style' && <StyleForm ind={sel} result={res} onPatch={(p) => onUpdate(sel.id, p, false)} />}
+                {tab === 'vis' && <VisibilityForm ind={sel} onPatch={(p) => onUpdate(sel.id, p, false)} />}
                 {tab === 'bt' && strat && (
                   <div className="btform">
                     <div className="irow"><label><span className="ilabel">Vốn ban đầu</span><input type="number" value={sel.bt.capital} onChange={(e) => onUpdate(sel.id, { bt: { ...sel.bt, capital: e.target.value } }, false)} onBlur={() => onUpdate(sel.id, {})} /></label></div>

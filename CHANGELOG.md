@@ -12,6 +12,8 @@ Xem `docs/plan/README.md` cho thứ tự ưu tiên và các file tính năng cho
 - Vẽ xong một hình thì tự quay về chế độ Trỏ. Hình đang chọn có nút "Xoá" nổi bên cạnh, bấm một lần là xoá.
 - Xoá hình vẽ: bấm vào hình ở chế độ Trỏ để chọn, `Delete` hoặc `Backspace` để xoá, `Esc` để bỏ chọn, nút "Xoá hình đang chọn" trên thanh vẽ. Hình vừa vẽ được chọn sẵn.
 
+- Cài đặt chỉ báo kiểu TradingView: tab Tham số, Kiểu dáng (màu, độ đục, độ dày, nét, bật tắt cho từng đường, mức, tín hiệu, vùng tô), Hiển thị (theo khung thời gian, nhãn giá trị trên thang giá). Có trong bảng chỉ báo và trong hộp bánh răng trên biểu đồ.
+
 ### Sửa
 - Mã Pine tràn ra ngoài khung trong bảng chỉ báo: luật CSS của trình soạn gắn nhầm vào `.pine` nên không áp dụng cho bảng mới. Nay mã cuộn trong khung, có số dòng.
 - `--hover`, `--veil`, `--focus` ở giao diện sáng tự tham chiếu nên mất màu (chú giải chỉ báo trong suốt).

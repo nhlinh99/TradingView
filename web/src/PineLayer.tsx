@@ -33,17 +33,20 @@ export default function PineLayer({ result, chart, candles, version }: Props) {
     // indicator không overlay: mỗi script một pane mới ở cuối
     const pane = overlay ? 0 : c.panes().length
 
+    const lastLabel = !!result.scaleLabels
+    const dashOf = (d: string | undefined, fallback: LineStyle) => (d === 'dashed' ? LineStyle.Dashed : d === 'dotted' ? LineStyle.Dotted : d === 'solid' ? LineStyle.Solid : fallback)
     for (const p of result.plots) {
+      if (p.hidden) continue
       const colorOf = (i: number) => hex(p.colors[i], '#2962FF')
       if (p.style === 'columns' || p.style === 'histogram') {
-        const s = c.addSeries(HistogramSeries, { priceLineVisible: false, lastValueVisible: false, title: p.title }, pane)
+        const s = c.addSeries(HistogramSeries, { priceLineVisible: false, lastValueVisible: lastLabel, title: p.title }, pane)
         s.setData(idx(p.values.length).flatMap((ms, i) => (p.values[i] === null ? [] : [{ time: t(ms), value: p.values[i] as number, color: colorOf(i) }])))
         series.push(s)
       } else {
         const s = c.addSeries(LineSeries, {
           color: colorOf(p.colors.findIndex((x) => x) >= 0 ? p.colors.findIndex((x) => x) : 0), lineWidth: Math.max(1, Math.min(4, p.linewidth)) as 1 | 2 | 3 | 4,
-          priceLineVisible: false, lastValueVisible: false,
-          lineStyle: p.style === 'circles' || p.style === 'cross' ? LineStyle.Dotted : LineStyle.Solid,
+          priceLineVisible: false, lastValueVisible: lastLabel,
+          lineStyle: dashOf(p.dash, p.style === 'circles' || p.style === 'cross' ? LineStyle.Dotted : LineStyle.Solid),
         }, pane)
         // màu thay đổi theo nến được hỗ trợ bằng cách cho từng điểm một màu
         s.setData(idx(p.values.length).flatMap((ms, i) => (p.values[i] === null ? [] : [{ time: t(ms), value: p.values[i] as number, color: colorOf(i) }])))
@@ -55,6 +58,7 @@ export default function PineLayer({ result, chart, candles, version }: Props) {
     // bgcolor: cột cao hết vùng giá, nằm trên thang giá riêng (ẩn) để không làm méo thang giá của nến
     if (overlay) {
       for (const bg of result.bgcolors) {
+        if (bg.hidden) continue
         const data = result.times.flatMap((ms, i) => (bg.colors[i] ? [{ time: t(ms), value: 1, color: bg.colors[i] as string }] : []))
         if (data.length === 0) continue
         const s = c.addSeries(HistogramSeries, { priceScaleId: 'pine-bg', priceLineVisible: false, lastValueVisible: false, base: 0 }, 0)
@@ -80,6 +84,7 @@ export default function PineLayer({ result, chart, candles, version }: Props) {
 
     const markers: SeriesMarker<Time>[] = []
     for (const sh of result.shapes) {
+      if (sh.hidden) continue
       sh.values.forEach((on, i) => {
         if (!on) return
         const up = sh.location === 'belowbar' || sh.shape.includes('up')
@@ -102,7 +107,7 @@ export default function PineLayer({ result, chart, candles, version }: Props) {
       markerSets.push(createSeriesMarkers(main, markers))
     }
     for (const h of result.hlines) {
-      if (h.price !== null) lines.push(main.createPriceLine({ price: h.price, color: hex(h.color, '#787B86'), lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: h.title }))
+      if (h.price !== null && !h.hidden) lines.push(main.createPriceLine({ price: h.price, color: hex(h.color, '#787B86'), lineWidth: Math.max(1, Math.min(4, h.width ?? 1)) as 1 | 2 | 3 | 4, lineStyle: dashOf(h.dash, LineStyle.Dashed), axisLabelVisible: true, title: h.title }))
     }
     if (st && st.equity.length > 0) {
       const eq = c.addSeries(LineSeries, { color: '#f0b90b', lineWidth: 2, priceLineVisible: false, title: 'Equity' }, c.panes().length)

@@ -56,6 +56,16 @@ Mỗi chỉ báo là một mục độc lập `{id, name, source, inputs, visibl
 
 ![Quản lý chỉ báo](../screenshots/indicators-manager.png)
 
+## Cài đặt chỉ báo kiểu TradingView
+
+Hộp cài đặt có ba tab, mở từ biểu tượng bánh răng trên biểu đồ hoặc từ bảng chỉ báo:
+
+- **Tham số:** form tự sinh từ `input.*`, nhóm theo `group`.
+- **Kiểu dáng:** bật tắt, màu (bảng màu 15 ô và ô chọn màu tuỳ ý), độ đục, độ dày 1 đến 4 px và nét liền, gạch, chấm cho từng đường, mức ngang, tín hiệu, vùng tô giữa hai đường và tô nền. Phần tử đã đổi có chấm xanh, có nút đặt lại. Đổi kiểu dáng không chạy lại script, vì giao diện áp lên kết quả đã có.
+- **Hiển thị:** chọn khung thời gian được phép hiện chỉ báo, và bật nhãn giá trị cuối trên thang giá.
+
+Tuỳ chỉnh lưu theo từng chỉ báo trong trình duyệt (`ind.list`), khoá theo thứ tự phần tử (`plot:0`, `hline:1`, `fill:0`...), nên đổi số lượng `plot` trong mã sẽ làm lệch khoá cũ. Màu đổi thay cho mọi màu động theo nến của đường đó, vì Pine cho phép một đường đổi màu từng nến. Ẩn một đường vẫn giữ dữ liệu của nó để vùng tô giữa hai đường không mất.
+
 ## Giới hạn đã biết
 
 - Mọi nến là nến lịch sử: `barstate.isconfirmed` luôn đúng, `barstate.isrealtime` luôn sai. Tần suất của `alert()` bị bỏ qua, mỗi lần gọi ghi một sự kiện.
