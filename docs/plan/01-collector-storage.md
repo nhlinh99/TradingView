@@ -63,7 +63,7 @@ Dung lượng đo từ một ngày dữ liệu Binance (10/11/2026). Ngày biế
 
 ### Dung lượng hiện tại
 
-Đo ngày 2026-11-15 trên `C:\tv-data`: 502 MB, trong đó dữ liệu khoảng 320 MB. Phần còn lại là `.venv` (102 MB) và `web-deps` (84 MB).
+Đo sáng 2026-11-15 trên `C:\tv-data`: 502 MB, trong đó dữ liệu khoảng 320 MB. Số này đo trước khi tải lịch sử 1 năm và trước khi gom nén. Sau khi tải 1 năm và gom nén, dữ liệu còn 714 MB (xem [10](10-memory-data-optimization.md)). Phần còn lại là `.venv` (102 MB) và `web-deps` (84 MB).
 
 | Thư mục | Dung lượng | Số file | Phạm vi |
 |---|---|---|---|
@@ -88,9 +88,9 @@ Giả định collector chạy liên tục 24/7 cho BTCUSDT và XAUUSDT, kèm VN
 | `bookdepth` Binance | khoảng 0,29 GB | như cũ |
 | Nến 1 phút (BTC, XAU, VN100) và `metrics` | khoảng 0,12 GB | như cũ |
 | **Tổng, không gom nén** | **khoảng 11 GB** | **22 đến 33 GB** |
-| **Tổng, theo chính sách giữ dữ liệu** | **khoảng 1,6 GB** | **khoảng 2,8 GB** |
+| **Tổng, theo chính sách giữ dữ liệu** | **khoảng 1,3 GB** | **khoảng 2,5 GB** |
 
-Theo chính sách giữ dữ liệu, năm đầu gồm: footprint 1 phút 0,45 GB, cửa sổ tick 30 ngày 0,29 GB, sổ lệnh 0,44 GB (7 ngày ở 5 giây cộng 180 ngày ở 1 phút), `bookdepth` 0,29 GB, nến và `metrics` 0,12 GB. Chỉ footprint, `bookdepth` và nến tăng thêm mỗi năm, còn tick và sổ lệnh có trần. Sau 5 năm tổng khoảng 5 GB, hoặc khoảng 3,6 GB nếu xoá `bookdepth` (tải lại miễn phí được). Cả hai đều dưới trần `MAX_DATA_GB` mặc định 20.
+Theo chính sách giữ dữ liệu, năm đầu gồm (footprint đã sửa theo số đo thật sau gom nén, 0,17 GB thay vì 0,45 GB): footprint 1 phút 0,17 GB, cửa sổ tick 30 ngày 0,29 GB, sổ lệnh 0,44 GB (7 ngày ở 5 giây cộng 180 ngày ở 1 phút), `bookdepth` 0,29 GB, nến và `metrics` 0,12 GB. Chỉ footprint, `bookdepth` và nến tăng thêm mỗi năm, còn tick và sổ lệnh có trần. Sau 5 năm tổng khoảng 5 GB, hoặc khoảng 3,6 GB nếu xoá `bookdepth` (tải lại miễn phí được). Cả hai đều dưới trần `MAX_DATA_GB` mặc định 20.
 
 Ngày 2026-11-15 `book` mới có 6 MB sau hơn một ngày ghi có gián đoạn, nên chưa dùng để ước tính. Số 20 MB mỗi ngày lấy từ phép đo 1 giờ.
 

@@ -47,7 +47,7 @@ Hiện trạng: `C:\tv-data` 3,4 GB, trong đó `ticks` 2,9 GB (BTCUSDT 366 ngà
 
 | Biện pháp | Lợi ích | Trạng thái |
 |---|---|---|
-| Gom tick quá 30 ngày thành footprint 1 phút (`retention.toml`) | `ticks` từ 2,9 GB còn khoảng 0,7 GB (footprint 0,43 GB và 30 ngày tick 0,29 GB, ước tính từ số đo mỗi ngày) | Đã có. **Sẽ chạy ở lần `collector.daily` kế tiếp**, xem quyết định bên dưới |
+| Gom tick quá 30 ngày thành footprint 1 phút (`retention.toml`) | `ticks` từ 2,9 GB còn 0,22 GB cộng 0,16 GB footprint (số đo thật sau khi chạy) | Đã có, **đã chạy ngày 2026-11-15** theo quyết định bên dưới. Kết quả đo ở mục Kết quả gom nén |
 | Giữ tick 365 ngày thay vì 30 | Giữ footprint dưới 1 phút cho cả năm. Tốn thêm khoảng 2,2 GB so với gom nén ở thời điểm này (2,9 GB so với 0,7 GB), và khoảng 3 GB mỗi năm chạy tiếp cho hai symbol | Cần quyết định |
 | Bỏ cột `id` của tick sau khi đã loại trùng, giá số nguyên, `qty` float32 | Số đo một ngày BTC: 6,65 MB còn 5,22 MB, giảm 21% | Đề xuất cho ngày đã gom, vì `id` chỉ cần để loại trùng |
 | Coi `bookDepth` và `metrics` là bộ đệm: xoá cũ hơn 90 ngày khi cần chỗ, tải lại khi dùng | Giải phóng 0,24 GB và 0,3 GB mỗi năm | Đề xuất |
@@ -56,17 +56,33 @@ Hiện trạng: `C:\tv-data` 3,4 GB, trong đó `ticks` 2,9 GB (BTCUSDT 366 ngà
 | Dọn `DATA_DIR\tmp` khi khởi động, xoay vòng `logs` | Tránh file tràn của DuckDB và log tích tụ | Đề xuất. Hiện 1 MB, chưa gấp |
 | Sao lưu chỉ nhóm không tải lại được: `book`, `options`, `vn_book`, `app.sqlite` | Sao lưu vài chục MB mỗi tuần thay vì cả 3,4 GB | Đề xuất. Xem TODO |
 
-Ước tính mỗi năm khi chạy 24/7 theo chính sách mặc định: khoảng 1,6 GB (yên tĩnh) đến 2,8 GB (biến động mạnh); không gom nén thì khoảng 11 GB và 22 đến 33 GB (xem [01](01-collector-storage.md)).
+Ước tính mỗi năm khi chạy 24/7 theo chính sách mặc định: khoảng 1,3 GB (yên tĩnh, đã sửa theo số đo footprint) đến 2,5 GB (biến động mạnh, chưa đo); không gom nén thì khoảng 11 GB và 22 đến 33 GB (xem [01](01-collector-storage.md)).
 
-## Quyết định cần bạn
+## Kết quả gom nén (2026-11-15)
 
-**Giữ tick một năm hay để gom nén chạy?** Khuyến nghị: để gom nén chạy. Tick BTCUSDT từ 2019 và XAUUSDT từ 12/2025 tải lại được miễn phí trong khoảng 30 phút cho một năm, nên gom nén không làm mất gì mà bạn không lấy lại được. Giữ tick đầy đủ chỉ đáng khi bạn thường xuyên cần footprint dưới 1 phút cho cả năm. Nếu chọn giữ, đặt `full_days = 400` trong `config/retention.toml` **trước** khi chạy lại `run-collectors.ps1` hoặc `collector.daily`, vì cả hai đều gom nén.
+Chạy `python -m collector.compact` sau khi chạy thử `--dry-run`. Mất khoảng 8 phút, gom 644 ngày tick của BTCUSDT và XAUUSDT, 0 cảnh báo, giải phóng 2,65 GB.
+
+| | Trước | Sau |
+|---|---|---|
+| `ticks` | 2.910 MB | 223 MB (chỉ 30 ngày gần nhất, từ 2026-10-16) |
+| `footprint_1m` | 0 | 159 MB (335 ngày BTC, từ 2025-11-15) |
+| Cả `DATA_DIR` trừ `.venv` và `web-deps` | khoảng 3,4 GB | 714 MB |
+
+Đã kiểm `/api/footprint` ở khung 1 phút cho một ngày đã gom (2026-03-10) và một ngày còn tick (2026-11-14): cả hai trả 200 và có dòng dữ liệu, nên biểu đồ vẫn dựng được footprint từ ngày cũ.
+
+Số đo thật tốt hơn ước tính: footprint chỉ khoảng 0,47 MB mỗi ngày cho cả hai symbol, tức 0,17 GB mỗi năm, thay vì 1,24 MB mỗi ngày (0,45 GB mỗi năm) suy ra từ một ngày mẫu. Vì vậy ước tính mỗi năm theo chính sách giữ dữ liệu giảm từ 1,6 GB xuống khoảng 1,3 GB. Phần ngày biến động mạnh (khoảng 2,5 GB) chưa đo.
+
+## Quyết định
+
+**Đã chọn (2026-11-15): để gom nén chạy, giữ `full_days = 30`.** Tick quá 30 ngày thành footprint 1 phút rồi xoá tick. Lý do bên dưới, giữ lại để biết cách đổi ý.
+
+**Giữ tick một năm hay để gom nén chạy?** Khuyến nghị đã nhận: để gom nén chạy. Tick BTCUSDT từ 2019 và XAUUSDT từ 12/2025 tải lại được miễn phí trong khoảng 30 phút cho một năm, nên gom nén không làm mất gì mà bạn không lấy lại được. Giữ tick đầy đủ chỉ đáng khi bạn thường xuyên cần footprint dưới 1 phút cho cả năm. Nếu chọn giữ, đặt `full_days = 400` trong `config/retention.toml` **trước** khi chạy lại `run-collectors.ps1` hoặc `collector.daily`, vì cả hai đều gom nén.
 
 Một việc phụ thuộc quyết định này: sau gom nén, footprint dưới 1 phút của ngày cũ chỉ dựng lại được bằng cách tải lại file ngày.
 
 ## Việc còn mở
 
-- [ ] Quyết định `full_days` (30 hay 400) trước lần khởi động collector kế tiếp.
+- [x] Quyết định `full_days`: giữ 30, để gom nén chạy (2026-11-15).
 - [ ] Hàm `store.work_conn(limit)` và áp trần cho `hotmerge`, `compact`, `backfill`.
 - [ ] Semaphore cho yêu cầu nặng của server.
 - [ ] Chế độ chẩn đoán `SERVER_MEM_DIAG`.
