@@ -116,6 +116,21 @@ def aggregate_minutes(symbol: str, tf_ms: int, start_ms: int, end_ms: int, live:
         con.close()
 
 
+COARSE_TVC = ("5m", "15m", "1h", "4h", "1d", "1w", "1M")
+
+
+def tvc_coarse_bars(symbol: str, tf: str, tf_ms: int, cfg: dict, start_ms: int | None, end_ms: int | None, limit: int) -> dict:
+    """Vàng TVC ở khung lớn: lấy thẳng nến TradingView đã lưu (sâu hơn nhiều so với nến 1 phút ẩn danh)."""
+    from collector import tvc
+    if end_ms is None:
+        tvc.refresh_coarse(tf)
+    rows = tvc.load_coarse(tf)
+    out = [r for r in rows if (start_ms is None or r[0] * 1000 >= start_ms) and (end_ms is None or r[0] * 1000 < end_ms)]
+    out = out[-limit:]
+    bars = [[int(r[0]) * 1000, r[1], r[2], r[3], r[4], round(r[5], 6), 0.0, 0.0] for r in out]
+    return {"symbol": symbol, "tf": tf, "tf_ms": tf_ms, "tick": cfg["tick"], "last_trade_id": None, "bars": bars}
+
+
 def get_bars(symbol: str, tf: str, start_ms: int | None, end_ms: int | None, limit: int) -> dict:
     try:
         cfg = store.symbol_config(symbol)
@@ -127,6 +142,8 @@ def get_bars(symbol: str, tf: str, start_ms: int | None, end_ms: int | None, lim
         tf_ms = tickbars.tf_to_ms(tf)
     except ValueError as e:
         raise HTTPException(422, str(e))
+    if cfg.get("market") == "tvc" and tf in COARSE_TVC:
+        return tvc_coarse_bars(symbol, tf, tf_ms, cfg, start_ms, end_ms, limit)
     is_vn = cfg.get("market") in ("vn", "tvc")   # chỉ có nến 1 phút, không có tick (VN100 và vàng TVC)
     live = end_ms is None and not is_vn   # chỉ yêu cầu nến mới nhất mới cần đuôi từ REST; cổ phiếu VN không có tick
     now_ms = int(time.time() * 1000)

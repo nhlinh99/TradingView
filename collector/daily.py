@@ -53,6 +53,8 @@ def run(symbols: list[str], backfill_days: int = 3, do_compact: bool = True, vn_
     for symbol in symbols:
         if store.symbol_config(symbol).get("market") == "tvc":   # vàng TVC: chỉ nến 1 phút, không tick, không compact
             step("tvc-bars", symbol, lambda: tvc.sync())
+            for tf in tvc.COARSE:
+                step(f"tvc-{tf}", symbol, lambda t=tf: tvc.sync_coarse(t))
             continue
         step("klines", symbol, lambda s=symbol: klines.sync(s))
         for dataset in BACKFILL_DATASETS:

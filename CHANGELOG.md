@@ -11,6 +11,9 @@ Xem `TODO.md` cho việc còn mở và `docs/plan/README.md` cho kế hoạch t�
 ### Thêm
 - Mã `XAUUSD` (vàng giao ngay) lấy từ TradingView, nguồn TVC (`collector/tvc.py`, mã gốc `TVC:GOLD` vì `TVC:XAUUSD` bị từ chối với tài khoản ẩn danh). Chỉ có nến 1 phút trở lên, không tick, không heatmap. Nguồn ẩn danh chỉ trả khoảng 7.800 nến 1 phút (5 ngày), nên phải chạy `collector.tvc` đều đặn (đã thêm vào `dev.ps1` và `collector.daily`) để lịch sử dài ra.
 
+### Thêm (tiếp)
+- XAUUSD có lịch sử dài ở các khung lớn: 5m từ 21/10, 1h từ 01/2026, 4h từ 2023, 1d từ 2007 trở về trước (hàng chục năm), cả 1w và 1M. Nến TradingView ở các khung này được lưu riêng (`DATA_DIR/tvc/XAUUSD/<khung>.json`, nạp bằng `python -m collector.tvc --history`) và server trả đúng nó khi chọn khung tương ứng; khung khác (ví dụ 2h) vẫn dựng từ nến 1 phút nên chỉ có vài ngày. Nến 1 phút vẫn chỉ sâu khoảng 5 ngày do giới hạn của nguồn.
+
 ### Sửa
 - XAUUSD thiếu nến mới: không có luồng trực tiếp nên nến dừng ở lần nạp lúc khởi động. Giờ server tự kéo đuôi nến từ TradingView khi có người xem (tối đa 20 giây một lần). Ngày 08/11 (60 nến mở cửa Chủ nhật) cũng đã nạp bù. Các khoảng trống 22:00 đến 23:00 UTC mỗi ngày và cuối tuần là giờ nghỉ của thị trường.
 - Đổi mã trên biểu đồ: bật lại tự co giãn trục giá để thang khớp giá của mã mới (trước đó kéo tay trục giá thì sang mã khác vẫn giữ thang cũ).

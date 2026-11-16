@@ -7,6 +7,10 @@ của họ không cho phép dùng lại dữ liệu ngoài cá nhân. Chỉ dùn
 cho cùng sản phẩm và chạy được, nên dùng nó. Volume là số tick của nhà cung cấp, không phải khối lượng khớp thật.
 
 Chạy:  python -m collector.tvc [--days 30]     (nạp nến 1 phút vào kho `bars`, mã XAUUSD)
+       python -m collector.tvc --history        (nạp lịch sử dài của các khung 5m, 15m, 1h, 4h, 1d, 1w, 1M)
+
+Nến 1 phút ẩn danh chỉ sâu khoảng 5 ngày, còn khung lớn sâu hơn nhiều (5m ~1 tháng, 1h ~10 tháng, 4h ~4 năm, 1d hàng
+chục năm). Các khung lớn lưu riêng ở DATA_DIR/tvc/XAUUSD/<khung>.json và được server trả đúng khung đó.
 """
 from __future__ import annotations
 
@@ -14,6 +18,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import random
 import re
 import string
@@ -64,7 +69,7 @@ def to_bars(rows: list[list[float]]) -> list[tuple]:
             for r in rows]
 
 
-async def fetch_minutes(start_s: int, timeout: float = 20.0, connect=websockets.connect, count: int = CHUNK) -> list[list[float]]:
+async def fetch_minutes(start_s: int, timeout: float = 20.0, connect=websockets.connect, count: int = CHUNK, res: str = "1") -> list[list[float]]:
     """Nến 1 phút mới nhất lùi tới start_s (giây), cũ trước. Dừng khi đủ hoặc nguồn hết lịch sử (ẩn danh: khoảng 5 ngày)."""
     got: dict[int, list[float]] = {}
     async with connect(WS_URL, origin="https://www.tradingview.com", max_size=None) as ws:
@@ -72,7 +77,7 @@ async def fetch_minutes(start_s: int, timeout: float = 20.0, connect=websockets.
         sym = "=" + json.dumps({"symbol": TV_SYMBOL, "adjustment": "splits", "session": "regular"})
         for m, p in [("set_auth_token", ["unauthorized_user_token"]), ("chart_create_session", [cs, ""]),
                      ("resolve_symbol", [cs, "sym", sym]),
-                     ("create_series", [cs, "sds_1", "s1", "sym", "1", count, ""])]:
+                     ("create_series", [cs, "sds_1", "s1", "sym", res, count, ""])]:
             await ws.send(_frame(m, p))
         chunks = 0
         last_new = 0
@@ -128,6 +133,57 @@ def sync(days: int = 30, now_ms: int | None = None, fetch=fetch_minutes) -> dict
     return {"bars": len(bars), "days": len(by_day), "from_ms": start_ms}
 
 
+COARSE = {"5m": "5", "15m": "15", "1h": "60", "4h": "240", "1d": "1D", "1w": "1W", "1M": "1M"}
+FULL_CAP = 10_000     # số nến tối đa khi nạp lịch sử một khung
+
+
+def coarse_path(tf: str):
+    return store.data_dir() / "tvc" / SYMBOL / f"{tf}.json"
+
+
+def load_coarse(tf: str) -> list[list[float]]:
+    try:
+        return json.loads(coarse_path(tf).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+
+
+def sync_coarse(tf: str, full: bool = False, fetch=fetch_minutes) -> dict:
+    """Nạp nến khung `tf` (full: toàn bộ lịch sử nguồn cho; không thì chỉ phần mới), gộp vào tệp JSON theo ts."""
+    old = load_coarse(tf)
+    start_s = 0 if full or not old else int(old[-1][0])
+    count = FULL_CAP if full else 100
+    rows = asyncio.run(fetch(start_s, res=COARSE[tf], count=min(count, 5000)))
+    merged = {int(r[0]): r for r in old}
+    for r in rows:
+        merged[int(r[0])] = r
+    out = [merged[k] for k in sorted(merged)]
+    p = coarse_path(tf)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_text(json.dumps(out, separators=(",", ":")), encoding="utf-8")
+    os.replace(tmp, p)
+    return {"tf": tf, "bars": len(out), "new": len(out) - len(old)}
+
+
+_last_coarse: dict[str, float] = {}
+
+
+def refresh_coarse(tf: str, min_interval: float = 30.0) -> bool:
+    """Làm mới đuôi của khung lớn khi có người xem, gọi thưa. Lỗi chỉ ghi log."""
+    if time.monotonic() - _last_coarse.get(tf, -1e9) < min_interval or not _refresh_lock.acquire(blocking=False):
+        return False
+    try:
+        _last_coarse[tf] = time.monotonic()
+        sync_coarse(tf)
+        return True
+    except Exception as e:  # noqa: BLE001
+        log.warning("không làm mới được XAUUSD %s: %s: %s", tf, type(e).__name__, e)
+        return False
+    finally:
+        _refresh_lock.release()
+
+
 _last_refresh = 0.0
 _refresh_lock = threading.Lock()
 
@@ -151,8 +207,13 @@ def refresh_tail(min_interval: float = 20.0) -> bool:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=30)
+    ap.add_argument("--history", action="store_true", help="nạp toàn bộ lịch sử các khung lớn")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    if args.history:
+        for tf in COARSE:
+            log.info("%s", sync_coarse(tf, full=True))
+        return
     log.info("%s %s", SYMBOL, sync(args.days))
 
 
