@@ -20,8 +20,8 @@ def test_symbols_lists_configured_with_tick(data_root):
 
 
 def test_first_read_seeds_with_all_configured_symbols(data_root):
-    assert client.get("/api/watchlist").json() == {"symbols": ["BTCUSDT", "XAUUSDT"]}
-    assert client.get("/api/watchlist").json() == {"symbols": ["BTCUSDT", "XAUUSDT"]}   # đọc lại không nhân đôi
+    assert client.get("/api/watchlist").json() == {"symbols": ["BTCUSDT", "XAUUSDT", "XAUUSD"]}
+    assert client.get("/api/watchlist").json() == {"symbols": ["BTCUSDT", "XAUUSDT", "XAUUSD"]}   # đọc lại không nhân đôi
 
 
 def test_put_replaces_and_keeps_order(data_root):
@@ -34,7 +34,7 @@ def test_put_dedupes_and_allows_empty_then_reseeds(data_root):
     assert client.put("/api/watchlist", json={"symbols": ["BTCUSDT", "BTCUSDT"]}).json() == {"symbols": ["BTCUSDT"]}
     assert client.put("/api/watchlist", json={"symbols": []}).json() == {"symbols": []}
     # danh sách rỗng được lưu đúng như người dùng muốn, nhưng lần đọc sau tự khởi tạo lại
-    assert client.get("/api/watchlist").json()["symbols"] == ["BTCUSDT", "XAUUSDT"]
+    assert client.get("/api/watchlist").json()["symbols"] == ["BTCUSDT", "XAUUSDT", "XAUUSD"]
 
 
 def test_put_rejects_unknown_symbol_and_keeps_previous(data_root):

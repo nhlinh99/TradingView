@@ -9,7 +9,7 @@ type Props = {
   onClose: () => void
 }
 
-const KIND: Record<string, string> = { vn: 'VN100 · HOSE', binance_futures: 'Binance Futures' }
+const KIND: Record<string, string> = { vn: 'VN100 · HOSE', tvc: 'TradingView · TVC', binance_futures: 'Binance Futures' }
 
 /** Hộp tìm symbol (mở bằng / hoặc Ctrl+K): gõ để lọc, mũi tên để chọn, Enter để mở; mã chưa có trong danh sách theo dõi sẽ được thêm. */
 export default function SymbolSearch({ all, watch, current, onPick, onClose }: Props) {

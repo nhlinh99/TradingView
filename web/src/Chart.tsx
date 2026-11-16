@@ -212,7 +212,11 @@ export default function Chart({ symbol, tf, tz, flow, pines, indLegend, replay, 
     const paint = (all: Bar[], fit: boolean) => {
       candles.current?.setData(all.map((b) => ({ time: b.time as UTCTimestamp, open: b.open, high: b.high, low: b.low, close: b.close })))
       volume.current?.setData(all.map((b) => ({ time: b.time as UTCTimestamp, value: b.volume, color: volColor(b, PALETTE[themeRef.current].up, PALETTE[themeRef.current].down) })))
-      if (fit) chartRef.current?.timeScale().fitContent()
+      if (fit) {
+        // đổi mã: bật lại tự co giãn trục giá (kéo tay đã tắt nó) để thang khớp với giá của mã mới
+        chartRef.current?.priceScale('right').applyOptions({ autoScale: true })
+        chartRef.current?.timeScale().fitContent()
+      }
       if (import.meta.env.DEV) (window as unknown as { __tvBars?: Bar[] }).__tvBars = bars.current
       refreshRef.current()
       setVersion((v) => v + 1)

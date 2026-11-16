@@ -26,6 +26,8 @@ foreach ($sym in @('BTCUSDT', 'XAUUSDT')) {
   try { & $py -m collector.klines --symbol $sym --days 3 } catch { Write-Warning "klines catch-up failed for ${sym}: $_" }
 }
 
+try { & $py -m collector.tvc --days 5 } catch { Write-Warning "tvc catch-up failed: $_" }
+
 $api = Start-Process -FilePath $py -WorkingDirectory $root -NoNewWindow -PassThru `
   -ArgumentList '-m', 'uvicorn', 'server.main:app', '--host', '127.0.0.1', '--port', '8000'
 $web = Start-Process -FilePath 'npm.cmd' -WorkingDirectory (Join-Path $root 'web') -NoNewWindow -PassThru `

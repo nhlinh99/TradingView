@@ -113,7 +113,7 @@ def latest_prices(symbols: set[str]) -> dict[str, float]:
     """Giá gần nhất của từng symbol: Binance qua REST ticker, cổ phiếu VN qua bảng giá SSI (đơn vị nghìn đồng)."""
     from collector import binance, vn
     out: dict[str, float] = {}
-    crypto = [s for s in symbols if store.symbol_config(s).get("market") != "vn"]
+    crypto = [s for s in symbols if store.symbol_config(s).get("market") not in ("vn", "tvc")]   # tvc: chưa có giá trực tiếp
     vns = {s for s in symbols if store.symbol_config(s).get("market") == "vn"}
     if crypto:
         client = binance.make_client()

@@ -32,3 +32,13 @@ book_window_pct = 0.30
 book_bucket = 0.1
 book_interval_s = 5
 book_resync_s = 60
+
+# Vàng giao ngay từ TradingView (TVC:GOLD), chỉ có nến 1 phút, không tick, không sổ lệnh. Xem collector/tvc.py.
+[XAUUSD]
+source = "tvc"
+market = "tvc"
+tick = 0.001
+qty_step = 1
+footprint_bucket = 0.1
+book_window_pct = 0.0
+book_bucket = 0.1

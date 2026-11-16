@@ -127,7 +127,7 @@ def get_bars(symbol: str, tf: str, start_ms: int | None, end_ms: int | None, lim
         tf_ms = tickbars.tf_to_ms(tf)
     except ValueError as e:
         raise HTTPException(422, str(e))
-    is_vn = cfg.get("market") == "vn"
+    is_vn = cfg.get("market") in ("vn", "tvc")   # chỉ có nến 1 phút, không có tick (VN100 và vàng TVC)
     live = end_ms is None and not is_vn   # chỉ yêu cầu nến mới nhất mới cần đuôi từ REST; cổ phiếu VN không có tick
     now_ms = int(time.time() * 1000)
     if end_ms is None:
@@ -147,7 +147,7 @@ def get_bars(symbol: str, tf: str, start_ms: int | None, end_ms: int | None, lim
     start_ms = tickbars.bucket_start(tf, start_ms)          # căn đầu nến (tuần: thứ Hai, tháng: ngày 1) để nến đầu tiên đủ dữ liệu
 
     if tf_ms < MINUTE and is_vn:
-        raise HTTPException(422, "cổ phiếu VN chỉ có nến từ 1 phút trở lên (không có tick)")
+        raise HTTPException(422, "mã này chỉ có nến từ 1 phút trở lên (không có tick)")
     if tf_ms < MINUTE:
         rows, last_id = tick_bars(symbol, tf_ms, start_ms, end_ms, live)
     elif tf_ms % MINUTE == 0:

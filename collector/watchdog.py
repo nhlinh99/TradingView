@@ -69,7 +69,7 @@ def _configured_symbols() -> list[str]:
 def targets(now: float, symbols: list[str] | None = None) -> dict[tuple[str, str], float | None]:
     """Mốc ghi cuối của mọi cặp (loại, symbol) đang được ghi. Cặp không có dữ liệu gần đây thì bỏ qua."""
     if symbols is None:
-        symbols = [s for s in _configured_symbols() if store.symbol_config(s).get("market") != "vn"]
+        symbols = [s for s in _configured_symbols() if store.symbol_config(s).get("market") not in ("vn", "tvc")]
     out: dict[tuple[str, str], float | None] = {}
     for s in symbols:
         for k in KINDS:

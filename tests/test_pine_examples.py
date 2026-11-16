@@ -211,6 +211,16 @@ def test_volume_profile_boxes_stay_inside_the_profile_range(vpt):
         assert ref["lo"] - 1e-9 <= lo_ < hi_ <= ref["hi"] + 1e-9
 
 
+def test_volume_profile_boxes_carry_row_text(vpt):
+    """Mỗi hàng profile có số (volume, delta, %) trong box; engine phải giữ text và kiểu chữ để biểu đồ vẽ ra."""
+    _, res = vpt
+    boxes = [b for b in res["objects"]["boxes"] if b.get("text")]
+    assert len(boxes) >= 25
+    assert {b["text_halign"] for b in boxes} >= {"left", "right"}
+    assert all(b["text_color"] for b in boxes) and all(b["text_size"] == "tiny" for b in boxes)
+    assert any(b["text"].endswith("%") for b in boxes)
+
+
 def test_volume_profile_changes_with_inputs(vpt):
     bars, res = vpt
     narrow = run("volume_profile_total", bars, inputs={"  Lookback Length / Fixed Range": 100})

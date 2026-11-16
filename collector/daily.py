@@ -22,7 +22,7 @@ import logging
 import tomllib
 from datetime import datetime, timedelta, timezone
 
-from collector import backfill, compact, klines, vn
+from collector import backfill, compact, klines, tvc, vn
 from common import store
 
 log = logging.getLogger("collector.daily")
@@ -51,6 +51,9 @@ def run(symbols: list[str], backfill_days: int = 3, do_compact: bool = True, vn_
             report["failures"].append(f"{name} {symbol}: {type(e).__name__}: {e}")
 
     for symbol in symbols:
+        if store.symbol_config(symbol).get("market") == "tvc":   # vàng TVC: chỉ nến 1 phút, không tick, không compact
+            step("tvc-bars", symbol, lambda: tvc.sync())
+            continue
         step("klines", symbol, lambda s=symbol: klines.sync(s))
         for dataset in BACKFILL_DATASETS:
             step(f"backfill-{dataset}", symbol,

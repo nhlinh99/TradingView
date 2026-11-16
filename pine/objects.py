@@ -789,7 +789,8 @@ def register() -> None:
                                      ("tooltip", ""))),
         "box.new": _make("box", (("left", NAN), ("top", NAN), ("right", NAN), ("bottom", NAN), ("border_color", None),
                                  ("border_width", 1), ("border_style", "solid"), ("extend", "none"), ("xloc", "bar_index"),
-                                 ("bgcolor", None), ("text", ""))),
+                                 ("bgcolor", None), ("text", ""), ("text_size", "normal"), ("text_color", None),
+                                 ("text_halign", "center"), ("text_valign", "center"))),
         "table.new": t_new, "table.cell": t_cell, "table.merge_cells": t_merge, "table.delete": _delete,
         "line.delete": _delete, "label.delete": _delete, "box.delete": _delete,
         "request.earnings": lambda it, n, a, k: NAN, "request.dividends": lambda it, n, a, k: NAN, "request.splits": lambda it, n, a, k: NAN,
@@ -811,7 +812,8 @@ def register() -> None:
     })
     for k, fields in (("line", ("x1", "y1", "x2", "y2", "color", "width", "style", "extend")),
                       ("label", ("x", "y", "text", "color", "textcolor", "style", "size", "tooltip")),
-                      ("box", ("left", "top", "right", "bottom", "border_color", "border_width", "border_style", "bgcolor", "text"))):
+                      ("box", ("left", "top", "right", "bottom", "border_color", "border_width", "border_style", "bgcolor", "text",
+                                  "text_size", "text_color", "text_halign", "text_valign"))):
         for f in fields:
             B[f"{k}.set_{f}"] = _setter(f)
     B["line.set_first_point"] = _point_setter("x1", "y1")

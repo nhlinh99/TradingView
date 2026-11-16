@@ -120,6 +120,21 @@ export default function PineObjects({ result, tf, chart, candles, bars, version 
           ctx.strokeStyle = css(b.border_color, '#888'); ctx.lineWidth = Number(b.border_width) || 1
           ctx.setLineDash(DASH[String(b.border_style)] ?? []); ctx.strokeRect(x, y, bw, Math.max(1, bh)); ctx.setLineDash([])
         }
+        const txt = String(b.text ?? '')
+        if (txt && bw > 8 && bh > 5) {
+          // chữ trong box (volume profile hiện số ở từng hàng): cắt theo khung, cỡ chữ không vượt chiều cao hàng
+          const fs = Math.min(FONT[String(b.text_size)] ?? 12, Math.max(6, bh - 1))
+          const halign = String(b.text_halign)
+          const pad = 3
+          ctx.save()
+          ctx.beginPath(); ctx.rect(x, y, bw, Math.max(1, bh)); ctx.clip()
+          ctx.font = `${fs}px system-ui, sans-serif`
+          ctx.fillStyle = css(b.text_color, '#d1d4dc'); ctx.textBaseline = 'middle'
+          ctx.textAlign = halign === 'left' ? 'left' : halign === 'right' ? 'right' : 'center'
+          const tx = halign === 'left' ? x + pad : halign === 'right' ? x + bw - pad : x + bw / 2
+          ctx.fillText(txt, tx, y + Math.max(1, bh) / 2)
+          ctx.restore()
+        }
       }
       for (const l of objs.lines) {
         const y1 = yOf(l.y1 as number); const y2 = yOf(l.y2 as number)
