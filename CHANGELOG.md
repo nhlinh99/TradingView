@@ -12,6 +12,7 @@ Xem `TODO.md` cho việc còn mở và `docs/plan/README.md` cho kế hoạch t�
 - Mã `XAUUSD` (vàng giao ngay) lấy từ TradingView, nguồn TVC (`collector/tvc.py`, mã gốc `TVC:GOLD` vì `TVC:XAUUSD` bị từ chối với tài khoản ẩn danh). Chỉ có nến 1 phút trở lên, không tick, không heatmap. Nguồn ẩn danh chỉ trả khoảng 7.800 nến 1 phút (5 ngày), nên phải chạy `collector.tvc` đều đặn (đã thêm vào `dev.ps1` và `collector.daily`) để lịch sử dài ra.
 
 ### Sửa
+- XAUUSD thiếu nến mới: không có luồng trực tiếp nên nến dừng ở lần nạp lúc khởi động. Giờ server tự kéo đuôi nến từ TradingView khi có người xem (tối đa 20 giây một lần). Ngày 08/11 (60 nến mở cửa Chủ nhật) cũng đã nạp bù. Các khoảng trống 22:00 đến 23:00 UTC mỗi ngày và cuối tuần là giờ nghỉ của thị trường.
 - Đổi mã trên biểu đồ: bật lại tự co giãn trục giá để thang khớp giá của mã mới (trước đó kéo tay trục giá thì sang mã khác vẫn giữ thang cũ).
 - Indicator volume profile (`volume_profile_total`) không hiện số: engine Pine bỏ mất `text_size`, `text_color`, `text_halign`, `text_valign` của `box.new`, và biểu đồ không vẽ chữ trong box. Đã sửa cả hai.
 

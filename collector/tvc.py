@@ -17,6 +17,7 @@ import logging
 import random
 import re
 import string
+import threading
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -63,7 +64,7 @@ def to_bars(rows: list[list[float]]) -> list[tuple]:
             for r in rows]
 
 
-async def fetch_minutes(start_s: int, timeout: float = 20.0, connect=websockets.connect) -> list[list[float]]:
+async def fetch_minutes(start_s: int, timeout: float = 20.0, connect=websockets.connect, count: int = CHUNK) -> list[list[float]]:
     """Nến 1 phút mới nhất lùi tới start_s (giây), cũ trước. Dừng khi đủ hoặc nguồn hết lịch sử (ẩn danh: khoảng 5 ngày)."""
     got: dict[int, list[float]] = {}
     async with connect(WS_URL, origin="https://www.tradingview.com", max_size=None) as ws:
@@ -71,7 +72,7 @@ async def fetch_minutes(start_s: int, timeout: float = 20.0, connect=websockets.
         sym = "=" + json.dumps({"symbol": TV_SYMBOL, "adjustment": "splits", "session": "regular"})
         for m, p in [("set_auth_token", ["unauthorized_user_token"]), ("chart_create_session", [cs, ""]),
                      ("resolve_symbol", [cs, "sym", sym]),
-                     ("create_series", [cs, "sds_1", "s1", "sym", "1", CHUNK, ""])]:
+                     ("create_series", [cs, "sds_1", "s1", "sym", "1", count, ""])]:
             await ws.send(_frame(m, p))
         chunks = 0
         last_new = 0
@@ -116,7 +117,8 @@ def sync(days: int = 30, now_ms: int | None = None, fetch=fetch_minutes) -> dict
     now_ms = now_ms if now_ms is not None else int(time.time() * 1000)
     last = vn.last_bar_ts(SYMBOL)
     start_ms = (last if last is not None else now_ms - days * DAY_MS) // DAY_MS * DAY_MS   # về đầu ngày UTC
-    rows = asyncio.run(fetch(start_ms // 1000))
+    need = min(CHUNK, (now_ms - start_ms) // 60_000 + 10)   # chỉ xin đủ số nến cần, để lần làm mới đuôi nhanh
+    rows = asyncio.run(fetch(start_ms // 1000, count=need)) if fetch is fetch_minutes else asyncio.run(fetch(start_ms // 1000))
     bars = to_bars(rows)
     by_day = defaultdict(list)
     for b in bars:
@@ -124,6 +126,26 @@ def sync(days: int = 30, now_ms: int | None = None, fetch=fetch_minutes) -> dict
     for day, day_rows in by_day.items():
         store.write_partition("bars", SYMBOL, day, day_rows)
     return {"bars": len(bars), "days": len(by_day), "from_ms": start_ms}
+
+
+_last_refresh = 0.0
+_refresh_lock = threading.Lock()
+
+
+def refresh_tail(min_interval: float = 20.0) -> bool:
+    """Làm mới đuôi nến cho server khi có người xem. Gọi thưa (mặc định 20 giây một lần); lỗi mạng chỉ ghi log."""
+    global _last_refresh
+    if time.monotonic() - _last_refresh < min_interval or not _refresh_lock.acquire(blocking=False):
+        return False
+    try:
+        _last_refresh = time.monotonic()
+        sync()
+        return True
+    except Exception as e:  # noqa: BLE001
+        log.warning("không làm mới được XAUUSD từ TradingView: %s: %s", type(e).__name__, e)
+        return False
+    finally:
+        _refresh_lock.release()
 
 
 def main() -> None:

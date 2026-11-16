@@ -132,6 +132,9 @@ def get_bars(symbol: str, tf: str, start_ms: int | None, end_ms: int | None, lim
     now_ms = int(time.time() * 1000)
     if end_ms is None:
         end_ms = now_ms + 1  # gồm cả nến đang chạy
+        if cfg.get("market") == "tvc":
+            from collector import tvc
+            tvc.refresh_tail()   # vàng TVC không có luồng trực tiếp: kéo nến mới nhất khi có người xem
         if is_vn:
             # thị trường VN đóng cửa nhiều ngày (cuối tuần, lễ): lấy khoảng kết thúc ở nến cuối cùng đang có
             from collector import vn as vn_collector
