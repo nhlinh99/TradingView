@@ -73,6 +73,28 @@ class Feed:
         self._broadcast({"t": "trade", "s": self.symbol, "ts": int(m["T"]), "id": id_,
                          "p": float(m["p"]), "q": float(m["q"]), "m": bool(m["m"])})
 
+    async def run_tvc(self) -> None:
+        """Vàng TVC: một websocket liên tục tới TradingView; mỗi lần nến 1 phút đổi phát một "lệnh" giá đóng, khối lượng 0."""
+        from collector import tvc
+        backoff = self.hub.backoff_start
+        seq = 0
+        while True:
+            try:
+                async for r in tvc.stream_minutes():
+                    if self.state != "connected":
+                        self._status("connected")
+                        backoff = self.hub.backoff_start
+                    seq += 1
+                    self._broadcast({"t": "trade", "s": self.symbol, "ts": int(r[0]) * 1000, "id": seq,
+                                     "p": float(r[4]), "q": 0.0, "m": False})
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:  # noqa: BLE001
+                log.warning("%s mất kết nối TradingView: %s: %s", self.symbol, type(e).__name__, e)
+            self._status("reconnecting")
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 30.0)
+
     async def run(self) -> None:
         backoff = self.hub.backoff_start
         while True:
@@ -100,8 +122,11 @@ class LiveHub:
         feed = self.feeds.get(symbol)
         if feed is None:
             feed = self.feeds[symbol] = Feed(self, symbol)
-            if store.symbol_config(symbol).get("market") in ("vn", "tvc"):
+            market = store.symbol_config(symbol).get("market")
+            if market == "vn":
                 feed.state = "connected"   # cổ phiếu VN: không có luồng lệnh khớp; nến cập nhật theo lần tải lại
+            elif market == "tvc":
+                feed.task = asyncio.get_running_loop().create_task(feed.run_tvc(), name=f"feed-{symbol}")
             else:
                 feed.task = asyncio.get_running_loop().create_task(feed.run(), name=f"feed-{symbol}")
         q: asyncio.Queue = asyncio.Queue(maxsize=QUEUE_SIZE)

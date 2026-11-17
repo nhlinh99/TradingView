@@ -225,7 +225,15 @@ export default function Chart({ symbol, tf, tz, flow, pines, indLegend, replay, 
       if (replayRef.current !== null) return // đang phát lại: không trộn lệnh khớp trực tiếp vào
       if (lastId !== null && t.id <= lastId) return // đã nằm trong nến tải về
       lastId = t.id
-      const b = applyTrade(bars.current, step, t, tf)
+      // vàng TVC: khung 4h/1d/1w/1M của TradingView lệch múi giờ so với cách chia nến của app, nên chỉ cập nhật giá nến cuối
+      // (nến mới của các khung này do vòng hỏi lại 15 giây tạo ra)
+      let b: Bar | null
+      if (t.q === 0 && ['4h', '1d', '1w', '1M'].includes(tf) && bars.current.length > 0) {
+        b = bars.current[bars.current.length - 1]
+        b.close = t.p
+        b.high = Math.max(b.high, t.p)
+        b.low = Math.min(b.low, t.p)
+      } else b = applyTrade(bars.current, step, t, tf)
       if (!b) return
       candles.current?.update({ time: b.time as UTCTimestamp, open: b.open, high: b.high, low: b.low, close: b.close })
       volume.current?.update({ time: b.time as UTCTimestamp, value: b.volume, color: volColor(b, PALETTE[themeRef.current].up, PALETTE[themeRef.current].down) })

@@ -117,6 +117,38 @@ async def fetch_minutes(start_s: int, timeout: float = 20.0, connect=websockets.
     return [got[k] for k in sorted(got) if k >= start_s]
 
 
+async def stream_minutes(connect=websockets.connect, idle_timeout: float = 90.0):
+    """Giữ một websocket ẩn danh tới TradingView và phát (yield) dòng nến 1 phút [t, o, h, l, c, v] mỗi khi nó đổi.
+
+    Gồm cả đợt nến đầu tiên khi vừa nối. Mất kết nối hoặc im lặng quá idle_timeout giây thì ném lỗi để bên gọi nối lại
+    (heartbeat của TradingView đến mỗi vài giây nên im lặng lâu nghĩa là kết nối đã chết)."""
+    async with connect(WS_URL, origin="https://www.tradingview.com", max_size=None) as ws:
+        cs = _sid("cs_")
+        sym = "=" + json.dumps({"symbol": TV_SYMBOL, "adjustment": "splits", "session": "regular"})
+        for m, p in [("set_auth_token", ["unauthorized_user_token"]), ("chart_create_session", [cs, ""]),
+                     ("resolve_symbol", [cs, "sym", sym]), ("create_series", [cs, "sds_1", "s1", "sym", "1", 3, ""])]:
+            await ws.send(_frame(m, p))
+        seen: dict[int, list[float]] = {}
+        while True:
+            raw = await asyncio.wait_for(ws.recv(), idle_timeout)
+            for part in parse_frames(raw):
+                if part.startswith("~h~"):
+                    await ws.send(f"~m~{len(part)}~m~{part}")
+                    continue
+                d = json.loads(part)
+                m = d.get("m")
+                if m in ("symbol_error", "series_error", "critical_error"):
+                    raise RuntimeError(f"TradingView: {m} {d.get('p')}")
+                if m in ("timescale_update", "du"):
+                    for r in series_rows(d):
+                        t = int(r[0])
+                        if seen.get(t) != r:
+                            seen[t] = r
+                            yield r
+                    for old in sorted(seen)[:-5]:
+                        del seen[old]
+
+
 def sync(days: int = 30, now_ms: int | None = None, fetch=fetch_minutes) -> dict:
     from collector import vn   # last_bar_ts đọc kho `bars`, không phụ thuộc nguồn
     now_ms = now_ms if now_ms is not None else int(time.time() * 1000)
