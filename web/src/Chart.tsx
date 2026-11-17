@@ -245,6 +245,7 @@ export default function Chart({ symbol, tf, tz, flow, pines, indLegend, replay, 
         onTotalRef.current(fullRef.current.length)
         bars.current = replayRef.current === null ? fullRef.current : fullRef.current.slice(0, Math.max(2, Math.min(replayRef.current, fullRef.current.length)))
         lastId = j.last_trade_id
+        noStream = j.last_trade_id === null
         const first = my === 1
         paint(bars.current, first)
         ready = true
@@ -257,6 +258,32 @@ export default function Chart({ symbol, tf, tz, flow, pines, indLegend, replay, 
         if (my === seq) setLoading(false)
       }
     }
+
+    // mã không có luồng lệnh (vàng TVC, VN100): hỏi lại vài nến cuối mỗi 15 giây để nến đang chạy và nến mới hiện ra
+    let noStream = false
+    let polling = false
+    const poll = window.setInterval(async () => {
+      if (!noStream || !ready || polling || replayRef.current !== null || document.hidden) return
+      polling = true
+      try {
+        const j = await fetchBars(symbol, tf, 3, undefined, ctrl.signal)
+        if (ctrl.signal.aborted || !ready || replayRef.current !== null) return
+        for (const row of j.bars.map(barFromRow)) {
+          const last = bars.current[bars.current.length - 1]
+          if (last && row.time < last.time) continue
+          if (last && row.time === last.time) bars.current[bars.current.length - 1] = row
+          else bars.current.push(row)
+          candles.current?.update({ time: row.time as UTCTimestamp, open: row.open, high: row.high, low: row.low, close: row.close })
+          volume.current?.update({ time: row.time as UTCTimestamp, value: row.volume, color: volColor(row, PALETTE[themeRef.current].up, PALETTE[themeRef.current].down) })
+        }
+        fullRef.current = bars.current
+        scheduleFlow()
+      } catch {
+        /* lỗi tạm thời: lần sau thử lại */
+      } finally {
+        polling = false
+      }
+    }, 15_000)
 
     paintRef.current = paint
     reloadRef.current = () => void load()
@@ -295,6 +322,7 @@ export default function Chart({ symbol, tf, tz, flow, pines, indLegend, replay, 
 
     return () => {
       ctrl.abort()
+      window.clearInterval(poll)
       window.clearTimeout(flowTimer)
       stop()
       chartRef.current?.timeScale().unsubscribeVisibleLogicalRangeChange(onRange)
