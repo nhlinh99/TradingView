@@ -12,12 +12,12 @@ Dự án không liên kết với TradingView. Không dùng tên, logo hay giao 
 | 1 | Collector BTC và vàng (Binance Futures): nến, backfill, tick trực tiếp, sổ lệnh, gom nén | Xong. Đã đo sổ lệnh 1 giờ (xem `docs/plan/engineering-notes.md`) |
 | 2 | Chart: nến, volume, danh sách theo dõi (kéo thả), trực tiếp, múi giờ, giao diện sáng/tối, khung `1s` đến `1M` | Xong |
 | 3 | Orderflow: footprint (4 kiểu, imbalance, POC, stacked imbalance), delta, CVD, VPVR | Xong, trừ volume profile theo phiên |
-| 4 | Heatmap thanh khoản kiểu DeepCharts và Bookmap, chấm lệnh lớn, iceberg ước lượng | Xong, chưa đo thời gian vẽ (đích 100 ms) |
+| 4 | Heatmap thanh khoản kiểu DeepCharts và Bookmap, chấm lệnh lớn, iceberg ước lượng, vùng thanh khoản (rút lệnh, bị khớp), bảng độ sâu DOM (Chờ và Khớp), độ sâu thô từ `bookDepth` cho đoạn thiếu | Xong, chưa đo thời gian vẽ (đích 100 ms). Heatmap chỉ dài bằng thời gian collector đã chạy |
 | 5 | GEX BTC (Deribit): snapshot 15 phút, GEX theo strike, gamma flip, call/put wall | Xong. Gamma tính từ IV (Black-76), OI trễ ~8 giờ |
 | 6 | Vàng (XAUUSDT; GC1! tuỳ chọn, trả phí) | 6A xong. 6B và 6C chưa làm (tuỳ chọn) |
 | 7 | Cổ phiếu VN100 (SSI iBoard và VNDirect, không cần khoá) | Danh sách, nến 1 phút (khoảng 270 ngày, thưa ở giai đoạn cũ), nến ngày từ 2014 và bộ ghi sổ lệnh 3 mức xong. **Chưa đo phiên giao dịch thật** (Thứ Hai 16/11) |
 | 8 | Engine Pine: parser, thông dịch, `ta.*`, `request.security` và `security_lower_tf`, `type`, `import` (shim thư viện), mảng, line/label/box/table/polyline | Xong. Chạy được 6 script thật, 4 có đối chiếu tham chiếu độc lập |
-| 9 | Công cụ vẽ, layout 1/2/4 ô, cảnh báo nền (desktop, Telegram), phát lại, backtest | Xong (xem giới hạn trong `docs/plan/engineering-notes.md`) |
+| 9 | Công cụ vẽ (khoảng 40 công cụ: đường, Fibonacci, Pitchfork, Gann, Long/Short, đo, hình khối, ghi chú; menu chuột phải), layout 1/2/4 ô, cảnh báo nền (desktop, Telegram), phát lại, backtest | Xong (xem giới hạn trong `docs/plan/engineering-notes.md`) |
 | UX | Chỉ báo Pine nhiều cái cùng lúc, bảng Orderflow, tìm symbol, phím tắt, giao diện điện thoại | Xong |
 
 Kế hoạch, điều kiện nghiệm thu, số đo và việc còn mở của từng tính năng nằm trong [`docs/plan/`](docs/plan/README.md), mỗi tính năng một file. Đặc tả gốc và bản nghiên cứu đầu tiên nằm trong `docs/plan/archive/`.
@@ -28,7 +28,7 @@ Việc còn mở và thứ tự ưu tiên: xem [`TODO.md`](TODO.md). Kế hoạc
 
 ## Giao diện
 
-Thanh trên cùng chỉ có một hàng: symbol và trạng thái trực tiếp, khung thời gian, nút **Orderflow**, bố cục 1/2/4 ô, múi giờ, Replay, Cảnh báo, **Chỉ báo** (Pine), đổi sáng/tối. Mọi tính năng orderflow nằm trong bảng **Orderflow**: có 4 mẫu dựng sẵn (Sạch, Footprint, Bookmap, Profile), công tắc có mô tả một dòng, thanh trượt cho ngưỡng cắt, cỡ chấm, imbalance; tuỳ chọn chi tiết chỉ hiện khi bật tính năng; tính năng không dùng được cho symbol hiện tại (ví dụ cổ phiếu VN không có tick) bị làm mờ kèm giải thích. Bảng đóng bằng Esc hoặc bấm ra ngoài. Thanh vẽ ở mép trái dùng biểu tượng kèm gợi ý khi rê chuột; trên điện thoại thanh này nằm ngang và các nút tự gọn lại.
+Thanh trên cùng chỉ có một hàng: symbol và trạng thái trực tiếp, khung thời gian, nút **Orderflow**, bố cục 1/2/4 ô, múi giờ, Replay, Cảnh báo, **Chỉ báo** (Pine), đổi sáng/tối. Mọi tính năng orderflow nằm trong bảng **Orderflow**: có 4 mẫu dựng sẵn (Sạch, Footprint, Bookmap, Profile), công tắc có mô tả một dòng, thanh trượt cho ngưỡng cắt, cỡ chấm, imbalance; tuỳ chọn chi tiết chỉ hiện khi bật tính năng; tính năng không dùng được cho symbol hiện tại (ví dụ cổ phiếu VN không có tick) bị làm mờ kèm giải thích, và ở layout nhiều ô thì các lớp orderflow tự tắt trong ô của mã đó. Bảng đóng bằng Esc hoặc bấm ra ngoài. Thanh vẽ ở mép trái dùng biểu tượng kèm gợi ý khi rê chuột; trên điện thoại thanh này nằm ngang và các nút tự gọn lại.
 
 ![Bảng Orderflow](docs/screenshots/indicators-menu.png)
 
@@ -59,6 +59,8 @@ Kiểu màu **Mua/Bán**: lệnh mua chờ màu xanh lá, lệnh bán chờ màu
 **Kiểu Bookmap** (mặc định): thang màu nền đen, xanh đậm, xanh dương, cyan, vàng, cam, đỏ; chỉnh được ngưỡng cắt thấp và cao của thang; đường bid và ask tốt nhất dạng bậc thang (xanh lá và đỏ); dải volume mua/bán dưới đáy vùng giá; chấm volume có thanh trượt cỡ và bộ lọc lệnh nhỏ; hình thoi băng giá là dấu hiệu iceberg ước lượng (số bên cạnh là tỉ lệ khối lượng khớp so với thanh khoản hiển thị, độ tin cậy thấp).
 
 ![Heatmap kiểu Bookmap](docs/screenshots/heatmap-bookmap.png)
+
+Ảnh trên là preset Bookmap trên BTCUSDT khung 1m (giao diện tối): heatmap, vùng thanh khoản với dấu ✕ ở chỗ lệnh bị rút, chấm volume, iceberg, đường bid/ask tốt nhất, và cột DOM bên phải (Chờ và Khớp).
 
 **Bảng độ sâu (DOM)**: cột riêng bên phải trục giá (không đè lên nến), mỗi dòng ứng với một mức giá của biểu đồ (cùng tung độ): ask đỏ ở trên, bid xanh ở dưới, thanh bắt đầu từ mép trái cột và dài theo khối lượng chờ, mọi dòng đều ghi số, dòng bid và ask tốt nhất được tô nền, giá hiện tại có vạch ngang kèm spread. Bảng có hai cột con: **Chờ** (lệnh chờ trong sổ lệnh) và **Khớp**. Cột bên phải là **Khớp**: khối lượng đã khớp ở từng mức giá trong khoảng đang xem (xanh là mua chủ động, đỏ là bán chủ động, mức khớp nhiều nhất có viền vàng), làm mới mỗi 6 giây; XAUUSD dùng lệnh khớp XAUUSDT. Tiêu đề cột ghi độ gom giá, chân cột ghi trạng thái (trực tiếp hay trễ) và độ phủ quanh giá (sổ lệnh Binance chỉ có 1000 mức mỗi phía nên phủ khoảng ±0,3% với BTC). Lấy trực tiếp từ snapshot sổ lệnh của Binance (1000 mức mỗi phía, cập nhật mỗi 2 giây, server nhớ 1,5 giây để nhiều ô dùng chung một yêu cầu); nếu Binance lỗi thì dùng mẫu mới nhất đã ghi và ghi rõ độ trễ. Độ rộng mỗi dòng tự co giãn theo mức thu phóng của trục giá. XAUUSD dùng sổ lệnh XAUUSDT, dịch giá theo chênh lệch.
 
