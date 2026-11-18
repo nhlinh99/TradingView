@@ -37,6 +37,13 @@ def test_fib_extension_needs_three_points(data_root):
     assert client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": "fibx", "payload": pts((1, 10), (2, 20))}).status_code == 422
 
 
+def test_fib_extension_width_point_is_optional(data_root):
+    four = pts((1, 10), (2, 20), (3, 15), (9, 15))   # điểm thứ tư chỉ mang thời gian mép phải
+    assert client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": "fibx", "payload": four}).status_code == 200
+    five = pts((1, 10), (2, 20), (3, 15), (9, 15), (10, 15))
+    assert client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": "fibx", "payload": five}).status_code == 422
+
+
 def test_ruler_needs_two_points(data_root):
     assert client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": "ruler", "payload": pts((1, 10), (2, 20))}).status_code == 200
     assert client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": "ruler", "payload": pts((1, 10))}).status_code == 422

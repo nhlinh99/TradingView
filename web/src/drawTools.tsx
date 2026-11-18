@@ -334,6 +334,12 @@ function priceLabelBox(ctx: CanvasRenderingContext2D | null, text: string, p: Pt
   return { x: p.x + 9, y: p.y - 11, w: w + 16, h: 22 }
 }
 
+/** Mép phải của Fib mở rộng: điểm thứ tư (nếu có) do người dùng kéo; chưa có thì mặc định theo khoảng cách A-C, tối thiểu 160px. */
+function fibxRight(P: Pt[], plotW: number): number {
+  if (P.length >= 4) return Math.min(plotW, Math.max(P[3].x, P[2].x + 20))
+  return Math.min(plotW, P[2].x + Math.max(160, Math.abs(P[2].x - P[0].x)))
+}
+
 // ---------- biểu tượng ----------
 
 const I = {
@@ -555,18 +561,18 @@ export const REGISTRY: Record<DrawKind, ToolDef> = {
     draw: (e, P, D) => {
       const { ctx } = e
       ctx.strokeStyle = '#787b86'; ctx.lineWidth = 1; ctx.setLineDash([4, 4])
-      ctx.beginPath(); ctx.moveTo(P[0].x, P[0].y); ctx.lineTo(P[1].x, P[1].y); if (P.length === 3) ctx.lineTo(P[2].x, P[2].y); ctx.stroke(); ctx.setLineDash([])
-      if (P.length === 3) {
+      ctx.beginPath(); ctx.moveTo(P[0].x, P[0].y); ctx.lineTo(P[1].x, P[1].y); if (P.length >= 3) ctx.lineTo(P[2].x, P[2].y); ctx.stroke(); ctx.setLineDash([])
+      if (P.length >= 3) {
         const [pa, pb, pc] = D
         const x0 = P[2].x
-        const x1 = Math.min(e.plotW, x0 + Math.max(160, Math.abs(P[2].x - P[0].x)))   // chiều dài hữu hạn, không kéo hết mép phải
+        const x1 = fibxRight(P, e.plotW)
         drawFib(e, FIBX_LEVELS, (lv) => pc.price + (pb.price - pa.price) * lv, x0, x1)
       }
-      ctx.fillStyle = '#787b86'; dots(ctx, P)
+      ctx.fillStyle = '#787b86'; dots(ctx, P.slice(0, 3))
     },
     hit: (e, S, D, px, py) => {
       const [pa, pb, pc] = D
-      const x1 = Math.min(e.plotW, S[2].x + Math.max(160, Math.abs(S[2].x - S[0].x)))
+      const x1 = fibxRight(S, e.plotW)
       let dist = Math.min(distToSegment(px, py, S[0].x, S[0].y, S[1].x, S[1].y), distToSegment(px, py, S[1].x, S[1].y, S[2].x, S[2].y))
       for (const lv of FIBX_LEVELS) {
         const price = pc.price + (pb.price - pa.price) * lv
@@ -957,6 +963,15 @@ export const GROUP_ORDER: Group[] = ['line', 'fib', 'pitchfork', 'gann', 'positi
 export function handlesFor(kind: DrawKind, P: Pt[], plotW = Infinity): Handle[] {
   const def = REGISTRY[kind]
   if (def.noHandles) return []
+  if (kind === 'fibx' && P.length >= 3) {
+    // ba điểm A, B, C + tay nắm ở mép phải để chỉnh bề rộng (lưu thành điểm thứ tư, chỉ có thời gian là quan trọng)
+    const pts: Handle[] = P.slice(0, 3).map((q, k) => ({ ...q, cursor: 'move', set: (ps: DrawPoint[], np: DrawPoint) => ps.map((p, i) => (i === k ? np : p)) }))
+    pts.push({
+      x: fibxRight(P, plotW), y: P[2].y, cursor: 'ew-resize',
+      set: (ps, np) => [...ps.slice(0, 3), { time: np.time, price: ps[2].price }],
+    })
+    return pts
+  }
   if ((kind === 'long' || kind === 'short') && P.length === 3) {
     // vị thế: điểm 1 là giá vào (mép trái), điểm 2 và 3 cùng thời gian (mép phải) là cắt lỗ và chốt lời → 4 góc + 2 tay nắm ở giá vào
     const x0 = P[0].x

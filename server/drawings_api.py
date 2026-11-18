@@ -20,7 +20,7 @@ router = APIRouter()
 KINDS = {
     "trend": (2, 2), "ray": (2, 2), "hray": (1, 1), "xline": (2, 2), "hline": (1, 1), "vline": (1, 1), "cross": (1, 1),
     "info": (2, 2), "angle": (2, 2), "arrow": (2, 2), "channel": (3, 3), "regression": (2, 2),
-    "rect": (2, 2), "brush": (2, 400), "fib": (2, 2), "fibx": (3, 3), "ruler": (2, 2), "daterange": (2, 2),
+    "rect": (2, 2), "brush": (2, 400), "fib": (2, 2), "fibx": (3, 4), "ruler": (2, 2), "daterange": (2, 2),
     "pricerange": (2, 2), "text": (1, 1),
     "long": (3, 3), "short": (3, 3), "circle": (2, 2), "ellipse": (2, 2), "triangle": (3, 3), "polyline": (2, 50),
     "note": (1, 1), "callout": (2, 2), "pricelabel": (1, 1), "flag": (1, 1),
