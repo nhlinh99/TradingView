@@ -216,9 +216,9 @@ const ASK_STOPS: [number, RGB][] = [[0, [0, 0, 0]], [0.5, [110, 50, 190]], [1, [
 export function heatColor(v: number, side?: 'bid' | 'ask' | 'bookmap'): [number, number, number, number] {
   const x = Math.min(1, Math.max(0, v))
   if (x === 0) return [0, 0, 0, 0]
-  const s = Math.pow(x, 0.5)
+  const s = Math.pow(x, 0.8)   // gần tuyến tính như Bookmap: chỉ các "bức tường" thanh khoản mới sáng
   const [r, g, b] = ramp(side === 'bid' ? BID_STOPS : side === 'ask' ? ASK_STOPS : side === 'bookmap' ? BOOKMAP_STOPS : INTENSITY_STOPS, s)
-  return [r, g, b, 0.3 + 0.65 * s]
+  return [r, g, b, 0.04 + 0.9 * s]   // thanh khoản thấp gần như trong suốt, không tạo nhiễu
 }
 
 /** Ngược của timeToIndex: thời điểm (giây) ứng với chỉ số thập phân idx trên trục nến. */

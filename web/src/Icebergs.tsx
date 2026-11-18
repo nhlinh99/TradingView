@@ -112,12 +112,12 @@ export default function Icebergs({ on, symbol, tf, chart, candles, bars, version
         const rad = Math.max(5, Math.min(14, 4 + Math.sqrt((traded as number) / max) * 10))
         ctx.beginPath()
         ctx.moveTo(x, y - rad); ctx.lineTo(x + rad * 0.8, y); ctx.lineTo(x, y + rad); ctx.lineTo(x - rad * 0.8, y); ctx.closePath()
-        ctx.fillStyle = 'rgba(190,235,255,.85)'
+        ctx.fillStyle = 'rgba(190,235,255,.45)'
         ctx.fill()
         ctx.strokeStyle = side === 'buy' ? '#00e676' : '#ff5252'
         ctx.lineWidth = 2
         ctx.stroke()
-        if (ratio >= 4) {
+        if (ratio >= 8) {   // chỉ ghi hệ số khi đủ lớn, tránh chữ dày đặc
           ctx.fillStyle = '#ffffff'
           ctx.font = '10px system-ui, sans-serif'
           ctx.textAlign = 'left'

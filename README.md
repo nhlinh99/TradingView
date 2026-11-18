@@ -60,6 +60,10 @@ Kiểu màu **Mua/Bán**: lệnh mua chờ màu xanh lá, lệnh bán chờ màu
 
 ![Heatmap kiểu Bookmap](docs/screenshots/heatmap-bookmap.png)
 
+**Vùng thanh khoản (rút lệnh)**: mỗi lệnh chờ lớn là một thanh ngang kéo dài từ lúc xuất hiện đến lúc biến mất, đúng mức giá của nó. Cuối thanh có dấu hiệu: **✕** là bị rút lệnh, **▶** là bị khớp (có lệnh khớp ở đúng mức giá, phía chủ động đối diện), thanh mờ dần về bên phải là còn hiệu lực. Rê chuột vào thanh để xem phía, khối lượng lớn nhất, giờ bắt đầu và kết thúc, thời gian tồn tại và lý do kết thúc. Thu nhỏ biểu đồ thì chỉ giữ các vùng đủ dài để nhìn thấy (khoảng 6px). Ngưỡng cỡ lệnh chỉnh trong bảng Orderflow.
+
+Cách đọc heatmap cho dễ: thanh khoản thấp mờ dần vào nền (không sáng đều), nến rỗng màu xám khi bật heatmap để không lẫn với dải nhiệt, có chú giải thang màu, rê chuột vào heatmap thì hiện khối lượng bid và ask của ô đang trỏ. Đoạn chưa có sổ lệnh chi tiết (xem mục thu thập dữ liệu) được vẽ bằng độ sâu thô ±5% từ kho `bookDepth` của Binance, kèm ghi chú độ phủ. XAUUSD (vàng spot) không có sổ lệnh nên lấy từ XAUUSDT và dịch giá theo chênh lệch hiện tại, có ghi chú.
+
 **GEX BTC** từ options Deribit: histogram theo strike, gamma flip, call wall, put wall, kèm nhãn tuổi dữ liệu và OI trễ.
 
 ![GEX](docs/screenshots/gex.png)
@@ -88,6 +92,14 @@ Kiểu màu **Mua/Bán**: lệnh mua chờ màu xanh lá, lệnh bán chờ màu
 **Script Pine thật dài 1720 dòng** (Viprasol Liquidity Trail Matrix, Pine v6): băng trail, nhãn đảo chiều, tín hiệu retest, đường entry/SL/TP, volume profile của đoạn xu hướng và bảng dashboard, chạy trên engine của dự án.
 
 ![Pine Viprasol](docs/screenshots/pine-viprasol.png)
+
+**Công cụ vẽ.** Thanh công cụ bên trái chia nhóm, bấm mũi tên ▾ để mở danh sách: đường (xu hướng, tia, tia ngang, đường thẳng, đường ngang, đường dọc, chữ thập, info line, góc xu hướng, mũi tên, kênh song song, kênh hồi quy), Fibonacci (retracement, mở rộng có chỉnh bề rộng, channel, time zones, fan, circles, arcs), Pitchfork (Andrews, Schiff, Modified Schiff), Gann (fan, box), vị thế Long/Short với tỉ lệ R:R, đo (thước %, khoảng ngày, khoảng giá), hình khối (hộp, ellipse, hình tròn, tam giác, đường gấp khúc, bút vẽ), chữ và ghi chú (chữ, ghi chú, chú thích, nhãn giá, cờ). Chọn hình để kéo 4 góc hay các điểm neo, kéo thân để di chuyển, phím mũi tên nhích từng bước (Shift nhanh gấp 10), chỉnh màu, độ dày, kiểu nét, khoá, nhân bản. Có nam châm bắt vào giá nến, ẩn mọi hình, hoàn tác và làm lại (Ctrl+Z, Ctrl+Y). Fib, Pitchfork, Gann không vẽ phần dưới giá 0.
+
+![Công cụ vẽ](docs/screenshots/drawing-tools.png)
+
+**Menu chuột phải** trên biểu đồ (kiểu TradingView): sao chép giá, thêm cảnh báo tại giá, vẽ đường ngang hoặc dọc, nhãn giá, ghi chú, thêm chỉ báo, đặt lại khung nhìn, nam châm, ẩn hay xoá hình. Chuột phải vào một hình thì có thêm khoá, nhân bản, xoá. Chuột phải khi đang vẽ dở là huỷ hình.
+
+![Menu chuột phải](docs/screenshots/context-menu.png)
 
 **Layout 4 ô** (chế độ sáng): BTCUSDT, XAUUSDT và hai cổ phiếu VN100 (VNM, BSI), cuộn và crosshair đồng bộ theo thời gian.
 

@@ -169,3 +169,49 @@ def test_depthbands_turn_cumulative_depth_into_density_per_percent(data_root):
     assert got[(0.0, 1.0)] == 50.0 and got[(1.0, 2.0)] == 30.0
     assert j["scale"] > 0
     assert client.get("/api/depthbands", params={"symbol": "NOPE", "from": T0, "to": T0 + 1000}).status_code == 400
+
+
+def zones(**kw):
+    p = {"symbol": "BTCUSDT", "from": T0, "to": T0 + 3_600_000, "mult": 1, "min": 0.3, **kw}
+    r = client.get("/api/liqzones", params=p)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_liqzones_pulled_filled_active_and_noise(data_root):
+    rows = []
+    for i in range(0, 120):                                    # 10 phút, mẫu cách 5 giây
+        t = T0 + i * 5000
+        rows.append((t, 670100, 0.0, 0.1))                      # nền nhỏ để có mẫu ở mọi thời điểm
+        if i < 40:
+            rows.append((t, 670000, 50.0, 0.0))                 # tường mua 200 giây rồi biến mất, không có lệnh khớp: bị rút
+            rows.append((t, 671000, 0.0, 40.0))                 # tường bán 200 giây rồi biến mất, có lệnh khớp mua: bị khớp
+        if i >= 80:
+            rows.append((t, 672000, 45.0, 0.0))                 # tường mua còn tới mẫu cuối: còn hiệu lực
+        if 10 <= i < 12:
+            rows.append((t, 673000, 60.0, 0.0))                 # chỉ 10 giây: nhiễu
+    put_book(rows)
+    # lệnh khớp ở mức 671000 ngay sau khi tường bán biến mất (phía mua chủ động: m = False)
+    store.write_partition("ticks", "BTCUSDT", DAY, [(T0 + 40 * 5000 + 1000, 1, 671000, 39.0, False)])
+    j = zones(top=50)
+    by = {(r[0], r[1]): r for r in j["rows"]}
+    assert j["bucket"] == 1.0
+    pulled = by[("bid", 67000.0)]
+    assert pulled[6] == "pulled" and pulled[2] == T0 and pulled[3] == T0 + 40 * 5000
+    assert by[("ask", 67100.0)][6] == "filled"
+    assert by[("bid", 67200.0)][6] == "active"
+    assert ("bid", 67300.0) not in by                           # đoạn 10 giây bị bỏ vì quá ngắn
+    assert all(r[4] >= 1 for r in j["rows"])                    # nền nhỏ (0,1) dưới ngưỡng nên không thành vùng
+
+
+def test_liqzones_recording_gap_is_not_a_pull(data_root):
+    rows = [(T0 + i * 5000, 670000, 50.0, 0.0) for i in range(0, 30)]      # tường 150 giây
+    rows += [(T0 + 20 * 60_000 + i * 5000, 670500, 0.0, 0.1) for i in range(0, 12)]   # mẫu kế tiếp cách 20 phút: collector tắt
+    put_book(rows)
+    got = {(r[0], r[1]): r for r in zones()["rows"]}
+    assert got[("bid", 67000.0)][6] == "gap"
+
+
+def test_liqzones_empty_and_bad_symbol(data_root):
+    assert zones(symbol="XAUUSDT")["rows"] == []
+    assert client.get("/api/liqzones", params={"symbol": "NOPE", "from": T0, "to": T0 + 1000}).status_code == 400

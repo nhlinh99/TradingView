@@ -7,6 +7,7 @@ import { fetchBars, openStream, type PineResult, type StreamState } from './api'
 import Footprint from './Footprint'
 import Profile from './Profile'
 import Heatmap from './Heatmap'
+import LiqZones from './LiqZones'
 import Bubbles from './Bubbles'
 import Icebergs from './Icebergs'
 import Gex from './Gex'
@@ -31,7 +32,7 @@ const crosshairOpts = (c: string) => ({
 })
 const volColor = (b: Bar, up: string, down: string) => (b.close >= b.open ? up + '88' : down + '88')
 
-export type Flow = { delta: boolean; cvd: 'off' | 'none' | 'day'; footprint: boolean; vpvr: boolean; heatmap: boolean; bubbles: boolean; gex: boolean; ratio: number; heatMode: 'intensity' | 'side' | 'bookmap'; heatLo: number; heatHi: number; bestLines: boolean; strip: boolean; dotScale: number; dotMin: number; iceberg: boolean; fpMode: 'bidask' | 'delta' | 'volume' | 'profile' }
+export type Flow = { delta: boolean; cvd: 'off' | 'none' | 'day'; footprint: boolean; vpvr: boolean; heatmap: boolean; zones: boolean; zoneMin: number; bubbles: boolean; gex: boolean; ratio: number; heatMode: 'intensity' | 'side' | 'bookmap'; heatLo: number; heatHi: number; bestLines: boolean; strip: boolean; dotScale: number; dotMin: number; iceberg: boolean; fpMode: 'bidask' | 'delta' | 'volume' | 'profile' }
 type Props = { symbol: string; tf: string; tz: string; flow: Flow; pines: { id: string; result: PineResult }[]; indLegend?: ReactNode; replay: number | null; onTotal: (n: number) => void; sync?: SyncBus; cellId?: number; theme: 'light' | 'dark'; onState: (s: StreamState) => void }
 type Legend = { time: number; bar: Bar } | null
 
@@ -189,7 +190,13 @@ export default function Chart({ symbol, tf, tz, flow, pines, indLegend, replay, 
       crosshair: crosshairOpts(P.cross),
       rightPriceScale: { borderColor: P.line }, timeScale: { borderColor: P.line },
     })
-    candles.current?.applyOptions({ upColor: flow.footprint ? 'transparent' : P.up, downColor: flow.footprint ? 'transparent' : P.down, borderUpColor: P.up, borderDownColor: P.down, wickUpColor: P.up, wickDownColor: P.down })
+    // heatmap bật: nến tăng rỗng, nến giảm đặc, cùng màu xám sáng, để không lẫn với dải nhiệt xanh/đỏ/cam
+    const heat = flow.heatmap && !flow.footprint
+    const ink = theme === 'dark' ? '#d8dce6' : '#3b4252'
+    candles.current?.applyOptions({
+      upColor: flow.footprint || heat ? 'transparent' : P.up, downColor: flow.footprint ? 'transparent' : heat ? ink : P.down,
+      borderUpColor: heat ? ink : P.up, borderDownColor: heat ? ink : P.down, wickUpColor: heat ? ink : P.up, wickDownColor: heat ? ink : P.down,
+    })
     volume.current?.setData(bars.current.map((b) => ({ time: b.time as UTCTimestamp, value: b.volume, color: volColor(b, P.up, P.down) })))
     refreshRef.current()
   }, [theme, flow.footprint, flow.heatmap])
@@ -349,6 +356,7 @@ export default function Chart({ symbol, tf, tz, flow, pines, indLegend, replay, 
     <div className="chart-wrap">
       <Heatmap on={flow.heatmap} mode={flow.heatMode} cutLo={flow.heatLo / 100} cutHi={flow.heatHi / 100} bestLines={flow.bestLines} strip={flow.strip} dark={theme === 'dark'} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
       <div ref={box} className="chart" data-testid="chart" />
+      <LiqZones on={flow.zones} minPct={flow.zoneMin} dark={theme === 'dark'} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
       <Icebergs on={flow.iceberg} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
       <Bubbles on={flow.bubbles} dotScale={flow.dotScale / 100} dotMin={flow.dotMin / 100} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
       <Drawings symbol={symbol} tf={tf} dark={theme === 'dark'} chart={chartRef} candles={candles} bars={bars} />

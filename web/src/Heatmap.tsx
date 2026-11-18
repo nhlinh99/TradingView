@@ -3,6 +3,16 @@ import type { IChartApi, ISeriesApi, MouseEventParams } from 'lightweight-charts
 import { fetchCoverage, fetchDepthBands, fetchHeatmap } from './api'
 import { applyCutoff, bestBidAsk, heatColor, indexToTime, tfMs, timeToIndex, type Bar } from './logic'
 
+/** Dải màu CSS của thang nhiệt (cùng bảng màu với ô heatmap) để làm chú giải. */
+function legendGradient(mode: 'intensity' | 'side' | 'bookmap'): string {
+  const stops: string[] = []
+  for (let i = 0; i <= 10; i++) {
+    const [r, g, b, a] = heatColor(i / 10, mode === 'bookmap' ? 'bookmap' : mode === 'side' ? 'bid' : undefined)
+    stops.push(`rgba(${r | 0},${g | 0},${b | 0},${a.toFixed(2)}) ${i * 10}%`)
+  }
+  return `linear-gradient(90deg, ${stops.join(', ')})`
+}
+
 type Props = {
   on: boolean
   mode: 'intensity' | 'side' | 'bookmap'
@@ -26,6 +36,7 @@ export default function Heatmap({ on, mode, cutLo, cutHi, bestLines, strip, dark
   const cv = useRef<HTMLCanvasElement>(null)
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const [note, setNote] = useState<string | null>(null)
+  const [unit, setUnit] = useState<number>(0)   // thanh khoản ứng với màu đậm nhất (phân vị 99 của ô)
   const [tip, setTip] = useState<{ x: number; y: number; flip: boolean; price: string; time: string; bid: number; ask: number; rel: number } | null>(null)
 
   useEffect(() => {
@@ -100,6 +111,7 @@ export default function Heatmap({ on, mode, cutLo, cutHi, bestLines, strip, dark
         for (const r of rows) { const a = byTime.get(r[0]); if (a) a.push(r); else byTime.set(r[0], [r]) }
         if (!stopped) setStatus('idle')
         scale = j.scale || 1
+        if (!stopped) setUnit(scale)
         bucket = j.bucket
         baseBucket = j.bucket / mult
         tb = j.tbucket
@@ -310,6 +322,13 @@ export default function Heatmap({ on, mode, cutLo, cutHi, bestLines, strip, dark
       {on && status !== 'idle' && (
         <div className={`flow-status ${status}`} role="status">
           {status === 'loading' ? 'Đang tải heatmap…' : 'Chưa tải được heatmap, đang thử lại…'}
+        </div>
+      )}
+      {on && unit > 0 && (
+        <div className="heat-legend" aria-label="Chú giải thang thanh khoản">
+          <span>Thanh khoản chờ</span>
+          <i style={{ background: legendGradient(mode) }} />
+          <span className="ends"><b>{(unit * cutLo).toLocaleString('en-US', { maximumFractionDigits: 2 })}</b><b>{(unit * cutHi).toLocaleString('en-US', { maximumFractionDigits: 2 })}+</b></span>
         </div>
       )}
       {on && note && status === 'idle' && <div className="flow-status info" role="note">{note}</div>}

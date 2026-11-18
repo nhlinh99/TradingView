@@ -6,6 +6,32 @@ Theo dạng [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/). Dự án c
 
 Xem `TODO.md` cho việc còn mở và `docs/plan/README.md` cho kế hoạch từng tính năng. Việc quan trọng nhất: chạy collector bằng Task Scheduler, đo phiên giao dịch VN100 thật (Thứ Hai 16/11), đối chiếu engine Pine với TradingView.
 
+## 2026-11-18
+
+### Thêm
+- **Công cụ vẽ** viết lại theo registry (`web/src/drawTools.tsx`), thanh công cụ chia nhóm có menu mở rộng: đường (tia, tia ngang, đường thẳng, đường dọc, chữ thập, info line, góc xu hướng, mũi tên, kênh song song, kênh hồi quy), Fibonacci (mở rộng chỉnh được bề rộng, channel, time zones, fan, circles, arcs, màu từng mức và dải tô kiểu TradingView), Pitchfork (Andrews, Schiff, Modified Schiff), Gann (fan, box), vị thế Long/Short với tỉ lệ R:R và 4 góc điều khiển, đo (thước %, khoảng ngày, khoảng giá), hình khối (ellipse, hình tròn, tam giác, đường gấp khúc, bút vẽ), ghi chú, chú thích, nhãn giá, cờ.
+- Chọn hình: kéo 4 góc hoặc điểm neo, kéo thân để di chuyển, phím mũi tên nhích từng bước, thanh thuộc tính (màu, độ dày, kiểu nét, khoá, nhân bản, xoá), nam châm bắt vào giá nến, ẩn mọi hình, hoàn tác và làm lại có hoàn tác cả việc xoá (server nhận lại hình với đúng id cũ), Fib/Pitchfork/Gann không vẽ phần dưới giá 0, nút thu gọn thanh công cụ.
+- **Menu chuột phải** trên biểu đồ kiểu TradingView (sao chép giá, thêm cảnh báo tại giá, vẽ đường ngang/dọc, nhãn giá, ghi chú, thêm chỉ báo, đặt lại khung nhìn, nam châm, ẩn/xoá hình; trên một hình thì khoá, nhân bản, xoá; khi đang vẽ dở thì huỷ hình).
+- Con trỏ chữ thập nét đứt theo chuột (ẩn khi đang dùng công cụ vẽ).
+- **Vùng thanh khoản (rút lệnh)** (`/api/liqzones`, `web/src/LiqZones.tsx`): lệnh chờ lớn vẽ thành thanh kéo dài từ lúc xuất hiện đến lúc biến mất, cuối thanh có ✕ (bị rút), ▶ (bị khớp, đối chiếu với lệnh khớp ở đúng mức giá) hoặc mờ dần (còn hiệu lực); đoạn collector tắt được tách riêng, không tính là rút lệnh. Có tooltip chi tiết và chú giải.
+- Heatmap: tooltip bid/ask khi rê chuột, chú giải thang màu, chỉ báo đang tải và tự thử lại, ghi chú độ phủ dữ liệu (`/api/heatmap/coverage`), độ sâu thô ±5% từ `bookDepth` cho đoạn chưa có sổ lệnh chi tiết (`/api/depthbands`).
+- XAUUSD có Bookmap, chấm volume, iceberg: lấy từ sổ lệnh XAUUSDT và dịch giá theo chênh lệch trung vị hai mã, kèm ghi chú đây là ước lượng.
+- Chỉ báo RSI (Wilder) kèm MA, vùng quá mua/quá bán và cảnh báo (`pine/examples/rsi.pine`).
+- Nến ngày của VN100 từ VNDirect `1D` (từ 2014, `vn_daily/<mã>.json`); tuần và tháng ghép từ nến ngày. Dung lượng khoảng 12 MB cho 100 mã.
+- `scripts/install-tasks.ps1` đăng ký Task Scheduler: `TradingView-Collectors` lúc đăng nhập và `TradingView-Daily` lúc 03:00. `run-collectors.ps1` có khoá không chạy trùng.
+- Nạp nến 1 phút XAUUSD cũ từ Dukascopy (`collector/dukascopy.py`).
+
+### Đổi
+- Heatmap dễ đọc hơn: thanh khoản thấp mờ dần vào nền (gamma 0.8, độ đục tối thiểu gần 0), preset Bookmap cắt nhiễu 15%, nến rỗng màu xám khi bật heatmap, chấm volume và iceberg bớt lấn át.
+- Máy chủ gộp các yêu cầu nặng giống hệt nhau và nhớ kết quả 20 giây (`limits.coalesce`), giao diện làm tròn khoảng thời gian và chờ 0,35 giây sau khi kéo, nên hàng đợi yêu cầu nặng không còn đầy khi kéo biểu đồ.
+- Bỏ dòng ghi chú nguồn dữ liệu của cổ phiếu VN100.
+
+### Sửa
+- VN100 khung ngày, tuần, tháng thiếu dữ liệu (FPT thiếu 11/2025 đến 5/2026): nguồn không có nến phút cho giai đoạn đó, nên khung ngày trở lên lấy thẳng nến ngày.
+- Volume Profile by Range lỗi khi chọn 1 Hour, 3 Month, 6 Month: engine Pine thiếu dạng gọi hàm của `hour(time)`, `month(time)`, `dayofmonth(time)` và các hàm cùng loại (có tham số múi giờ).
+- Menu nhóm công cụ vẽ bị ô biểu đồ khác đè ở layout nhiều ô: vẽ qua portal ở tầng trên cùng.
+- Nhãn giá không còn chồng lên Long/Short: chữ chốt lời, cắt lỗ và thẻ R:R nằm bên phải hộp, ghi chú và nhãn giá luôn vẽ trên cùng.
+
 ## 2026-11-16
 
 ### Thêm

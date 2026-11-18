@@ -116,10 +116,10 @@ export default function Bubbles({ on, dotScale, dotMin, symbol, tf, chart, candl
         const rgb = side === 'buy' ? '38,166,154' : '239,83,80'
         ctx.beginPath()
         ctx.arc(x, y, rad, 0, Math.PI * 2)
-        ctx.fillStyle = solid ? `rgba(${rgb},.8)` : `rgba(${rgb},.12)`
+        ctx.fillStyle = solid ? `rgba(${rgb},.5)` : `rgba(${rgb},.06)`
         ctx.fill()
-        ctx.strokeStyle = `rgba(${rgb},.95)`
-        ctx.lineWidth = solid ? 1 : 2
+        ctx.strokeStyle = `rgba(${rgb},.85)`
+        ctx.lineWidth = solid ? 1 : 1.5
         ctx.stroke()
       }
     }

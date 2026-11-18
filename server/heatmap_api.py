@@ -293,3 +293,108 @@ def depthbands_endpoint(
         with limits.heavy():
             return get_depthbands(sym, from_, to, tbucket)
     return limits.coalesce(("depthbands", sym, from_, to, tbucket), limits.CACHE_TTL, run)
+
+
+# ---------- vùng thanh khoản kéo dài theo thời gian và mức giá, kèm lúc bị rút hoặc bị khớp ----------
+
+MIN_ZONE_S = 30           # lệnh chờ tồn tại ngắn hơn mức này bị coi là nhiễu (nhấp nháy)
+ZONE_TICK_BEFORE_MS = 2_000
+ZONE_TICK_AFTER_MS = 12_000
+
+
+def get_liqzones(symbol: str, start_ms: int, end_ms: int, mult: int, min_frac: float, top: int, min_s: int = MIN_ZONE_S) -> dict:
+    """Các "bức tường" thanh khoản: một mức giá có lệnh chờ lớn liên tục trong một khoảng thời gian.
+
+    Với mỗi mức giá (bucket nhân `mult`) và mỗi phía (bid, ask), lấy các đoạn liên tục có khối lượng chờ >= min_frac x phân vị 99
+    (cho phép hở một mẫu). Mỗi vùng ghi: bắt đầu, kết thúc, khối lượng lớn nhất, khối lượng ngay trước khi hết, và trạng thái:
+      - "active": còn đến mẫu cuối của dữ liệu;
+      - "gap": biến mất nhưng không có mẫu sổ lệnh nào ngay sau đó (collector tắt), không kết luận được;
+      - "filled": biến mất và có lệnh khớp ở đúng mức giá đó (phía chủ động đối diện) đủ ăn phần lớn khối lượng còn lại;
+      - "pulled": biến mất mà không có lệnh khớp tương ứng, tức là bị rút lệnh.
+    `min_s`: tồn tại ngắn hơn số giây này thì bỏ (giao diện tăng khi thu nhỏ để chỉ còn các vùng đủ dài thấy được).
+    Mỗi dòng: [side, price, t0, t_end, peak, last, status]. Chỉ giữ `top` vùng quan trọng nhất (khối lượng lớn nhất x thời gian tồn tại).
+    """
+    try:
+        cfg = store.symbol_config(symbol)
+    except (ValueError, KeyError) as e:
+        raise HTTPException(400, str(e)) from e
+    if end_ms <= start_ms:
+        raise HTTPException(400, "to phải lớn hơn from")
+    base = round(cfg["book_bucket"] / cfg["tick"])
+    pm = base * mult
+    tick = cfg["tick"]
+    sql = heatmap_sql(symbol, start_ms, end_ms, MIN_TBUCKET_MS, mult)
+    empty = {"symbol": symbol, "from": start_ms, "to": end_ms, "bucket": round(pm * tick, 10), "scale": 0.0, "rows": []}
+    if not sql:
+        return empty
+    import bisect
+    con = store.query_conn()
+    try:
+        con.execute(f"CREATE TEMP TABLE g AS {sql}")
+        stamps = [r[0] for r in con.execute("SELECT DISTINCT t FROM g ORDER BY t").fetchall()]
+        if not stamps:
+            return empty
+        diffs = sorted(b - a for a, b in zip(stamps, stamps[1:]))
+        interval = diffs[len(diffs) // 2] if diffs else MIN_TBUCKET_MS
+        gap = max(2.5 * interval, 12_000)
+        scale = con.execute("SELECT quantile_cont(greatest(bid, ask), 0.99) FROM g WHERE bid > 0 OR ask > 0").fetchone()[0] or 0.0
+        thr = max(1e-12, float(min_frac) * float(scale))
+        zones = con.execute(
+            f"""WITH s AS (SELECT t, p, bid AS q, 'bid' AS side FROM g WHERE bid >= {thr}
+                           UNION ALL SELECT t, p, ask AS q, 'ask' AS side FROM g WHERE ask >= {thr}),
+                l AS (SELECT *, lag(t) OVER (PARTITION BY side, p ORDER BY t) AS pt FROM s),
+                n AS (SELECT *, sum(CASE WHEN pt IS NULL OR t - pt > {gap} THEN 1 ELSE 0 END) OVER (PARTITION BY side, p ORDER BY t) AS grp FROM l)
+                SELECT side, p, min(t) AS t0, max(t) AS t1, max(q) AS peak, arg_max(q, t) AS lastq
+                FROM n GROUP BY side, p, grp
+                HAVING max(t) - min(t) >= {max(1, int(min_s)) * 1000}
+                ORDER BY peak * (max(t) - min(t)) DESC LIMIT {int(top)}"""
+        ).fetchall()
+        info = []
+        for i, (side, p, t0, t1, peak, lastq) in enumerate(zones):
+            j = bisect.bisect_right(stamps, t1)
+            nxt = stamps[j] if j < len(stamps) else None
+            if nxt is None:
+                status, t_end = "active", t1 + interval
+            elif nxt - t1 <= gap:
+                status, t_end = "ended", nxt
+            else:
+                status, t_end = "gap", t1 + interval
+            info.append([i, side, p, t0, t1, peak, lastq, status, t_end])
+        # phân biệt bị khớp và bị rút: có lệnh khớp ở đúng mức giá, phía chủ động đối diện, quanh lúc biến mất
+        traded: dict[int, float] = {}
+        cand = [x for x in info if x[7] == "ended"]
+        ticks = None
+        if cand:
+            ticks = store.range_select("ticks", symbol, min(x[4] for x in cand) - ZONE_TICK_BEFORE_MS,
+                                       max(x[4] for x in cand) + ZONE_TICK_AFTER_MS + 1)
+        if ticks and cand:
+            con.execute("CREATE TEMP TABLE z(id INTEGER, side VARCHAR, p BIGINT, t1 BIGINT)")
+            con.executemany("INSERT INTO z VALUES (?, ?, ?, ?)", [(x[0], x[1], x[2], x[4]) for x in cand])
+            for zid, q in con.execute(
+                f"SELECT z.id, sum(k.q::DOUBLE) FROM z JOIN ({ticks}) k "
+                f"ON k.ts BETWEEN z.t1 - {ZONE_TICK_BEFORE_MS} AND z.t1 + {ZONE_TICK_AFTER_MS} "
+                f"AND (k.p // {pm}) * {pm} = z.p AND k.m = (z.side = 'bid') GROUP BY z.id"
+            ).fetchall():
+                traded[zid] = q
+    finally:
+        con.close()
+    rows = []
+    for zid, side, p, t0, t1, peak, lastq, status, t_end in sorted(info, key=lambda x: x[3]):
+        if status == "ended":
+            status = "filled" if traded.get(zid, 0.0) >= 0.5 * lastq else "pulled"
+        rows.append([side, round(p * tick, 10), int(t0), int(t_end), round(float(peak), 4), round(float(lastq), 4), status])
+    return {"symbol": symbol, "from": start_ms, "to": end_ms, "bucket": round(pm * tick, 10), "scale": round(float(scale), 4), "rows": rows}
+
+
+@router.get("/api/liqzones")
+def liqzones_endpoint(
+    symbol: str, from_: int = Query(..., alias="from"), to: int = Query(...),
+    mult: int = Query(1, ge=1, le=100000), min: float = Query(0.3, ge=0.0, le=1.0, description="ngưỡng khối lượng chờ, theo tỉ lệ so với phân vị 99"),
+    top: int = Query(400, ge=1, le=3000), min_s: int = Query(MIN_ZONE_S, ge=5, le=7200, description="thời gian tồn tại tối thiểu, giây"),
+) -> dict:
+    sym = symbol.upper()
+
+    def run() -> dict:
+        with limits.heavy():
+            return get_liqzones(sym, from_, to, mult, min, top, min_s)
+    return limits.coalesce(("liqzones", sym, from_, to, mult, round(min, 3), top, min_s), limits.CACHE_TTL, run)

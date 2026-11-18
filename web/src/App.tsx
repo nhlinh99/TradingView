@@ -46,11 +46,13 @@ export default function App() {
     footprint: pref('footprint', '0', ['0', '1']) === '1',
     gex: pref('gex', '0', ['0', '1']) === '1',
     bubbles: pref('bubbles', '0', ['0', '1']) === '1',
+    zones: pref('zones', '0', ['0', '1']) === '1',
+    zoneMin: Number(pref('zoneMin', '30', ['10', '20', '30', '40', '50', '60', '80'])),
     heatmap: pref('heatmap', '0', ['0', '1']) === '1',
     vpvr: pref('vpvr', '0', ['0', '1']) === '1',
     ratio: Number(pref('ratio', '3', ['2', '3', '4', '5'])),
     heatMode: pref('heatMode', 'bookmap', ['intensity', 'side', 'bookmap']) as Flow['heatMode'],
-    heatLo: Number(pref('heatLo', '5', ['0', '5', '10', '20', '30', '40', '50'])),
+    heatLo: Number(pref('heatLo', '15', ['0', '5', '10', '15', '20', '30', '40', '50'])),
     heatHi: Number(pref('heatHi', '100', ['40', '50', '60', '70', '80', '90', '100'])),
     bestLines: pref('bestLines', '1', ['0', '1']) === '1',
     strip: pref('strip', '1', ['0', '1']) === '1',
@@ -61,7 +63,7 @@ export default function App() {
   }))
   const setF = (patch: Partial<Flow>) => setFlow((f) => {
     const n = { ...f, ...patch }
-    savePref('delta', n.delta ? '1' : '0'); savePref('cvd', n.cvd); savePref('footprint', n.footprint ? '1' : '0'); savePref('ratio', String(n.ratio)); savePref('vpvr', n.vpvr ? '1' : '0'); savePref('heatmap', n.heatmap ? '1' : '0'); savePref('bubbles', n.bubbles ? '1' : '0'); savePref('gex', n.gex ? '1' : '0'); savePref('heatMode', n.heatMode); savePref('heatLo', String(n.heatLo)); savePref('heatHi', String(n.heatHi)); savePref('bestLines', n.bestLines ? '1' : '0'); savePref('strip', n.strip ? '1' : '0'); savePref('dotScale', String(n.dotScale)); savePref('dotMin', String(n.dotMin)); savePref('iceberg', n.iceberg ? '1' : '0'); savePref('fpMode', n.fpMode)
+    savePref('delta', n.delta ? '1' : '0'); savePref('cvd', n.cvd); savePref('footprint', n.footprint ? '1' : '0'); savePref('ratio', String(n.ratio)); savePref('vpvr', n.vpvr ? '1' : '0'); savePref('heatmap', n.heatmap ? '1' : '0'); savePref('bubbles', n.bubbles ? '1' : '0'); savePref('zones', n.zones ? '1' : '0'); savePref('zoneMin', String(n.zoneMin)); savePref('gex', n.gex ? '1' : '0'); savePref('heatMode', n.heatMode); savePref('heatLo', String(n.heatLo)); savePref('heatHi', String(n.heatHi)); savePref('bestLines', n.bestLines ? '1' : '0'); savePref('strip', n.strip ? '1' : '0'); savePref('dotScale', String(n.dotScale)); savePref('dotMin', String(n.dotMin)); savePref('iceberg', n.iceberg ? '1' : '0'); savePref('fpMode', n.fpMode)
     return n
   })
   const [layout, setLayout] = useState(() => Number(pref('layout', '1', ['1', '2', '4'])))

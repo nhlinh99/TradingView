@@ -565,3 +565,16 @@ kbd { font: 11px ui-monospace, Consolas, monospace; border: 1px solid var(--line
 .ctx-menu .sep { height: 1px; margin: 4px 6px; background: var(--line); }
 .draw-toast { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); z-index: 9; padding: 6px 12px; border-radius: 8px; font-size: 12px; background: var(--ink); color: var(--bg); box-shadow: var(--shadow); pointer-events: none; }
 
+/* chú giải thang màu heatmap */
+.heat-legend { position: absolute; right: 74px; top: 8px; z-index: 6; width: 150px; display: flex; flex-direction: column; gap: 3px; padding: 5px 8px; border-radius: 8px; font-size: 10px; background: var(--veil); border: 1px solid var(--line); color: var(--ink); pointer-events: none; }
+.heat-legend i { display: block; height: 8px; border-radius: 3px; background-color: #000; }
+.heat-legend .ends { display: flex; justify-content: space-between; opacity: .8; }
+
+/* vùng thanh khoản */
+.flow-status.zone-status { top: 62px; }
+.zone-legend { position: absolute; right: 74px; top: 62px; white-space: nowrap; align-items: center; z-index: 6; display: flex; gap: 10px; padding: 3px 8px; border-radius: 8px; font-size: 10px; background: var(--veil); border: 1px solid var(--line); color: var(--ink); pointer-events: none; }
+.zone-legend b { font-weight: 700; margin-right: 3px; font-size: 11px; line-height: 1; }
+.zone-legend b.x { color: var(--ink); }
+.zone-legend b.f { color: #ffb300; }
+.zone-legend b.a { color: #12d6e0; }
+

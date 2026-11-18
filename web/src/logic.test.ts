@@ -178,7 +178,7 @@ test('heatColor ramp: black to red, side tints, alpha grows', () => {
   const hi = heatColor(1)
   assert.ok(hi[0] > 200 && hi[1] < 100 && hi[2] < 100)               // cao nhất: đỏ
   assert.ok(lo[0] < 40 && lo[1] < 40)                                // thấp: gần đen/xanh
-  const mid = heatColor(0.27)                                         // quanh giữa thang: trắng (cả ba kênh cao)
+  const mid = heatColor(Math.pow(0.5, 1 / 0.8))                       // giữa thang màu (sau hiệu chỉnh gamma 0.8): trắng, cả ba kênh cao
   assert.ok(mid[0] > 200 && mid[1] > 200 && mid[2] > 200)
   const bid = heatColor(0.8, 'bid')
   const ask = heatColor(0.8, 'ask')

@@ -148,6 +148,15 @@ export function fetchDepthBands(symbol: string, from: number, to: number, tbucke
   return heavyJson<DepthBandsResponse>(`/api/depthbands?${q}`, { signal })
 }
 
+export type LiqZonesResponse = { symbol: string; from: number; to: number; bucket: number; scale: number; rows: (number | string)[][] }
+/** Vùng thanh khoản kéo dài theo thời gian: [phía, giá, bắt đầu, kết thúc, lớn nhất, còn lại, trạng thái] (rút lệnh, bị khớp, còn hiệu lực). */
+export function fetchLiqZones(symbol: string, from: number, to: number, mult: number, min: number, top: number, minS: number, signal?: AbortSignal) {
+  return viaFlowSource(symbol, (s) => {
+    const q = new URLSearchParams({ symbol: s, from: String(from), to: String(to), mult: String(mult), min: String(min), top: String(top), min_s: String(minS) })
+    return heavyJson<LiqZonesResponse>(`/api/liqzones?${q}`, { signal })
+  })
+}
+
 export type HeatmapResponse = { symbol: string; from: number; to: number; tbucket: number; bucket: number; scale: number; rows: number[][] }
 export function fetchHeatmap(symbol: string, from: number, to: number, tbucket: number, mult: number, signal?: AbortSignal) {
   return viaFlowSource(symbol, (s) => {
