@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactElement } from 'react'
 import type { IChartApi, ISeriesApi } from 'lightweight-charts'
-import { clearDrawings, createDrawing, deleteDrawing, fetchDrawings } from './api'
+import { clearDrawings, createDrawing, deleteDrawing, fetchDrawings, updateDrawing } from './api'
 import {
   FIBX_LEVELS, FIB_LEVELS, distToSegment, indexToTime, tfMs, timeToIndex,
   type Bar, type DrawKind, type DrawPoint, type Drawing,
@@ -46,6 +46,30 @@ function Icon({ id }: { id: string }) {
 
 const NEED: Record<DrawKind, number> = { trend: 2, hline: 1, rect: 2, fib: 2, fibx: 3, ruler: 2, text: 1 }
 const COLOR = '#f0b90b'
+const BOX_KINDS: DrawKind[] = ['rect', 'fib', 'ruler']
+
+type XY = { x: number; y: number }
+type Handle = XY & { set: (pts: DrawPoint[], np: DrawPoint) => DrawPoint[] }
+/** Các tay nắm của một hình: hình dạng hộp (hộp, fib, thước) có 4 góc, hình khác có đúng các điểm neo. Kéo tay nắm đổi các điểm neo tương ứng. */
+function handlesFor(kind: DrawKind, P: XY[]): Handle[] {
+  if (BOX_KINDS.includes(kind) && P.length === 2) {
+    const li = P[0].x <= P[1].x ? 0 : 1
+    const ti = P[0].y <= P[1].y ? 0 : 1
+    const out: Handle[] = []
+    for (const left of [true, false]) {
+      for (const top of [true, false]) {
+        const xi = left ? li : 1 - li
+        const yi = top ? ti : 1 - ti
+        out.push({
+          x: P[xi].x, y: P[yi].y,
+          set: (pts, np) => pts.map((p, i) => ({ time: i === xi ? np.time : p.time, price: i === yi ? np.price : p.price })),
+        })
+      }
+    }
+    return out
+  }
+  return P.map((q, k) => ({ ...q, set: (pts, np) => pts.map((p, i) => (i === k ? np : p)) }))
+}
 
 /** Lớp vẽ tay lên biểu đồ. Điểm neo lưu theo (thời gian, giá) nên đúng ở mọi khung thời gian; lưu trong SQLite qua /api/drawings. */
 export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Props) {
@@ -244,7 +268,7 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
         }
         if (isSel) {
           ctx.shadowBlur = 0; ctx.setLineDash([]); ctx.fillStyle = '#fff'; ctx.strokeStyle = col; ctx.lineWidth = 2
-          for (const q of P) { ctx.beginPath(); ctx.arc(q.x, q.y, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke() }
+          for (const q of handlesFor(d.kind, P)) { ctx.beginPath(); ctx.arc(q.x, q.y, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke() }
         }
         ctx.restore()
       }
@@ -264,6 +288,14 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
     const py = e.clientY - rect.top
     const price = g.s.coordinateToPrice(py)
     return price === null ? null : { time: g.time(px), price }
+  }
+
+  const pointFromClient = (clientX: number, clientY: number): DrawPoint | null => {
+    const g = geo()
+    const rect = cv.current?.getBoundingClientRect()
+    if (!g || !rect) return null
+    const price = g.s.coordinateToPrice(clientY - rect.top)
+    return price === null ? null : { time: g.time(clientX - rect.left), price }
   }
 
   const hitAt = (clientX: number, clientY: number): Drawing | null => {
@@ -330,6 +362,51 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
     host.addEventListener('pointerup', onUp)
     window.addEventListener('keydown', onKey)
     return () => { host.removeEventListener('pointerdown', onDown); host.removeEventListener('pointerup', onUp); window.removeEventListener('keydown', onKey) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geo])
+
+  // Kéo hình đang chọn: kéo tay nắm (4 góc với hộp/fib/thước, các điểm neo với hình khác) để đổi cỡ, kéo thân hình để di chuyển.
+  // Chạy ở pha capture để biểu đồ không bị cuộn theo khi đang kéo hình.
+  useEffect(() => {
+    const host = cv.current?.parentElement
+    if (!host) return
+    const onDownCap = (e: PointerEvent) => {
+      if (toolRef.current !== 'cursor' || selRef.current === null || e.button !== 0) return
+      if ((e.target as HTMLElement | null)?.closest?.('.draw-del, .draw-tools')) return
+      const g = geo()
+      const rect = cv.current?.getBoundingClientRect()
+      const d = itemsRef.current.find((x) => x.id === selRef.current)
+      if (!g || !rect || !d) return
+      const S = d.payload.points.map((p) => toScreen(g, p))
+      if (S.some((p) => p === null)) return
+      const px = e.clientX - rect.left
+      const py = e.clientY - rect.top
+      const hs = handlesFor(d.kind, S as XY[])
+      const h = hs.find((q) => Math.hypot(px - q.x, py - q.y) <= 9)
+      const body = !h && hitAt(e.clientX, e.clientY)?.id === d.id
+      if (!h && !body) return
+      const start = pointFromClient(e.clientX, e.clientY)
+      if (!start) return
+      e.stopPropagation(); e.preventDefault()
+      const orig = d.payload.points
+      let cur = orig
+      const apply = (pts: DrawPoint[]) => { cur = pts; setItems((l) => l.map((x) => (x.id === d.id ? { ...x, payload: { ...x.payload, points: pts } } : x))); redraw.current() }
+      const onMove = (ev: PointerEvent) => {
+        const np = pointFromClient(ev.clientX, ev.clientY)
+        if (!np) return
+        if (h) apply(h.set(orig, np))
+        else apply(orig.map((p) => ({ time: p.time + (np.time - start.time), price: p.price + (np.price - start.price) })))
+      }
+      const onUpDrag = async () => {
+        window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUpDrag)
+        if (cur === orig) return
+        try { await updateDrawing(d.id, d.symbol, d.kind, { ...d.payload, points: cur }); setErr(null) }
+        catch (x) { setErr(String(x)); setItems((l) => l.map((y) => (y.id === d.id ? d : y))); redraw.current() }
+      }
+      window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUpDrag)
+    }
+    host.addEventListener('pointerdown', onDownCap, true)
+    return () => host.removeEventListener('pointerdown', onDownCap, true)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geo])
 

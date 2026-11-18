@@ -157,6 +157,8 @@ import type { Drawing, DrawKind } from './logic'
 export const fetchDrawings = (symbol: string) => json<Drawing[]>(`/api/drawings?symbol=${encodeURIComponent(symbol)}`)
 export const createDrawing = (symbol: string, kind: DrawKind, payload: Drawing['payload']) =>
   json<Drawing>('/api/drawings', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ symbol, kind, payload }) })
+export const updateDrawing = (id: number, symbol: string, kind: DrawKind, payload: Drawing['payload']) =>
+  json<Drawing>(`/api/drawings/${id}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ symbol, kind, payload }) })
 export const deleteDrawing = (id: number) => json<{ deleted: number }>(`/api/drawings/${id}`, { method: 'DELETE' })
 export const clearDrawings = (symbol: string) => json<{ deleted: number }>(`/api/drawings?symbol=${encodeURIComponent(symbol)}`, { method: 'DELETE' })
 
