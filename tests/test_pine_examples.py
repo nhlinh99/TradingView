@@ -312,3 +312,38 @@ def test_date_functions_match_variables_and_timezone():
     assert set(g("dm")) == {0.0} and set(g("dh")) == {0.0} and set(g("dd")) == {0.0}
     assert g("y")[0] == 2025.0 and g("dw")[0] == 4.0
     assert g("h7")[0] == 7.0 and g("h7")[20] == 3.0   # 20:00 UTC = 03:00 hôm sau theo UTC+7
+
+
+# ---------------------------------------------------------------- RSI (Wilder), đối chiếu bản tính độc lập
+
+def wilder_rsi(closes, n):
+    out = [None] * len(closes)
+    gains = [max(closes[i] - closes[i - 1], 0.0) for i in range(1, len(closes))]
+    losses = [max(closes[i - 1] - closes[i], 0.0) for i in range(1, len(closes))]
+    ag = sum(gains[:n]) / n
+    al = sum(losses[:n]) / n
+    out[n] = 100.0 if al == 0 else 100.0 - 100.0 / (1.0 + ag / al)
+    for k in range(n, len(gains)):
+        ag = (ag * (n - 1) + gains[k]) / n
+        al = (al * (n - 1) + losses[k]) / n
+        out[k + 1] = 100.0 if al == 0 else 100.0 - 100.0 / (1.0 + ag / al)
+    return out
+
+
+@pytest.mark.parametrize("length", [14, 7])
+def test_rsi_matches_wilder_reference(length):
+    bars = make_bars(300, seed=11)
+    res = runner.run_script(src("rsi"), bars, symbol="BTCUSDT", tf="5m", tick=0.1, inputs={"Length": length})
+    got = plot(res, "RSI")["values"]
+    ref = wilder_rsi(bars.close, length)
+    checked = 0
+    for g, r in zip(got, ref):
+        if r is None:
+            continue
+        assert g is not None and abs(g - r) < 1e-6, (g, r)
+        checked += 1
+    assert checked > 200
+    assert all(v is None or 0.0 <= v <= 100.0 for v in got)
+    assert [h["price"] for h in res["hlines"]] == [70.0, 50.0, 30.0]
+    ma = plot(res, "RSI MA")["values"]
+    assert ma[length * 2 + 20] is not None

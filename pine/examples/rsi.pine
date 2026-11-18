@@ -1,0 +1,26 @@
+//@version=5
+indicator("Relative Strength Index", "RSI", overlay=false)
+
+len     = input.int(14, "Length", minval=1)
+src     = input.source(close, "Source")
+obLevel = input.int(70, "Overbought", minval=1, maxval=100)
+osLevel = input.int(30, "Oversold", minval=0, maxval=99)
+showMA  = input.bool(true, "Show MA of RSI")
+maType  = input.string("SMA", "MA Type", options=["SMA", "EMA"])
+maLen   = input.int(14, "MA Length", minval=1)
+shade   = input.bool(true, "Tô nền vùng quá mua / quá bán")
+
+rsi = ta.rsi(src, len)
+ma  = maType == "EMA" ? ta.ema(rsi, maLen) : ta.sma(rsi, maLen)
+
+plot(rsi, "RSI", color=color.new(#7e57c2, 0), linewidth=2)
+plot(showMA ? ma : na, "RSI MA", color=color.new(#f0b90b, 0))
+
+hline(obLevel, "Overbought", color=color.new(color.red, 40))
+hline(50, "Middle", color=color.new(color.gray, 60))
+hline(osLevel, "Oversold", color=color.new(color.green, 40))
+
+bgcolor(shade and rsi >= obLevel ? color.new(color.red, 88) : shade and rsi <= osLevel ? color.new(color.green, 88) : na)
+
+alertcondition(ta.crossover(rsi, obLevel), "RSI vào vùng quá mua", "RSI vượt {{plot_0}} trên {{ticker}}")
+alertcondition(ta.crossunder(rsi, osLevel), "RSI vào vùng quá bán", "RSI xuống dưới {{plot_0}} trên {{ticker}}")
