@@ -144,9 +144,15 @@ export type PineResult = {
 }
 export const fetchPineExamples = () => json<{ name: string; source: string }[]>('/api/pine/examples')
 export type BacktestOpts = { from_ms?: number; to_ms?: number; commission_pct?: number; slippage_ticks?: number; initial_capital?: number }
+/** Số nến nạp cho script: mặc định 1000; nếu có đầu vào số nguyên lớn (độ dài lookback) thì nạp thêm để lookback không bị cắt. Tối đa 5000 (giới hạn máy chủ). */
+export function pineBarLimit(inputs: Record<string, unknown>): number {
+  let need = 1000
+  for (const v of Object.values(inputs)) if (typeof v === 'number' && Number.isFinite(v) && v >= 1000 && v <= 4900) need = Math.max(need, Math.ceil(v) + 100)
+  return need
+}
 export async function runPine(source: string, symbol: string, tf: string, inputs: Record<string, unknown>, opts: BacktestOpts = {}): Promise<PineResult> {
   const r = await fetch('/api/pine/run', {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ source, symbol, tf, limit: 1000, inputs, ...opts }),
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ source, symbol, tf, limit: pineBarLimit(inputs), inputs, ...opts }),
   })
   const body = await r.json()
   if (!r.ok) throw body

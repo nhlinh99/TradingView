@@ -3,7 +3,7 @@
  
 //@version=6
 
-indicator("Money Flow Custom LinhNH", "MF Total", true, max_bars_back = 1500, max_boxes_count = 500, max_lines_count = 500)
+indicator("Money Flow Custom LinhNH", "MF Total", true, max_bars_back = 2000, max_boxes_count = 500, max_lines_count = 500)
 
 //---------------------------------------------------------------------------------------------------------------------}
 // Settings
@@ -22,7 +22,7 @@ startDate = input.time(timestamp("2024-01-01 00:00"), '  Start Date', group = rp
 endDate   = input.time(timestamp("2024-12-31 00:00"), '  End Date',   group = rpGR, display = disp,
      confirm = false)
 
-rpLN_raw = input.int(200, '  Lookback Length / Fixed Range', minval = 10, maxval = 1500, step = 10 , group = rpGR, display = disp)
+rpLN_raw = input.int(200, '  Lookback Length / Fixed Range', minval = 10, maxval = 2000, step = 10 , group = rpGR, display = disp)
 vpSRC  = input.string('Volume', '  Profile Source', options = ['Volume', 'Money Flow'], group = rpGR, display = disp)
 
 vpGR   = 'Profile Presentation Settings'
