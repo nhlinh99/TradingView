@@ -240,9 +240,6 @@ export default function App() {
         {symbol.startsWith('XAU') && (
           <p className="srcnote">Volume và orderflow của hợp đồng Binance (XAUUSDT, tính theo oz), không phải COMEX. Cuối tuần thị trường gốc nghỉ nhưng hợp đồng vẫn khớp lệnh.</p>
         )}
-        {all.find((s) => s.symbol === symbol)?.source === 'vn' && (
-          <p className="srcnote">Cổ phiếu VN100 (HOSE), nến từ VNDirect, giá nghìn đồng, đã điều chỉnh. Chưa có phía mua/bán nên delta và CVD bằng 0; không có tick, chỉ có khung từ 1 phút.</p>
-        )}
         {symbol && (
           <div className={`cells cells-${layout}`}>
             <div className="cell">
