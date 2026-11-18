@@ -127,6 +127,22 @@ function flowBasis(symbol: string, src: string): Promise<number> {
   basisCache = entry
   return entry.p
 }
+/** Chênh lệch giá hiện tại (trung bình 3 nến 5 phút gần nhất): dùng cho DOM trực tiếp để vạch giá khớp với giá đang chạy của biểu đồ; nhớ 15 giây. */
+let recentBasis: { key: string; at: number; p: Promise<number> } | null = null
+function flowBasisRecent(symbol: string, src: string): Promise<number> {
+  const key = `${symbol}|${src}`
+  if (recentBasis && recentBasis.key === key && Date.now() - recentBasis.at < 15_000) return recentBasis.p
+  const get = async (s: string) => (await json<{ bars: number[][] }>(`/api/bars?symbol=${s}&tf=5m&limit=8`)).bars
+  const entry = { key, at: Date.now(), p: Promise.resolve(0) }
+  entry.p = Promise.all([get(symbol), get(src)]).then(([a, b]) => {
+    const close = new Map(b.map((r) => [r[0], r[4]] as [number, number]))
+    const d = a.filter((r) => close.has(r[0])).slice(-3).map((r) => r[4] - (close.get(r[0]) as number))
+    return d.length > 0 ? d.reduce((x, y) => x + y, 0) / d.length : 0
+  }).catch(() => { entry.at = Date.now() - 10_000; return 0 })
+  recentBasis = entry
+  return entry.p
+}
+
 async function viaFlowSource<T extends { rows: (number | string)[][] }>(symbol: string, call: (s: string) => Promise<T>): Promise<T> {
   const src = FLOW_SOURCE[symbol]
   if (!src) return call(symbol)
@@ -164,7 +180,7 @@ export type DomResponse = {
 export async function fetchDom(symbol: string, mult: number, signal?: AbortSignal): Promise<DomResponse> {
   const src = FLOW_SOURCE[symbol] ?? symbol
   const q = new URLSearchParams({ symbol: src, mult: String(mult) })
-  const [res, off] = await Promise.all([json<Omit<DomResponse, 'mult'>>(`/api/dom?${q}`, { signal }), src === symbol ? Promise.resolve(0) : flowBasis(symbol, src)])
+  const [res, off] = await Promise.all([json<Omit<DomResponse, 'mult'>>(`/api/dom?${q}`, { signal }), src === symbol ? Promise.resolve(0) : flowBasisRecent(symbol, src)])
   const shift = (rows: number[][]) => rows.map(([p, v]) => [Math.round((p + off) * 1e6) / 1e6, v])
   return {
     ...res, symbol, mult,

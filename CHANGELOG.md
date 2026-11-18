@@ -24,6 +24,8 @@ Xem `TODO.md` cho việc còn mở và `docs/plan/README.md` cho kế hoạch t�
 
 ### Đổi
 - Heatmap dễ đọc hơn: thanh khoản thấp mờ dần vào nền (gamma 0.8, độ đục tối thiểu gần 0), preset Bookmap cắt nhiễu 15%, nến rỗng màu xám khi bật heatmap, chấm volume và iceberg bớt lấn át.
+- Cổ phiếu VN không còn hiện lớp orderflow (DOM, heatmap, vùng thanh khoản, chấm, iceberg, footprint) trong ô của mã đó khi bảng Orderflow đang bật; ở layout 2 và 4 ô bỏ các chú giải heatmap và vùng thanh khoản cho đỡ rối.
+- DOM của XAUUSD dùng chênh lệch giá gần nhất (3 nến 5 phút) thay vì trung vị cả ngày, để vạch giá khớp với giá đang chạy.
 - Máy chủ gộp các yêu cầu nặng giống hệt nhau và nhớ kết quả 20 giây (`limits.coalesce`), giao diện làm tròn khoảng thời gian và chờ 0,35 giây sau khi kéo, nên hàng đợi yêu cầu nặng không còn đầy khi kéo biểu đồ.
 - Bỏ dòng ghi chú nguồn dữ liệu của cổ phiếu VN100.
 

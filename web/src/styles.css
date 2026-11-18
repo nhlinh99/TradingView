@@ -593,3 +593,6 @@ kbd { font: 11px ui-monospace, Consolas, monospace; border: 1px solid var(--line
 .dom-cols span { padding: 1px 6px; }
 .dom-cols span:first-child { flex: 0 0 55%; }
 
+/* ô nhỏ (layout 2 và 4 ô): bỏ các chú giải heatmap và vùng thanh khoản cho đỡ rối; ghi chú trạng thái xuống dưới thanh công cụ */
+.cells-2 .heat-legend, .cells-4 .heat-legend, .cells-2 .zone-legend, .cells-4 .zone-legend { display: none; }
+.cells-2 .flow-status, .cells-4 .flow-status { top: 62px; left: 8px; max-width: 60%; font-size: 10px; }

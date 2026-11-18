@@ -83,6 +83,10 @@ export default function App() {
   const [selectedInd, setSelectedInd] = useState<string | null>(null)
   const [alertsOpen, setAlertsOpen] = useState(() => pref('alertsOpen', '0', ['0', '1']) === '1')
   const [pickerOpen, setPickerOpen] = useState(false)
+  /** Cổ phiếu VN không có tick và sổ lệnh sâu: tắt các lớp orderflow ở ô của mã đó (bảng Orderflow là chung cho mọi ô). */
+  const flowFor = (sym: string): Flow => (all.find((s) => s.symbol === sym)?.source === 'vn'
+    ? { ...flow, footprint: false, heatmap: false, dom: false, zones: false, bubbles: false, iceberg: false, delta: false, cvd: 'off', strip: false }
+    : flow)
   useEffect(() => {   // menu chuột phải của biểu đồ yêu cầu mở bảng chỉ báo
     const open = () => setPickerOpen(true)
     window.addEventListener('open-indicator-picker', open)
@@ -254,7 +258,7 @@ export default function App() {
         {symbol && (
           <div className={`cells cells-${layout}`}>
             <div className="cell">
-              <Chart symbol={symbol} tf={tf} tz={tz} flow={flow} pines={visibleResults(ind.list, ind.runs, tf)} indLegend={<IndicatorLegend list={ind.list} runs={ind.runs} onToggle={ind.toggle} onRemove={ind.remove} tf={tf}
+              <Chart symbol={symbol} tf={tf} tz={tz} flow={flowFor(symbol)} pines={visibleResults(ind.list, ind.runs, tf)} indLegend={<IndicatorLegend list={ind.list} runs={ind.runs} onToggle={ind.toggle} onRemove={ind.remove} tf={tf}
                 onPatch={(id, p, rerun) => ind.update(id, p, rerun ?? false)} onDuplicate={(id) => { ind.duplicate(id) }}
                 onEdit={(id) => { setSelectedInd(id); setDockOpen(true); savePref('dockOpen', '1') }}
                 onAdd={() => setPickerOpen(true)} />} replay={replay} onTotal={setTotal} sync={sync.current} cellId={0} theme={theme} onState={onState} />
@@ -269,7 +273,7 @@ export default function App() {
                     {TIMEFRAMES.map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
-                <Chart key={`${c.symbol}|${c.tf}`} symbol={c.symbol} tf={c.tf} tz={tz} flow={flow} pines={[]} replay={null} onTotal={() => {}} sync={sync.current} cellId={i + 1} theme={theme} onState={() => {}} />
+                <Chart key={`${c.symbol}|${c.tf}`} symbol={c.symbol} tf={c.tf} tz={tz} flow={flowFor(c.symbol)} pines={[]} replay={null} onTotal={() => {}} sync={sync.current} cellId={i + 1} theme={theme} onState={() => {}} />
               </div>
             ))}
           </div>
