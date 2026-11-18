@@ -234,6 +234,7 @@ export function indexToTime(times: number[], idx: number, stepSec: number): numb
 export type DrawKind = 'trend' | 'ray' | 'hray' | 'xline' | 'hline' | 'vline' | 'cross' | 'info' | 'angle' | 'arrow' | 'channel' | 'regression'
   | 'rect' | 'brush' | 'fib' | 'fibx' | 'ruler' | 'daterange' | 'pricerange' | 'text'
   | 'long' | 'short' | 'circle' | 'ellipse' | 'triangle' | 'polyline' | 'note' | 'callout' | 'pricelabel' | 'flag'
+  | 'fibchannel' | 'fibtime' | 'fibfan' | 'fibcircle' | 'fibarc' | 'pitchfork' | 'schiff' | 'mschiff' | 'gannfan' | 'gannbox'
 export type DrawPoint = { time: number; price: number }
 export type Drawing = { id: number; symbol: string; kind: DrawKind; payload: { points: DrawPoint[]; color?: string; width?: number; dash?: 'solid' | 'dash' | 'dot'; locked?: boolean; text?: string } }
 export const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]

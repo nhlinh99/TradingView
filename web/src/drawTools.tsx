@@ -26,8 +26,8 @@ export type Env = {
 export type HitEnv = { g: Geo; bars: Bar[]; step: number; plotW: number }
 export type Handle = Pt & { set: (pts: DrawPoint[], np: DrawPoint) => DrawPoint[] }
 
-export type Group = 'line' | 'fib' | 'position' | 'measure' | 'shape' | 'text'
-export const GROUP_LABEL: Record<Group, string> = { line: 'Đường', fib: 'Fibonacci', position: 'Vị thế', measure: 'Đo', shape: 'Hình và bút', text: 'Chữ và ghi chú' }
+export type Group = 'line' | 'fib' | 'pitchfork' | 'gann' | 'position' | 'measure' | 'shape' | 'text'
+export const GROUP_LABEL: Record<Group, string> = { line: 'Đường', fib: 'Fibonacci', pitchfork: 'Pitchfork', gann: 'Gann', position: 'Vị thế', measure: 'Đo', shape: 'Hình và bút', text: 'Chữ và ghi chú' }
 
 export type ToolDef = {
   group: Group
@@ -265,6 +265,64 @@ function positionTool(isLong: boolean): ToolDef {
   }
 }
 
+
+const FIB_CH_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.618, 2.618]
+const FIB_TIME_NUMBERS = [0, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144]
+const FIB_FAN_LEVELS = [0.236, 0.382, 0.5, 0.618, 0.786, 1]
+const FIB_RING_LEVELS = [0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.618, 2.618]
+const GANN_RATIOS: [number, number][] = [[1, 8], [1, 4], [1, 3], [1, 2], [1, 1], [2, 1], [3, 1], [4, 1], [8, 1]]
+
+/** Chữ nhỏ có viền nền để đọc được trên nến. */
+function label(e: Env, text: string, x: number, y: number, color: string, align: CanvasTextAlign) {
+  const { ctx } = e
+  ctx.save()
+  ctx.setLineDash([]); ctx.shadowBlur = 0
+  ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = align; ctx.textBaseline = 'middle'
+  ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = e.dark ? 'rgba(19,23,34,0.85)' : 'rgba(255,255,255,0.85)'
+  ctx.strokeText(text, x, y)
+  ctx.fillStyle = color; ctx.fillText(text, x, y)
+  ctx.restore()
+}
+
+/** Pitchfork Andrews / Schiff / Schiff cải tiến. Điểm 1 là gốc, điểm 2 và 3 là hai đỉnh/đáy kế tiếp; đường giữa đi từ gốc qua trung điểm đoạn 2-3. */
+function pitchforkTool(variant: 'andrews' | 'schiff' | 'mschiff'): ToolDef {
+  const names = { andrews: 'Pitchfork', schiff: 'Schiff pitchfork', mschiff: 'Modified Schiff' }
+  const origin = (P: Pt[]): Pt => variant === 'andrews' ? P[0]
+    : variant === 'schiff' ? { x: P[0].x, y: (P[0].y + P[1].y) / 2 }
+      : { x: (P[0].x + P[1].x) / 2, y: (P[0].y + P[1].y) / 2 }
+  const geom = (P: Pt[]) => {
+    const o = origin(P)
+    const m = { x: (P[1].x + P[2].x) / 2, y: (P[1].y + P[2].y) / 2 }
+    return Math.hypot(m.x - o.x, m.y - o.y) < 1e-6 ? null : { o, m, dir: { x: m.x - o.x, y: m.y - o.y } }
+  }
+  const ray = (a: Pt, d: Pt): Pt => far(a, { x: a.x + d.x, y: a.y + d.y })
+  return {
+    group: 'pitchfork', label: names[variant],
+    title: `${names[variant]}: bấm điểm gốc rồi hai điểm đỉnh/đáy kế tiếp`,
+    icon: variant === 'andrews' ? I.pitchfork : variant === 'schiff' ? I.schiff : I.mschiff, min: 3, max: 3,
+    draw: (e, P) => {
+      const { ctx } = e
+      if (P.length < 3) { seg(ctx, P[0], P[1]); dots(ctx, P); return }
+      const g = geom(P)
+      if (!g) return
+      const fb = ray(P[1], g.dir); const fc = ray(P[2], g.dir)
+      ctx.save(); ctx.globalAlpha = 0.07
+      ctx.beginPath(); ctx.moveTo(P[1].x, P[1].y); ctx.lineTo(P[2].x, P[2].y); ctx.lineTo(fc.x, fc.y); ctx.lineTo(fb.x, fb.y); ctx.closePath(); ctx.fill()
+      ctx.restore()
+      seg(ctx, g.o, ray(g.o, g.dir)); seg(ctx, P[1], fb); seg(ctx, P[2], fc)
+      ctx.save(); ctx.setLineDash([4, 4]); ctx.globalAlpha = 0.7; seg(ctx, P[0], P[1]); seg(ctx, P[1], P[2]); ctx.restore()
+      dots(ctx, P)
+    },
+    hit: (_e, S, _D, px, py) => {
+      const g = geom(S)
+      if (!g) return Infinity
+      const f1 = ray(g.o, g.dir); const f2 = ray(S[1], g.dir); const f3 = ray(S[2], g.dir)
+      return Math.min(distToSegment(px, py, g.o.x, g.o.y, f1.x, f1.y), distToSegment(px, py, S[1].x, S[1].y, f2.x, f2.y),
+        distToSegment(px, py, S[2].x, S[2].y, f3.x, f3.y), distToSegment(px, py, S[1].x, S[1].y, S[2].x, S[2].y))
+    },
+  }
+}
+
 // ---------- biểu tượng ----------
 
 const I = {
@@ -298,6 +356,16 @@ const I = {
   callout: <><path d="M10 4h9v7h-9z" /><path d="M10 9L3 18" /></>,
   pricelabel: <path d="M3 8h11l5 3-5 3H3z" />,
   flag: <path d="M6 19V3M6 4h11l-3 4 3 4H6" />,
+  fibchannel: <path d="M3 17L17 9M3 13L17 5M3 9l8-4.5M3 20L17 12" />,
+  fibtime: <path d="M4 3v16M8 3v16M12 3v16M20 3v16M16 3v16" />,
+  fibfan: <path d="M3 18L19 4M3 18L19 8M3 18L19 12M3 18L19 16" />,
+  fibcircle: <><circle cx="11" cy="11" r="3" /><circle cx="11" cy="11" r="6" /><circle cx="11" cy="11" r="9" /></>,
+  fibarc: <path d="M5 17a4 4 0 0 1 8-4M3 20a8 8 0 0 1 16-6M2 21a12 12 0 0 1 19-9" />,
+  pitchfork: <path d="M3 19L18 7M7 6l11 1M3 13l12-9M10 20L19 11" />,
+  schiff: <path d="M5 15L19 5M7 4l12 2M3 12l11-8M9 20L19 10" />,
+  mschiff: <path d="M6 13L19 5M8 3l11 3M4 11l10-8M10 19L19 9" />,
+  gannfan: <path d="M3 19L19 3M3 19L19 9M3 19L19 14M3 19L14 3M3 19L9 3" />,
+  gannbox: <><rect x="3" y="3" width="16" height="16" /><path d="M3 3l16 16M19 3L3 19M3 11h16M11 3v16" /></>,
 }
 
 // ---------- các công cụ ----------
@@ -657,6 +725,178 @@ export const REGISTRY: Record<DrawKind, ToolDef> = {
     },
     hit: (_e, S, _D, px, py) => (px >= S[0].x - 6 && px <= S[0].x + 20 && py >= S[0].y - 32 && py <= S[0].y + 2 ? 0 : Infinity),
   },
+  fibchannel: {
+    group: 'fib', label: 'Fib channel', title: 'Fib channel: bấm hai điểm của cạnh gốc, rồi điểm xác định bề rộng kênh', icon: I.fibchannel, min: 3, max: 3, ownColors: true,
+    draw: (e, P) => {
+      const { ctx } = e
+      ctx.lineWidth = 1
+      const dx = P[1].x - P[0].x
+      const m = Math.abs(dx) < 1e-6 ? 0 : (P[1].y - P[0].y) / dx
+      ctx.strokeStyle = '#787b86'; ctx.setLineDash([4, 4]); seg(ctx, P[0], P[1]); ctx.setLineDash([])
+      if (P.length < 3) return
+      const off = P[2].y - (P[0].y + m * (P[2].x - P[0].x))
+      FIB_CH_LEVELS.forEach((lv, i) => {
+        const a = { x: P[0].x, y: P[0].y + off * lv }; const b = { x: P[1].x, y: P[1].y + off * lv }
+        if (i > 0) {
+          const pa = { x: P[0].x, y: P[0].y + off * FIB_CH_LEVELS[i - 1] }; const pb = { x: P[1].x, y: P[1].y + off * FIB_CH_LEVELS[i - 1] }
+          ctx.save(); ctx.fillStyle = FIB_COLORS[lv] ?? '#787b86'; ctx.globalAlpha = 0.1
+          ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.lineTo(b.x, b.y); ctx.lineTo(a.x, a.y); ctx.closePath(); ctx.fill(); ctx.restore()
+        }
+        ctx.strokeStyle = FIB_COLORS[lv] ?? '#787b86'; ctx.setLineDash(e.preview ? [5, 4] : [])
+        seg(ctx, a, b)
+        label(e, String(lv), b.x + 4, b.y, FIB_COLORS[lv] ?? '#787b86', 'left')
+      })
+      ctx.setLineDash([])
+    },
+    hit: (_e, S, _D, px, py) => {
+      const dx = S[1].x - S[0].x
+      const m = Math.abs(dx) < 1e-6 ? 0 : (S[1].y - S[0].y) / dx
+      const off = S[2].y - (S[0].y + m * (S[2].x - S[0].x))
+      let best = Infinity
+      for (const lv of FIB_CH_LEVELS) best = Math.min(best, distToSegment(px, py, S[0].x, S[0].y + off * lv, S[1].x, S[1].y + off * lv))
+      return best
+    },
+  },
+  fibtime: {
+    group: 'fib', label: 'Fib time zones', title: 'Vùng thời gian Fibonacci: bấm hai điểm, khoảng cách là một đơn vị', icon: I.fibtime, min: 2, max: 2, ownColors: true,
+    draw: (e, P) => {
+      const { ctx } = e
+      const u = P[1].x - P[0].x
+      ctx.lineWidth = 1
+      if (Math.abs(u) < 2) return
+      for (const n of FIB_TIME_NUMBERS) {
+        const x = P[0].x + n * u
+        if (x > e.plotW + 2 || x < -2) { if (n > 0) break; continue }
+        ctx.strokeStyle = n === 0 ? '#787b86' : '#2962ff'; ctx.setLineDash(n === 0 ? [4, 4] : [])
+        ctx.save(); ctx.globalAlpha = 0.8; seg(ctx, { x, y: 0 }, { x, y: e.h }); ctx.restore()
+        label(e, String(n), x + 3, 12, '#2962ff', 'left')
+      }
+      ctx.setLineDash([])
+    },
+    hit: (e, S, _D, px) => {
+      const u = S[1].x - S[0].x
+      if (Math.abs(u) < 2) return Infinity
+      let best = Infinity
+      for (const n of FIB_TIME_NUMBERS) { const x = S[0].x + n * u; if (x >= -2 && x <= e.plotW + 2) best = Math.min(best, Math.abs(px - x)) }
+      return best
+    },
+  },
+  fibfan: {
+    group: 'fib', label: 'Fib fan', title: 'Quạt kháng cự tốc độ Fibonacci: bấm điểm gốc và điểm cuối', icon: I.fibfan, min: 2, max: 2, ownColors: true,
+    draw: (e, P) => {
+      const { ctx } = e
+      const dy = P[1].y - P[0].y
+      ctx.lineWidth = 1
+      if (Math.abs(P[1].x - P[0].x) < 1e-6) return
+      ctx.strokeStyle = '#787b86'; ctx.setLineDash([4, 4]); seg(ctx, P[0], P[1]); ctx.setLineDash([])
+      for (const lv of FIB_FAN_LEVELS) {
+        const t = { x: P[1].x, y: P[0].y + dy * lv }
+        const col = FIB_COLORS[lv] ?? '#787b86'
+        ctx.strokeStyle = col; ctx.fillStyle = col
+        seg(ctx, P[0], far(P[0], t))
+        label(e, String(lv), t.x + 4, t.y, col, 'left')
+      }
+    },
+    hit: (_e, S, _D, px, py) => {
+      if (Math.abs(S[1].x - S[0].x) < 1e-6) return Infinity
+      const dy = S[1].y - S[0].y
+      let best = Infinity
+      for (const lv of FIB_FAN_LEVELS) { const f = far(S[0], { x: S[1].x, y: S[0].y + dy * lv }); best = Math.min(best, distToSegment(px, py, S[0].x, S[0].y, f.x, f.y)) }
+      return best
+    },
+  },
+  fibcircle: {
+    group: 'fib', label: 'Fib circles', title: 'Vòng tròn Fibonacci: bấm tâm và một điểm xác định bán kính', icon: I.fibcircle, min: 2, max: 2, ownColors: true,
+    draw: (e, P) => {
+      const { ctx } = e
+      const r = Math.hypot(P[1].x - P[0].x, P[1].y - P[0].y)
+      ctx.lineWidth = 1
+      ctx.strokeStyle = '#787b86'; ctx.setLineDash([4, 4]); seg(ctx, P[0], P[1]); ctx.setLineDash([])
+      for (const lv of FIB_RING_LEVELS) {
+        const col = FIB_COLORS[lv] ?? '#787b86'
+        ctx.strokeStyle = col
+        ctx.beginPath(); ctx.arc(P[0].x, P[0].y, r * lv, 0, Math.PI * 2); ctx.stroke()
+        label(e, String(lv), P[0].x + r * lv + 3, P[0].y, col, 'left')
+      }
+    },
+    hit: (_e, S, _D, px, py) => {
+      const r = Math.hypot(S[1].x - S[0].x, S[1].y - S[0].y)
+      const d = Math.hypot(px - S[0].x, py - S[0].y)
+      let best = Infinity
+      for (const lv of FIB_RING_LEVELS) best = Math.min(best, Math.abs(d - r * lv))
+      return best
+    },
+  },
+  fibarc: {
+    group: 'fib', label: 'Fib arcs', title: 'Cung tròn Fibonacci: bấm tâm và điểm hướng ra, các cung mở về phía điểm thứ hai', icon: I.fibarc, min: 2, max: 2, ownColors: true,
+    draw: (e, P) => {
+      const { ctx } = e
+      const r = Math.hypot(P[1].x - P[0].x, P[1].y - P[0].y)
+      const ang = Math.atan2(P[1].y - P[0].y, P[1].x - P[0].x)
+      ctx.lineWidth = 1
+      ctx.strokeStyle = '#787b86'; ctx.setLineDash([4, 4]); seg(ctx, P[0], P[1]); ctx.setLineDash([])
+      for (const lv of FIB_RING_LEVELS) {
+        const col = FIB_COLORS[lv] ?? '#787b86'
+        ctx.strokeStyle = col
+        ctx.beginPath(); ctx.arc(P[0].x, P[0].y, r * lv, ang - Math.PI / 2, ang + Math.PI / 2); ctx.stroke()
+        label(e, String(lv), P[0].x + Math.cos(ang) * r * lv + 3, P[0].y + Math.sin(ang) * r * lv, col, 'left')
+      }
+    },
+    hit: (_e, S, _D, px, py) => {
+      const r = Math.hypot(S[1].x - S[0].x, S[1].y - S[0].y)
+      const ang = Math.atan2(S[1].y - S[0].y, S[1].x - S[0].x)
+      const vx = px - S[0].x; const vy = py - S[0].y
+      if (vx * Math.cos(ang) + vy * Math.sin(ang) < 0) return Infinity
+      const d = Math.hypot(vx, vy)
+      let best = Infinity
+      for (const lv of FIB_RING_LEVELS) best = Math.min(best, Math.abs(d - r * lv))
+      return best
+    },
+  },
+  pitchfork: pitchforkTool('andrews'),
+  schiff: pitchforkTool('schiff'),
+  mschiff: pitchforkTool('mschiff'),
+  gannfan: {
+    group: 'gann', label: 'Gann fan', title: 'Quạt Gann: bấm điểm gốc và một điểm xác định đường 1×1', icon: I.gannfan, min: 2, max: 2,
+    draw: (e, P) => {
+      const { ctx } = e
+      const dy = P[1].y - P[0].y
+      if (Math.abs(P[1].x - P[0].x) < 1e-6) return
+      for (const [a, b] of GANN_RATIOS) {
+        const r = a / b
+        const t = { x: P[1].x, y: P[0].y + dy * r }
+        const main = a === b
+        ctx.save(); ctx.globalAlpha = main ? 1 : 0.65; ctx.lineWidth = main ? 2 : 1
+        seg(ctx, P[0], far(P[0], t)); ctx.restore()
+        label(e, `${a}×${b}`, t.x + 4, t.y, ctx.strokeStyle as string, 'left')
+      }
+      dots(ctx, P)
+    },
+    hit: (_e, S, _D, px, py) => {
+      if (Math.abs(S[1].x - S[0].x) < 1e-6) return Infinity
+      const dy = S[1].y - S[0].y
+      let best = Infinity
+      for (const [a, b] of GANN_RATIOS) { const f = far(S[0], { x: S[1].x, y: S[0].y + dy * (a / b) }); best = Math.min(best, distToSegment(px, py, S[0].x, S[0].y, f.x, f.y)) }
+      return best
+    },
+  },
+  gannbox: {
+    group: 'gann', label: 'Gann box', title: 'Hộp Gann: bấm hai góc đối diện', icon: I.gannbox, min: 2, max: 2, box: true,
+    draw: (e, P) => {
+      const { ctx } = e
+      const x0 = Math.min(P[0].x, P[1].x); const x1 = Math.max(P[0].x, P[1].x)
+      const y0 = Math.min(P[0].y, P[1].y); const y1 = Math.max(P[0].y, P[1].y)
+      ctx.save(); ctx.globalAlpha = 0.06; ctx.fillRect(x0, y0, x1 - x0, y1 - y0); ctx.globalAlpha = 0.35; ctx.lineWidth = 1
+      for (let i = 1; i < 8; i++) {
+        const x = x0 + ((x1 - x0) * i) / 8; const y = y0 + ((y1 - y0) * i) / 8
+        seg(ctx, { x, y: y0 }, { x, y: y1 }); seg(ctx, { x: x0, y }, { x: x1, y })
+      }
+      ctx.restore()
+      seg(ctx, { x: x0, y: y0 }, { x: x1, y: y1 }); seg(ctx, { x: x1, y: y0 }, { x: x0, y: y1 })
+      ctx.strokeRect(x0, y0, x1 - x0, y1 - y0)
+    },
+    hit: (_e, S, _D, px, py) => (inBox(px, py, S[0], S[1]) ? 0 : Infinity),
+  },
   text: {
     group: 'text', label: 'Chữ', title: 'Văn bản: bấm một điểm', icon: I.text, min: 1, max: 1,
     draw: (e, P, _D, text) => {
@@ -670,7 +910,7 @@ export const REGISTRY: Record<DrawKind, ToolDef> = {
 }
 
 export const KINDS = Object.keys(REGISTRY) as DrawKind[]
-export const GROUP_ORDER: Group[] = ['line', 'fib', 'position', 'measure', 'shape', 'text']
+export const GROUP_ORDER: Group[] = ['line', 'fib', 'pitchfork', 'gann', 'position', 'measure', 'shape', 'text']
 
 /** Các tay nắm của một hình: hình dạng hộp có 4 góc, còn lại là các điểm neo. Kéo tay nắm đổi các điểm neo tương ứng. */
 export function handlesFor(kind: DrawKind, P: Pt[]): Handle[] {

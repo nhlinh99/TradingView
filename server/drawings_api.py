@@ -24,6 +24,8 @@ KINDS = {
     "pricerange": (2, 2), "text": (1, 1),
     "long": (3, 3), "short": (3, 3), "circle": (2, 2), "ellipse": (2, 2), "triangle": (3, 3), "polyline": (2, 50),
     "note": (1, 1), "callout": (2, 2), "pricelabel": (1, 1), "flag": (1, 1),
+    "fibchannel": (3, 3), "fibtime": (2, 2), "fibfan": (2, 2), "fibcircle": (2, 2), "fibarc": (2, 2),
+    "pitchfork": (3, 3), "schiff": (3, 3), "mschiff": (3, 3), "gannfan": (2, 2), "gannbox": (2, 2),
 }
 MAX_PAYLOAD = 40_000
 

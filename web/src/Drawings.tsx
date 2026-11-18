@@ -47,7 +47,7 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
   const [hideAll, setHideAll] = useState(false)
   const [magnet, setMagnet] = useState(false)
   const [openGrp, setOpenGrp] = useState<Group | null>(null)
-  const [lastTool, setLastTool] = useState<Record<Group, DrawKind>>({ line: 'trend', fib: 'fib', position: 'long', measure: 'ruler', shape: 'rect', text: 'text' })
+  const [lastTool, setLastTool] = useState<Record<Group, DrawKind>>({ line: 'trend', fib: 'fib', pitchfork: 'pitchfork', gann: 'gannfan', position: 'long', measure: 'ruler', shape: 'rect', text: 'text' })
   const pending = useRef<DrawPoint[]>([])
   const brush = useRef<DrawPoint[] | null>(null)
   const hover = useRef<DrawPoint | null>(null)
