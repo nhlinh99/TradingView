@@ -80,6 +80,11 @@ export default function App() {
   const [selectedInd, setSelectedInd] = useState<string | null>(null)
   const [alertsOpen, setAlertsOpen] = useState(() => pref('alertsOpen', '0', ['0', '1']) === '1')
   const [pickerOpen, setPickerOpen] = useState(false)
+  useEffect(() => {   // menu chuột phải của biểu đồ yêu cầu mở bảng chỉ báo
+    const open = () => setPickerOpen(true)
+    window.addEventListener('open-indicator-picker', open)
+    return () => window.removeEventListener('open-indicator-picker', open)
+  }, [])
   const [dockOpen, setDockOpen] = useState(() => pref('dockOpen', '0', ['0', '1']) === '1')
   const [state, setState] = useState<StreamState>('connecting')
   const [err, setErr] = useState<string | null>(null)

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import type { IChartApi, ISeriesApi } from 'lightweight-charts'
-import { clearDrawings, createDrawing, deleteDrawing, fetchDrawings, updateDrawing } from './api'
+import { clearDrawings, createAlert, createDrawing, deleteDrawing, fetchDrawings, updateDrawing } from './api'
 import { indexToTime, tfMs, timeToIndex, type Bar, type DrawKind, type DrawPoint, type Drawing } from './logic'
-import { GROUP_LABEL, GROUP_ORDER, KINDS, REGISTRY, handlesFor, zOrdered, type Geo, type Group, type Pt } from './drawTools'
+import { GROUP_LABEL, GROUP_ORDER, KINDS, REGISTRY, fmtPrice, handlesFor, zOrdered, type Geo, type Group, type Pt } from './drawTools'
 
 type Tool = 'cursor' | DrawKind | 'erase'
 type Props = {
@@ -50,6 +50,9 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
   const [hideAll, setHideAll] = useState(false)
   const [magnet, setMagnet] = useState(false)
   const [openGrp, setOpenGrp] = useState<Group | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; price: number; time: number; hitId: number | null } | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+  const ctxHandler = useRef<(e: MouseEvent) => void>(() => {})
   const [flyPos, setFlyPos] = useState<{ left: number; top: number } | null>(null)
   const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem('drawToolsCollapsed') === '1' } catch { return false } })
   const [lastTool, setLastTool] = useState<Record<Group, DrawKind>>({ line: 'trend', fib: 'fib', pitchfork: 'pitchfork', gann: 'gannfan', position: 'long', measure: 'ruler', shape: 'rect', text: 'text' })
@@ -464,6 +467,34 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geo])
 
+  // chuột phải trên biểu đồ: menu ngữ cảnh kiểu TradingView (bản xử lý mới nhất nằm trong ctxHandler)
+  useEffect(() => {
+    const host = cv.current?.parentElement
+    if (!host) return
+    const onCtx = (e: MouseEvent) => ctxHandler.current(e)
+    host.addEventListener('contextmenu', onCtx)
+    return () => host.removeEventListener('contextmenu', onCtx)
+  }, [])
+
+  // đóng menu chuột phải khi bấm ra ngoài, cuộn, đổi cỡ cửa sổ hoặc nhấn Esc
+  useEffect(() => {
+    if (!menu) return
+    const close = (e: Event) => { if (!(e.target as HTMLElement | null)?.closest?.('.ctx-menu')) setMenu(null) }
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenu(null) }
+    window.addEventListener('pointerdown', close, true)
+    window.addEventListener('wheel', close, { passive: true, capture: true })
+    window.addEventListener('resize', close)
+    window.addEventListener('blur', close)
+    window.addEventListener('keydown', esc)
+    return () => {
+      window.removeEventListener('pointerdown', close, true)
+      window.removeEventListener('wheel', close, { capture: true } as EventListenerOptions)
+      window.removeEventListener('resize', close)
+      window.removeEventListener('blur', close)
+      window.removeEventListener('keydown', esc)
+    }
+  }, [menu])
+
   // đóng menu nhóm công cụ khi bấm ra ngoài
   useEffect(() => {
     if (!openGrp) return
@@ -569,6 +600,75 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
   }
   const toggleCollapsed = () => setCollapsed((v) => { const n = !v; try { localStorage.setItem('drawToolsCollapsed', n ? '1' : '0') } catch { /* bỏ qua */ } return n })
 
+  const say = (msg: string) => { setToast(msg); window.setTimeout(() => setToast((t) => (t === msg ? null : t)), 2600) }
+
+  ctxHandler.current = (e: MouseEvent) => {
+    if ((e.target as HTMLElement | null)?.closest?.('.draw-tools, .draw-chip, .ctx-menu')) return
+    e.preventDefault()
+    // đang vẽ dở một hình: chuột phải là huỷ hình đó (như TradingView), chưa mở menu
+    if (pending.current.length > 0 || brush.current) { pending.current = []; brush.current = null; hover.current = null; redraw.current(); return }
+    const p = pointFromClient(e.clientX, e.clientY, false)
+    if (!p) return
+    const hitD = toolRef.current === 'cursor' ? hitAt(e.clientX, e.clientY) : null
+    if (hitD) { setSelected(hitD.id); redraw.current() }
+    setMenu({ x: e.clientX, y: e.clientY, price: p.price, time: p.time, hitId: hitD?.id ?? null })
+  }
+
+  const menuItems = (): ({ label: string; hint?: string; run: () => void; danger?: boolean } | 'sep')[] => {
+    if (!menu) return []
+    const pt: DrawPoint = { time: menu.time, price: menu.price }
+    const priceTxt = fmtPrice(menu.price)
+    const act = (fn: () => void | Promise<void>) => () => { setMenu(null); void fn() }
+    const items: ({ label: string; hint?: string; run: () => void; danger?: boolean } | 'sep')[] = []
+    const d = menu.hitId !== null ? itemsRef.current.find((x) => x.id === menu.hitId) : undefined
+    if (d) {
+      items.push({ label: d.payload.locked ? 'Mở khoá hình' : 'Khoá hình', run: act(() => patchSelected({ locked: !d.payload.locked }, true)) })
+      items.push({ label: 'Nhân bản hình', run: act(() => clone()) })
+      items.push({ label: 'Xoá hình', hint: 'Delete', danger: true, run: act(() => remove(d.id)) })
+      items.push('sep')
+    }
+    items.push({
+      label: `Sao chép giá ${priceTxt}`,
+      run: act(async () => {
+        try { await navigator.clipboard.writeText(String(Number(menu.price.toFixed(6)))); say(`Đã sao chép giá ${priceTxt}`) } catch { say('Không sao chép được (trình duyệt chặn clipboard)') }
+      }),
+    })
+    items.push({
+      label: `Thêm cảnh báo khi giá chạm ${priceTxt}`,
+      run: act(async () => {
+        try { await createAlert(symbol, { type: 'cross', level: Number(menu.price.toFixed(6)), dir: 'any', once: true }); say(`Đã thêm cảnh báo tại ${priceTxt} (xem ở mục Cảnh báo)`) } catch (x) { setErr(String(x)) }
+      }),
+    })
+    items.push('sep')
+    items.push({ label: `Vẽ đường ngang tại ${priceTxt}`, run: act(() => finishCreate('hline', { points: [pt], color: COLOR })) })
+    items.push({ label: 'Vẽ đường dọc tại đây', run: act(() => finishCreate('vline', { points: [pt], color: COLOR })) })
+    items.push({ label: 'Thêm nhãn giá tại đây', run: act(() => finishCreate('pricelabel', { points: [pt], color: COLOR })) })
+    items.push({
+      label: 'Thêm ghi chú tại đây…',
+      run: act(async () => {
+        const text = window.prompt('Nội dung ghi chú (xuống dòng bằng \\n)')
+        if (text) await finishCreate('note', { points: [pt], color: COLOR, text: text.replace(/\\n/g, '\n') })
+      }),
+    })
+    items.push('sep')
+    items.push({ label: 'Thêm chỉ báo…', hint: 'I', run: act(() => { window.dispatchEvent(new CustomEvent('open-indicator-picker')) }) })
+    items.push({
+      label: 'Đặt lại khung nhìn',
+      run: act(() => {
+        const c = chart.current
+        if (!c) return
+        c.timeScale().resetTimeScale()
+        c.timeScale().scrollToRealTime()
+        candles.current?.priceScale().applyOptions({ autoScale: true })
+      }),
+    })
+    items.push('sep')
+    items.push({ label: magnet ? 'Tắt nam châm' : 'Bật nam châm (bắt vào giá nến)', run: act(() => setMagnet((v) => !v)) })
+    items.push({ label: hideAll ? 'Hiện mọi hình vẽ' : 'Ẩn mọi hình vẽ', run: act(() => setHideAll((v) => !v)) })
+    items.push({ label: `Xoá mọi hình vẽ của ${symbol}`, danger: true, run: act(() => clearAll()) })
+    return items
+  }
+
   const pick = (k: DrawKind) => {
     setTool(k); setOpenGrp(null)
     setLastTool((m) => ({ ...m, [REGISTRY[k].group]: k }))
@@ -603,6 +703,16 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
           <button title="Nhân bản hình" aria-label="Nhân bản hình" onClick={() => void clone()}><Icon node={ICONS.clone} /></button>
           <button className="del" title="Xoá hình này (Delete)" aria-label="Xoá hình đang chọn" disabled={sel.payload.locked} onClick={() => void remove(sel.id)}><Icon node={ICONS.clear} /></button>
         </div>
+      )}
+      {toast && <div className="draw-toast" role="status">{toast}</div>}
+      {menu && createPortal(
+        <div className="ctx-menu" role="menu" aria-label="Menu biểu đồ"
+          style={{ left: Math.min(menu.x, window.innerWidth - 290), top: Math.max(8, Math.min(menu.y, window.innerHeight - 24 - menuItems().length * 31)) }}>
+          {menuItems().map((it, i) => it === 'sep'
+            ? <div key={`s${i}`} className="sep" role="separator" />
+            : <button key={it.label} role="menuitem" className={it.danger ? 'danger' : ''} onClick={it.run}><span>{it.label}</span>{it.hint && <kbd>{it.hint}</kbd>}</button>)}
+        </div>,
+        document.body,
       )}
       <div className={collapsed ? 'draw-tools collapsed' : 'draw-tools'} role="toolbar" aria-label="Công cụ vẽ">
         <button title={collapsed ? 'Mở thanh công cụ vẽ' : 'Thu gọn thanh công cụ vẽ'} aria-label={collapsed ? 'Mở thanh công cụ vẽ' : 'Thu gọn thanh công cụ vẽ'} aria-expanded={!collapsed} className="fold" onClick={toggleCollapsed}>
