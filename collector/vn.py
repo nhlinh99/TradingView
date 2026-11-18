@@ -113,6 +113,57 @@ def sync_bars(client: httpx.Client, symbol: str, days: int = 400, now_ms: int | 
     return {"bars": len(bars), "days": len(by_day)}
 
 
+# ---------- nến ngày ----------
+# Nến 1 phút của dchart rất thưa ở giai đoạn cũ (FPT thiếu 3/11/2025 đến 14/5/2026), nên khung ngày trở lên không ghép
+# từ nến 1 phút mà lấy thẳng nến `1D` của dchart (đủ từ 2025-01). Tuần và tháng ghép từ nến ngày ở server.
+# dchart không hỗ trợ 1W/1M. Lưu ở DATA_DIR/vn_daily/<mã>.json, mỗi dòng [t_giây, o, h, l, c, v] (giá là số thật).
+
+def daily_path(symbol: str):
+    return store.data_dir() / "vn_daily" / f"{symbol}.json"
+
+
+def load_daily(symbol: str) -> list[list[float]]:
+    try:
+        return json.loads(daily_path(symbol).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+
+
+def sync_daily(client: httpx.Client, symbol: str, full: bool = False, now_ms: int | None = None) -> dict:
+    """Nạp nến ngày. full: từ 2015; không thì chỉ ~10 ngày gần nhất rồi gộp theo ts (đủ để sửa nến đang chạy)."""
+    now_ms = now_ms if now_ms is not None else int(time.time() * 1000)
+    old = load_daily(symbol)
+    start_s = now_ms // 1000 - (365 * 12 if full or not old else 10) * 86_400
+    d = fetch_history(client, symbol, "1D", start_s, now_ms // 1000)
+    merged = {int(r[0]): r for r in old}
+    for t, o, h, l, c, v in zip(d.get("t", []), d.get("o", []), d.get("h", []), d.get("l", []), d.get("c", []), d.get("v", [])):
+        merged[int(t)] = [int(t), o, h, l, c, float(v)]
+    out = [merged[k] for k in sorted(merged)]
+    p = daily_path(symbol)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_text(json.dumps(out, separators=(",", ":")), encoding="utf-8")
+    tmp.replace(p)
+    return {"bars": len(out), "new": len(out) - len(old)}
+
+
+_last_daily: dict[str, float] = {}
+
+
+def refresh_daily(symbol: str, min_interval: float = 60.0) -> bool:
+    """Làm mới đuôi nến ngày khi có người xem, gọi thưa. Lỗi chỉ ghi log."""
+    if time.monotonic() - _last_daily.get(symbol, -1e9) < min_interval:
+        return False
+    _last_daily[symbol] = time.monotonic()
+    try:
+        with make_client() as client:
+            sync_daily(client, symbol)
+        return True
+    except Exception as e:  # noqa: BLE001
+        log.warning("không làm mới được nến ngày %s: %s", symbol, e)
+        return False
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -134,6 +185,7 @@ def main() -> None:
         for i, s in enumerate(syms, 1):
             try:
                 log.info("[%d/%d] %s %s", i, len(syms), s, sync_bars(client, s, args.days))
+                log.info("%s nến ngày %s", s, sync_daily(client, s, full=True))
             except Exception as e:  # noqa: BLE001 - một mã lỗi không dừng cả lượt
                 log.warning("%s lỗi: %s", s, e)
                 fail.append(s)

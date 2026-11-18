@@ -64,6 +64,7 @@ def run(symbols: list[str], backfill_days: int = 3, do_compact: bool = True, vn_
         with vn.make_client() as client:
             for symbol in store.vn100_symbols():
                 step("vn-bars", symbol, lambda s=symbol: vn.sync_bars(client, s))
+                step("vn-daily", symbol, lambda s=symbol: vn.sync_daily(client, s))
     if do_compact:
         step("compact", "*", lambda: compact.compact_all())
     return report

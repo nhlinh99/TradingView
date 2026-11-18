@@ -131,6 +131,40 @@ def tvc_coarse_bars(symbol: str, tf: str, tf_ms: int, cfg: dict, start_ms: int |
     return {"symbol": symbol, "tf": tf, "tf_ms": tf_ms, "tick": cfg["tick"], "last_trade_id": None, "bars": bars}
 
 
+VN_DAILY_TFS = ("1d", "1w", "1M")
+
+
+def vn_daily_has_data(symbol: str) -> bool:
+    """Chưa có nến ngày thì nạp một lần (toàn bộ lịch sử); vẫn không có thì rơi về ghép từ nến 1 phút."""
+    from collector import vn
+    if not vn.load_daily(symbol):
+        vn.refresh_daily(symbol)
+    return bool(vn.load_daily(symbol))
+
+
+def vn_daily_bars(symbol: str, tf: str, tf_ms: int, cfg: dict, start_ms: int | None, end_ms: int | None, limit: int) -> dict:
+    """Cổ phiếu VN ở khung ngày/tuần/tháng: nến ngày của dchart (đủ lịch sử); tuần và tháng ghép từ nến ngày."""
+    from collector import vn
+    if end_ms is None:
+        vn.refresh_daily(symbol)
+    tick = cfg["tick"]
+    groups: dict[int, list] = {}
+    for t, o, h, l, c, v in vn.load_daily(symbol):
+        ts = int(t) * 1000
+        groups.setdefault(tickbars.bucket_start(tf, ts), []).append((ts, o, h, l, c, v))
+    bars = []
+    for b in sorted(groups):
+        if (start_ms is not None and b < start_ms) or (end_ms is not None and b >= end_ms):
+            continue
+        g = sorted(groups[b])
+        bars.append([b, store.to_int_price(symbol, g[0][1]), store.to_int_price(symbol, max(x[2] for x in g)),
+                     store.to_int_price(symbol, min(x[3] for x in g)), store.to_int_price(symbol, g[-1][4]),
+                     float(sum(x[5] for x in g)), 0.0, 0.0])
+    bars = bars[-limit:]
+    return {"symbol": symbol, "tf": tf, "tf_ms": tf_ms, "tick": tick, "last_trade_id": None,
+            "bars": _convert(bars, tick)}
+
+
 def get_bars(symbol: str, tf: str, start_ms: int | None, end_ms: int | None, limit: int) -> dict:
     try:
         cfg = store.symbol_config(symbol)
@@ -144,6 +178,8 @@ def get_bars(symbol: str, tf: str, start_ms: int | None, end_ms: int | None, lim
         raise HTTPException(422, str(e))
     if cfg.get("market") == "tvc" and tf in COARSE_TVC:
         return tvc_coarse_bars(symbol, tf, tf_ms, cfg, start_ms, end_ms, limit)
+    if cfg.get("market") == "vn" and tf in VN_DAILY_TFS and vn_daily_has_data(symbol):
+        return vn_daily_bars(symbol, tf, tf_ms, cfg, start_ms, end_ms, limit)
     is_vn = cfg.get("market") in ("vn", "tvc")   # chỉ có nến 1 phút, không có tick (VN100 và vàng TVC)
     live = end_ms is None and not is_vn   # chỉ yêu cầu nến mới nhất mới cần đuôi từ REST; cổ phiếu VN không có tick
     now_ms = int(time.time() * 1000)

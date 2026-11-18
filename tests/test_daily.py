@@ -92,6 +92,7 @@ def test_vn_bars_step_runs_per_symbol_and_isolates_failures(monkeypatch):
         return {"bars": 1}
 
     monkeypatch.setattr(vn, "sync_bars", fake)
+    monkeypatch.setattr(vn, "sync_daily", lambda client, symbol: {"bars": 1})
     rep = daily.run([], do_compact=False, vn_bars=True)
-    assert [s[:2] for s in rep["steps"]] == [("vn-bars", "FPT")]
+    assert [s[:2] for s in rep["steps"]] == [("vn-daily", "VNM"), ("vn-bars", "FPT"), ("vn-daily", "FPT")]
     assert len(rep["failures"]) == 1 and "VNM" in rep["failures"][0]

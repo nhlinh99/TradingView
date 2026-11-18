@@ -94,3 +94,27 @@ def test_bars_api_for_vn_symbol(data_root, monkeypatch):
     assert c.get("/api/bars", params={"symbol": "VNM", "tf": "1s"}).status_code == 422
     syms = {s["symbol"] for s in c.get("/api/symbols").json()}
     assert {"VNM", "FPT", "BTCUSDT"} <= syms
+
+
+def test_sync_daily_and_vn_daily_bars(data_root, monkeypatch):
+    from server import bars_api
+    monkeypatch.setattr(vn, "refresh_daily", lambda s: False)   # không gọi mạng thật
+    t = [int(datetime(2026, 11, d, tzinfo=timezone.utc).timestamp()) for d in (2, 3, 4)]   # Thứ Hai, Ba, Tư
+    payload = {"s": "ok", "t": t, "o": [10, 11, 12], "h": [11, 13, 14], "l": [9, 10, 11], "c": [11, 12, 13], "v": [100, 200, 300]}
+    seen = []
+
+    def handler(req):
+        seen.append(dict(req.url.params))
+        return httpx.Response(200, json=payload)
+
+    with client_for(handler) as c:
+        assert vn.sync_daily(c, "FPT") == {"bars": 3, "new": 3}
+        assert vn.sync_daily(c, "FPT") == {"bars": 3, "new": 0}   # gộp theo ts, không nhân đôi
+    assert seen[0]["resolution"] == "1D"
+    cfg = store.symbol_config("FPT")
+    d = bars_api.vn_daily_bars("FPT", "1d", 86_400_000, cfg, None, None, 100)
+    assert [b[4] for b in d["bars"]] == [11, 12, 13]
+    w = bars_api.vn_daily_bars("FPT", "1w", 7 * 86_400_000, cfg, None, None, 100)["bars"]
+    assert len(w) == 1 and w[0][1:] == [10, 14, 9, 13, 600, 0.0, 0.0]
+    m = bars_api.vn_daily_bars("FPT", "1M", 30 * 86_400_000, cfg, None, None, 100)["bars"]
+    assert len(m) == 1 and m[0][2] == 14
