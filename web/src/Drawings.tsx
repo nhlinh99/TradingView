@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactElement } from 'react'
+import { createPortal } from 'react-dom'
 import type { IChartApi, ISeriesApi } from 'lightweight-charts'
 import { clearDrawings, createDrawing, deleteDrawing, fetchDrawings, updateDrawing } from './api'
 import { indexToTime, tfMs, timeToIndex, type Bar, type DrawKind, type DrawPoint, type Drawing } from './logic'
@@ -25,6 +26,8 @@ const ICONS: Record<string, ReactElement> = {
   redo: <path d="M15 5l4 4-4 4M19 9h-9a5 5 0 0 0 0 10h4" />,
   lock: <><rect x="5" y="10" width="12" height="9" rx="1.5" /><path d="M8 10V7a3 3 0 0 1 6 0v3" /></>,
   unlock: <><rect x="5" y="10" width="12" height="9" rx="1.5" /><path d="M8 10V7a3 3 0 0 1 5.5-1.6" /></>,
+  pencil: <path d="M4 18l1-4L15 4l3 3L8 17zM13 6l3 3" />,
+  chevron: <path d="M13 5l-6 6 6 6" />,
   clone: <><rect x="7" y="7" width="11" height="11" rx="1.5" /><path d="M4 14V5a1 1 0 0 1 1-1h9" /></>,
 }
 function Icon({ node }: { node: ReactElement }) {
@@ -47,6 +50,8 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
   const [hideAll, setHideAll] = useState(false)
   const [magnet, setMagnet] = useState(false)
   const [openGrp, setOpenGrp] = useState<Group | null>(null)
+  const [flyPos, setFlyPos] = useState<{ left: number; top: number } | null>(null)
+  const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem('drawToolsCollapsed') === '1' } catch { return false } })
   const [lastTool, setLastTool] = useState<Record<Group, DrawKind>>({ line: 'trend', fib: 'fib', pitchfork: 'pitchfork', gann: 'gannfan', position: 'long', measure: 'ruler', shape: 'rect', text: 'text' })
   const pending = useRef<DrawPoint[]>([])
   const brush = useRef<DrawPoint[] | null>(null)
@@ -404,7 +409,7 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
   // đóng menu nhóm công cụ khi bấm ra ngoài
   useEffect(() => {
     if (!openGrp) return
-    const close = (e: PointerEvent) => { if (!(e.target as HTMLElement | null)?.closest?.('.draw-grp')) setOpenGrp(null) }
+    const close = (e: PointerEvent) => { if (!(e.target as HTMLElement | null)?.closest?.('.draw-grp, .draw-fly')) setOpenGrp(null) }
     window.addEventListener('pointerdown', close)
     return () => window.removeEventListener('pointerdown', close)
   }, [openGrp])
@@ -494,6 +499,17 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
     try { await clearDrawings(symbol); setItems([]); setSelected(null) } catch (x) { setErr(String(x)) }
   }
 
+  /** Mở menu nhóm: vẽ qua portal ở body (không bị ô biểu đồ khác đè) và đặt cạnh nút, trong khung nhìn. */
+  const openFly = (gr: Group, btn: HTMLElement) => {
+    if (openGrp === gr) { setOpenGrp(null); return }
+    const r = btn.getBoundingClientRect()
+    const nItems = KINDS.filter((k) => REGISTRY[k].group === gr).length
+    const h = Math.min(nItems * 31 + 40, window.innerHeight - 16)
+    setFlyPos({ left: Math.min(r.right + 6, window.innerWidth - 206), top: Math.max(8, Math.min(r.top, window.innerHeight - h - 8)) })
+    setOpenGrp(gr)
+  }
+  const toggleCollapsed = () => setCollapsed((v) => { const n = !v; try { localStorage.setItem('drawToolsCollapsed', n ? '1' : '0') } catch { /* bỏ qua */ } return n })
+
   const pick = (k: DrawKind) => {
     setTool(k); setOpenGrp(null)
     setLastTool((m) => ({ ...m, [REGISTRY[k].group]: k }))
@@ -529,7 +545,11 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
           <button className="del" title="Xoá hình này (Delete)" aria-label="Xoá hình đang chọn" disabled={sel.payload.locked} onClick={() => void remove(sel.id)}><Icon node={ICONS.clear} /></button>
         </div>
       )}
-      <div className="draw-tools" role="toolbar" aria-label="Công cụ vẽ">
+      <div className={collapsed ? 'draw-tools collapsed' : 'draw-tools'} role="toolbar" aria-label="Công cụ vẽ">
+        <button title={collapsed ? 'Mở thanh công cụ vẽ' : 'Thu gọn thanh công cụ vẽ'} aria-label={collapsed ? 'Mở thanh công cụ vẽ' : 'Thu gọn thanh công cụ vẽ'} aria-expanded={!collapsed} className="fold" onClick={toggleCollapsed}>
+          <Icon node={collapsed ? ICONS.pencil : ICONS.chevron} />
+        </button>
+        {!collapsed && <>
         <button title="Trỏ: di chuyển biểu đồ, bấm để chọn hình" aria-label="Trỏ" aria-pressed={tool === 'cursor'} className={tool === 'cursor' ? 'on' : ''} onClick={() => setTool('cursor')}><Icon node={ICONS.cursor} /></button>
         {GROUP_ORDER.map((gr) => {
           const kinds = KINDS.filter((k) => REGISTRY[k].group === gr)
@@ -539,17 +559,7 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
               <button title={`${REGISTRY[cur].title}`} aria-label={REGISTRY[cur].label} aria-pressed={toolGroup === gr} className={toolGroup === gr ? 'on' : ''} onClick={() => pick(cur)}>
                 <Icon node={REGISTRY[toolGroup === gr ? (tool as DrawKind) : cur].icon} />
               </button>
-              {kinds.length > 1 && <button className="caret" title={`Thêm công cụ ${GROUP_LABEL[gr].toLowerCase()}`} aria-label={`Mở nhóm ${GROUP_LABEL[gr]}`} aria-expanded={openGrp === gr} onClick={() => setOpenGrp(openGrp === gr ? null : gr)}>▾</button>}
-              {openGrp === gr && (
-                <div className="draw-fly" role="menu" aria-label={GROUP_LABEL[gr]}>
-                  <div className="fly-title">{GROUP_LABEL[gr]}</div>
-                  {kinds.map((k) => (
-                    <button key={k} role="menuitem" title={REGISTRY[k].title} className={tool === k ? 'on' : ''} onClick={() => pick(k)}>
-                      <Icon node={REGISTRY[k].icon} /><span>{REGISTRY[k].label}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
+              {kinds.length > 1 && <button className="caret" title={`Thêm công cụ ${GROUP_LABEL[gr].toLowerCase()}`} aria-label={`Mở nhóm ${GROUP_LABEL[gr]}`} aria-expanded={openGrp === gr} onClick={(e) => openFly(gr, e.currentTarget.parentElement ?? e.currentTarget)}>▾</button>}
             </div>
           )
         })}
@@ -560,8 +570,20 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
         <button title="Hoàn tác (Ctrl+Z)" aria-label="Hoàn tác" disabled={histLen.undo === 0} onClick={undo}><Icon node={ICONS.undo} /></button>
         <button title="Làm lại (Ctrl+Y)" aria-label="Làm lại" disabled={histLen.redo === 0} onClick={redo}><Icon node={ICONS.redo} /></button>
         <button title="Xoá mọi hình của symbol này" aria-label="Xoá mọi hình" onClick={() => void clearAll()} disabled={items.length === 0}><Icon node={ICONS.clear} /></button>
+        </>}
         {err && <span className="bad" role="alert" title={err}>{err.length > 40 ? `${err.slice(0, 40)}…` : err}</span>}
       </div>
+      {openGrp && flyPos && !collapsed && createPortal(
+        <div className="draw-fly" role="menu" aria-label={GROUP_LABEL[openGrp]} style={{ left: flyPos.left, top: flyPos.top, maxHeight: window.innerHeight - flyPos.top - 8 }}>
+          <div className="fly-title">{GROUP_LABEL[openGrp]}</div>
+          {KINDS.filter((k) => REGISTRY[k].group === openGrp).map((k) => (
+            <button key={k} role="menuitem" title={REGISTRY[k].title} className={tool === k ? 'on' : ''} onClick={() => pick(k)}>
+              <Icon node={REGISTRY[k].icon} /><span>{REGISTRY[k].label}</span>
+            </button>
+          ))}
+        </div>,
+        document.body,
+      )}
     </>
   )
 }

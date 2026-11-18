@@ -535,9 +535,12 @@ kbd { font: 11px ui-monospace, Consolas, monospace; border: 1px solid var(--line
 /* nhóm công cụ: bấm biểu tượng để chọn công cụ vừa dùng, bấm mũi tên để mở danh sách */
 .draw-grp { position: relative; }
 .draw-tools .draw-grp .caret { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; padding: 0; font-size: 8px; line-height: 1; display: grid; place-items: center; background: transparent; color: var(--muted, currentColor); }
-.draw-fly { position: absolute; left: calc(100% + 8px); top: 0; z-index: 8; min-width: 190px; display: flex; flex-direction: column; gap: 1px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); box-shadow: var(--shadow); }
+.draw-fly { position: fixed; z-index: 1000; overflow-y: auto; min-width: 190px; display: flex; flex-direction: column; gap: 1px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); box-shadow: var(--shadow); }
 .draw-fly .fly-title { padding: 3px 8px 5px; font-size: 11px; font-weight: 600; color: var(--muted, currentColor); opacity: .8; }
-.draw-tools .draw-fly button { width: 100%; height: 30px; padding: 0 8px; display: flex; align-items: center; gap: 8px; justify-content: flex-start; font-size: 12px; white-space: nowrap; }
-.draw-tools .draw-fly button span { flex: 1; text-align: left; }
-.cells-2 .draw-fly, .cells-4 .draw-fly { left: 0; top: calc(100% + 6px); }
-@media (max-width: 700px) { .draw-fly { left: 0; top: calc(100% + 6px); } }
+.draw-fly button { border: 0; background: transparent; color: var(--ink); border-radius: 7px; cursor: pointer; }
+.draw-fly button:hover { background: var(--hover); }
+.draw-fly button.on { background: var(--accent); color: #fff; }
+.draw-fly button { width: 100%; height: 30px; padding: 0 8px; display: flex; align-items: center; gap: 8px; justify-content: flex-start; font-size: 12px; white-space: nowrap; }
+.draw-fly button span { flex: 1; text-align: left; }
+.draw-tools .fold { color: var(--muted, currentColor); }
+.draw-tools.collapsed { padding: 2px; }
