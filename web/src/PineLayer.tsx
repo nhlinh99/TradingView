@@ -106,8 +106,11 @@ export default function PineLayer({ result, chart, candles, version }: Props) {
       markers.sort((a, b) => (a.time as number) - (b.time as number))
       markerSets.push(createSeriesMarkers(main, markers))
     }
+    // hline thuộc thang giá của chính chỉ báo: indicator không overlay nằm ở pane riêng nên vạch gắn vào đường đầu tiên của pane đó,
+    // không gắn vào nến (trước đây vạch 30/50/70 của RSI rơi vào thang giá của nến). Vạch trên pane riêng tự mất khi gỡ series.
+    const hlineHost: ISeriesApi<'Line' | 'Histogram' | 'Candlestick'> | undefined = overlay ? main : series[0]
     for (const h of result.hlines) {
-      if (h.price !== null && !h.hidden) lines.push(main.createPriceLine({ price: h.price, color: hex(h.color, '#787B86'), lineWidth: Math.max(1, Math.min(4, h.width ?? 1)) as 1 | 2 | 3 | 4, lineStyle: dashOf(h.dash, LineStyle.Dashed), axisLabelVisible: true, title: h.title }))
+      if (hlineHost && h.price !== null && !h.hidden) { const pl = hlineHost.createPriceLine({ price: h.price, color: hex(h.color, '#787B86'), lineWidth: Math.max(1, Math.min(4, h.width ?? 1)) as 1 | 2 | 3 | 4, lineStyle: dashOf(h.dash, LineStyle.Dashed), axisLabelVisible: true, title: h.title }); if (overlay) lines.push(pl) }
     }
     if (st && st.equity.length > 0) {
       const eq = c.addSeries(LineSeries, { color: '#f0b90b', lineWidth: 2, priceLineVisible: false, title: 'Equity' }, c.panes().length)

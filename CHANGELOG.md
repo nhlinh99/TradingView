@@ -32,6 +32,7 @@ Xem `TODO.md` cho việc còn mở và `docs/plan/README.md` cho kế hoạch t�
 ### Sửa
 - VN100 khung ngày, tuần, tháng thiếu dữ liệu (FPT thiếu 11/2025 đến 5/2026): nguồn không có nến phút cho giai đoạn đó, nên khung ngày trở lên lấy thẳng nến ngày.
 - Volume Profile by Range lỗi khi chọn 1 Hour, 3 Month, 6 Month: engine Pine thiếu dạng gọi hàm của `hour(time)`, `month(time)`, `dayofmonth(time)` và các hàm cùng loại (có tham số múi giờ).
+- Đường ngang (`hline`) của chỉ báo ở pane riêng (ví dụ 30, 50, 70 của RSI) bị vẽ lên thang giá của nến: giờ gắn vào thang của chính chỉ báo.
 - Menu nhóm công cụ vẽ bị ô biểu đồ khác đè ở layout nhiều ô: vẽ qua portal ở tầng trên cùng.
 - Nhãn giá không còn chồng lên Long/Short: chữ chốt lời, cắt lỗ và thẻ R:R nằm bên phải hộp, ghi chú và nhãn giá luôn vẽ trên cùng.
 
