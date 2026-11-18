@@ -581,12 +581,15 @@ kbd { font: 11px ui-monospace, Consolas, monospace; border: 1px solid var(--line
 /* bảng độ sâu (DOM): cột riêng bên phải trục giá, không đè lên biểu đồ */
 .chart-wrap { display: flex; }
 .chart-main { position: relative; flex: 1; min-width: 0; min-height: 0; }
-.dom-panel { position: relative; flex: none; width: 150px; border-left: 1px solid var(--line); background: var(--bg); overflow: hidden; }
+.dom-panel { position: relative; flex: none; width: 212px; border-left: 1px solid var(--line); background: var(--bg); overflow: hidden; }
 .dom-canvas { position: absolute; inset: 0; pointer-events: none; }
 .dom-head { position: absolute; left: 0; right: 0; top: 0; z-index: 2; display: flex; justify-content: space-between; align-items: baseline; gap: 6px; padding: 3px 6px; font-size: 10px; color: var(--ink); background: var(--veil); border-bottom: 1px solid var(--line); pointer-events: none; }
 .dom-head span { opacity: .7; }
 .dom-status { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; padding: 2px 6px; font-size: 10px; color: var(--ink); background: var(--veil); border-top: 1px solid var(--line); pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dom-status.warn { color: var(--bad); }
-@media (max-width: 700px) { .dom-panel { width: 112px; } }
-.cells-2 .dom-panel, .cells-4 .dom-panel { width: 112px; }
+@media (max-width: 700px) { .dom-panel { width: 150px; } }
+.cells-2 .dom-panel, .cells-4 .dom-panel { width: 150px; }
+.dom-cols { position: absolute; left: 0; right: 0; top: 18px; z-index: 2; display: flex; font-size: 9px; letter-spacing: .02em; text-transform: uppercase; color: var(--ink); opacity: .65; pointer-events: none; }
+.dom-cols span { padding: 1px 6px; }
+.dom-cols span:first-child { flex: 0 0 55%; }
 

@@ -48,6 +48,7 @@ T = TypeVar("T")
 _cache_lock = threading.Lock()
 _cache: "OrderedDict[tuple, tuple[float, Future]]" = OrderedDict()
 CACHE_MAX = int(os.environ.get("HEAVY_CACHE_ENTRIES", "24"))
+PROFILE_TTL = float(os.environ.get("HEAVY_PROFILE_TTL_S", "5"))   # volume profile: ngắn hơn vì cột Khớp của DOM cần số liệu gần trực tiếp
 CACHE_TTL = float(os.environ.get("HEAVY_CACHE_TTL_S", "20"))   # giây nhớ kết quả heatmap, bong bóng, iceberg; 0 = chỉ gộp các yêu cầu đang chạy
 
 

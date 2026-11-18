@@ -148,6 +148,14 @@ export function fetchDepthBands(symbol: string, from: number, to: number, tbucke
   return heavyJson<DepthBandsResponse>(`/api/depthbands?${q}`, { signal })
 }
 
+/** Khối lượng khớp theo mức giá trong khoảng đang xem: [giá, mua chủ động, bán chủ động]. XAUUSD dùng lệnh khớp XAUUSDT, giá dịch theo chênh lệch. */
+export async function fetchTraded(symbol: string, from: number, to: number, mult: number, signal?: AbortSignal): Promise<ProfileResponse> {
+  const src = FLOW_SOURCE[symbol] ?? symbol
+  const q = new URLSearchParams({ symbol: src, from: String(from), to: String(to), mult: String(mult) })
+  const [res, off] = await Promise.all([heavyJson<ProfileResponse>(`/api/profile?${q}`, { signal }), src === symbol ? Promise.resolve(0) : flowBasis(symbol, src)])
+  return { ...res, symbol, rows: res.rows.map(([p, b, s]) => [Math.round((p + off) * 1e6) / 1e6, b, s]) }
+}
+
 export type DomResponse = {
   symbol: string; ts: number; age_ms: number; source: 'live' | 'book'; bucket: number; mult: number
   best_bid: number | null; best_ask: number | null; bids: number[][]; asks: number[][]

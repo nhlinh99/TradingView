@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react'
 import type { IChartApi, ISeriesApi } from 'lightweight-charts'
-import { fetchDom, type DomResponse } from './api'
-import type { Bar } from './logic'
+import { fetchDom, fetchTraded, type DomResponse } from './api'
+import { tfMs, type Bar } from './logic'
 
 type Props = {
   on: boolean
   dark: boolean
   symbol: string
+  tf: string
   chart: MutableRefObject<IChartApi | null>
   candles: MutableRefObject<ISeriesApi<'Candlestick'> | null>
   bars: MutableRefObject<Bar[]>
@@ -14,17 +15,18 @@ type Props = {
 }
 
 const POLL_MS = 2000
+const TRADED_MS = 6000    // cột Khớp làm mới chậm hơn: truy vấn lệnh khớp nặng hơn snapshot sổ lệnh
+const DEPTH_FRAC = 0.55   // phần bề rộng của cột Chờ (độ sâu); phần còn lại là cột Khớp
 const ROW_PX = 13         // chiều cao một dòng giá: đủ để mọi dòng đều ghi được số
 
 const fmtSize = (q: number) => (q >= 1000 ? `${(q / 1000).toFixed(1)}k` : q >= 100 ? q.toFixed(0) : q >= 10 ? q.toFixed(1) : q >= 1 ? q.toFixed(2) : q.toFixed(3))
-const fmtPrice = (p: number, bucket: number) => p.toLocaleString('en-US', { minimumFractionDigits: bucket < 1 ? 2 : 0, maximumFractionDigits: bucket < 1 ? 2 : 1 })
 
 /**
  * Bảng độ sâu (DOM) kiểu Bookmap: một cột riêng bên phải trục giá, mỗi dòng ứng với một mức giá của biểu đồ (cùng tung độ).
  * Từ trên xuống: ask (đỏ) rồi bid (xanh); thanh bắt đầu từ mép trái cột và dài theo khối lượng chờ, số ghi ở mọi dòng;
  * dòng bid tốt nhất và ask tốt nhất được tô nền, giá hiện tại có vạch ngang qua cột.
  */
-export default function Dom({ on, dark, symbol, chart, candles, bars, version }: Props) {
+export default function Dom({ on, dark, symbol, tf, chart, candles, bars, version }: Props) {
   const panel = useRef<HTMLDivElement>(null)
   const cv = useRef<HTMLCanvasElement>(null)
   const [info, setInfo] = useState<{ text: string; warn: boolean; group: string } | null>(null)
@@ -39,6 +41,12 @@ export default function Dom({ on, dark, symbol, chart, candles, bars, version }:
     let timer = 0
     let ctrl: AbortController | null = null
     let dom: DomResponse | null = null
+    let traded: { price: number; buy: number; sell: number }[] = []
+    let tradedBucket = 0
+    let tradedBase = 0
+    let tradedCtrl: AbortController | null = null
+    let tradedTimer = 0
+    let tradedSig = 0
     let baseBucket = 0
     let sig = ''
     let failed = false
@@ -84,6 +92,38 @@ export default function Dom({ on, dark, symbol, chart, candles, bars, version }:
       }
     }
 
+    /** Khối lượng khớp theo giá trong khoảng đang xem (cùng khoảng với heatmap), gom theo bội của bucket footprint gần với độ gom của DOM. */
+    const pollTraded = async () => {
+      if (stopped) return
+      try {
+        const c = chart.current
+        const list = bars.current
+        const r = c?.timeScale().getVisibleLogicalRange()
+        if (c && r && list.length > 0 && dom) {
+          const i0 = Math.max(0, Math.floor(r.from))
+          const i1 = Math.min(list.length - 1, Math.ceil(r.to))
+          if (i1 >= i0) {
+            const from = list[i0].time * 1000
+            const to = list[i1].time * 1000 + tfMs(tf)
+            const mult = tradedBase > 0 ? Math.max(1, Math.round(dom.bucket / tradedBase)) : 1
+            tradedCtrl?.abort()
+            tradedCtrl = new AbortController()
+            const j = await fetchTraded(symbol, from, to, mult, tradedCtrl.signal)
+            if (stopped) return
+            traded = j.rows.map(([price, buy, sell]) => ({ price, buy, sell }))
+            tradedBucket = j.bucket
+            tradedBase = j.bucket / mult
+            tradedSig++
+            sig = ''
+          }
+        }
+      } catch (e) {
+        if ((e as Error)?.name === 'AbortError' || stopped) return
+      } finally {
+        if (!stopped) tradedTimer = window.setTimeout(() => void pollTraded(), TRADED_MS)
+      }
+    }
+
     const draw = () => {
       if (stopped) return
       raf = requestAnimationFrame(draw)
@@ -100,7 +140,7 @@ export default function Dom({ on, dark, symbol, chart, candles, bars, version }:
         canvas.style.width = `${w}px`; canvas.style.height = `${h}px`
         sig = ''
       }
-      const newSig = `${s.priceToCoordinate(0)}|${s.priceToCoordinate(1000)}|${bars.current.length}|${dark}|${dom ? dom.ts : 0}|${w}|${h}`
+      const newSig = `${s.priceToCoordinate(0)}|${s.priceToCoordinate(1000)}|${bars.current.length}|${dark}|${dom ? dom.ts : 0}|${w}|${h}|${tradedSig}`
       if (newSig === sig) return
       sig = newSig
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -109,7 +149,8 @@ export default function Dom({ on, dark, symbol, chart, candles, bars, version }:
       const rows = [...dom.asks.map(([p, q]) => ({ p, q, side: 'ask' as const })), ...dom.bids.map(([p, q]) => ({ p, q, side: 'bid' as const }))]
       const sizes = rows.map((r) => r.q).sort((a, b) => a - b)
       const cap = Math.max(1e-9, sizes[Math.min(sizes.length - 1, Math.floor(sizes.length * 0.97))] ?? 1)   // phân vị 97: một bức tường không làm các mức khác bé tí
-      const barMax = w - 6
+      const depthW = Math.floor(w * DEPTH_FRAC)
+      const barMax = depthW - 6
       ctx.font = '10px system-ui, sans-serif'
       ctx.textBaseline = 'middle'
       ctx.textAlign = 'left'
@@ -127,7 +168,7 @@ export default function Dom({ on, dark, symbol, chart, candles, bars, version }:
         // nền dòng: sọc xen kẽ rất nhẹ cho dễ đọc, dòng tốt nhất tô đậm hơn
         if (isBest) {
           ctx.fillStyle = r.side === 'bid' ? 'rgba(0,200,140,0.22)' : 'rgba(255,82,82,0.22)'
-          ctx.fillRect(0, top, w, hh)
+          ctx.fillRect(0, top, depthW, hh)
         }
         const len = Math.min(1, r.q / cap) * barMax
         ctx.fillStyle = r.side === 'bid' ? 'rgba(0,200,140,0.65)' : 'rgba(255,82,82,0.65)'
@@ -143,6 +184,41 @@ export default function Dom({ on, dark, symbol, chart, candles, bars, version }:
           ctx.font = '10px system-ui, sans-serif'
         }
       }
+      // cột Khớp: khối lượng đã khớp ở từng mức giá trong khoảng đang xem; xanh là mua chủ động, đỏ là bán chủ động, viền sáng là mức khớp nhiều nhất (POC)
+      ctx.strokeStyle = dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)'
+      ctx.lineWidth = 1
+      ctx.beginPath(); ctx.moveTo(depthW + 0.5, 0); ctx.lineTo(depthW + 0.5, h); ctx.stroke()
+      if (traded.length > 0 && tradedBucket > 0) {
+        const tot = traded.map((t) => t.buy + t.sell).sort((a, b) => a - b)
+        const tcap = Math.max(1e-9, tot[Math.min(tot.length - 1, Math.floor(tot.length * 0.97))] ?? 1)
+        const poc = traded.reduce((m, t) => (t.buy + t.sell > m.buy + m.sell ? t : m), traded[0])
+        const x0 = depthW + 3
+        const tw = w - x0 - 3
+        for (const t of traded) {
+          const yt = s.priceToCoordinate(t.price + tradedBucket)
+          const yb = s.priceToCoordinate(t.price)
+          if (yt === null || yb === null) continue
+          const top = Math.min(yt, yb)
+          const hh = Math.max(1, Math.abs(yb - yt))
+          if (top > h || top + hh < 0) continue
+          const total = t.buy + t.sell
+          const len = Math.min(1, total / tcap) * tw
+          const lenBuy = total > 0 ? (len * t.buy) / total : 0
+          ctx.fillStyle = 'rgba(0,200,140,0.7)'
+          ctx.fillRect(x0, top + 1, lenBuy, Math.max(1, hh - 2))
+          ctx.fillStyle = 'rgba(255,82,82,0.7)'
+          ctx.fillRect(x0 + lenBuy, top + 1, len - lenBuy, Math.max(1, hh - 2))
+          if (t === poc) { ctx.strokeStyle = dark ? '#ffd54f' : '#b8860b'; ctx.lineWidth = 1.5; ctx.strokeRect(x0 + 0.5, top + 1.5, Math.max(1, len) , Math.max(1, hh - 3)) }
+          if (hh >= 9) {
+            const txt = fmtSize(total)
+            ctx.lineWidth = 3; ctx.lineJoin = 'round'
+            ctx.strokeStyle = dark ? 'rgba(19,23,34,0.85)' : 'rgba(255,255,255,0.85)'
+            ctx.strokeText(txt, x0 + 2, top + hh / 2)
+            ctx.fillStyle = dark ? '#d8dce6' : '#2b3340'
+            ctx.fillText(txt, x0 + 2, top + hh / 2)
+          }
+        }
+      }
       // giá hiện tại (giữa bid và ask tốt nhất): vạch ngang qua cột, kèm spread
       if (dom.best_bid !== null && dom.best_ask !== null) {
         const y = s.priceToCoordinate((dom.best_bid + dom.best_ask) / 2)
@@ -151,7 +227,7 @@ export default function Dom({ on, dark, symbol, chart, candles, bars, version }:
           ctx.lineWidth = 1
           ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke()
           const sp = dom.best_ask - dom.best_bid
-          const txt = `${fmtPrice((dom.best_bid + dom.best_ask) / 2, dom.bucket)}  Δ ${sp.toLocaleString('en-US', { maximumFractionDigits: 4 })}`
+          const txt = `Δ ${sp.toLocaleString('en-US', { maximumFractionDigits: 4 })}`   // chỉ ghi spread: giá đã có trên trục, và để không che số ở cột Khớp
           ctx.font = 'bold 10px system-ui, sans-serif'
           const tw = ctx.measureText(txt).width + 8
           ctx.fillStyle = dark ? '#e8ecf3' : '#1b2430'
@@ -166,21 +242,25 @@ export default function Dom({ on, dark, symbol, chart, candles, bars, version }:
     }
 
     void poll()
+    tradedTimer = window.setTimeout(() => void pollTraded(), 1200)   // chờ có DOM đầu tiên để biết độ gom
     raf = requestAnimationFrame(draw)
     return () => {
       stopped = true
       window.clearTimeout(timer)
+      window.clearTimeout(tradedTimer)
       cancelAnimationFrame(raf)
       ctrl?.abort()
+      tradedCtrl?.abort()
       setInfo(null)
       ctx.clearRect(0, 0, canvas.width, canvas.height)
     }
-  }, [on, dark, symbol, chart, candles, bars, version])
+  }, [on, dark, symbol, tf, chart, candles, bars, version])
 
   if (!on) return null
   return (
     <div ref={panel} className="dom-panel" aria-label="Bảng độ sâu thị trường">
       <canvas ref={cv} className="dom-canvas" aria-hidden="true" />
+      <div className="dom-cols"><span>Chờ</span><span>Khớp</span></div>
       <div className="dom-head"><b>DOM</b>{info?.group && <span>{info.group}</span>}</div>
       {info && <div className={`dom-status${info.warn ? ' warn' : ''}`} role="status">{info.text}</div>}
     </div>

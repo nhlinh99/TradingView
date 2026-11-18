@@ -133,5 +133,9 @@ def profile_endpoint(
     to: int = Query(...),
     mult: int = Query(1, ge=1, le=100000),
 ) -> dict:
-    with limits.heavy():
-        return get_profile(symbol.upper(), from_, to, mult)
+    sym = symbol.upper()
+
+    def run() -> dict:
+        with limits.heavy():
+            return get_profile(sym, from_, to, mult)
+    return limits.coalesce(("profile", sym, from_, to, mult), limits.PROFILE_TTL, run)
