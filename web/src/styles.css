@@ -578,3 +578,8 @@ kbd { font: 11px ui-monospace, Consolas, monospace; border: 1px solid var(--line
 .zone-legend b.f { color: #ffb300; }
 .zone-legend b.a { color: #12d6e0; }
 
+/* bảng độ sâu (DOM) bên phải */
+.dom-canvas { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.dom-status { position: absolute; right: 74px; bottom: 36px; z-index: 6; padding: 2px 8px; border-radius: 6px; font-size: 10px; background: var(--veil); border: 1px solid var(--line); color: var(--ink); pointer-events: none; }
+.dom-status.warn { color: var(--bad); border-color: var(--bad); }
+

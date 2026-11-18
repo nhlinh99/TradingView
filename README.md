@@ -60,6 +60,8 @@ Kiểu màu **Mua/Bán**: lệnh mua chờ màu xanh lá, lệnh bán chờ màu
 
 ![Heatmap kiểu Bookmap](docs/screenshots/heatmap-bookmap.png)
 
+**Bảng độ sâu (DOM)** bên phải, sát trục giá: cột thanh khoản đang chờ ở từng mức giá, bid xanh nằm dưới giá, ask đỏ nằm trên giá, thanh càng dài thì khối lượng chờ càng lớn, ghi số ở các mức lớn nhất, kèm vạch bid/ask tốt nhất và spread. Lấy trực tiếp từ snapshot sổ lệnh của Binance (1000 mức mỗi phía, cập nhật mỗi 2 giây, server nhớ 1,5 giây để nhiều ô dùng chung một yêu cầu); nếu Binance lỗi thì dùng mẫu mới nhất đã ghi và ghi rõ độ trễ. Độ rộng mỗi dòng tự co giãn theo mức thu phóng của trục giá. XAUUSD dùng sổ lệnh XAUUSDT, dịch giá theo chênh lệch.
+
 **Vùng thanh khoản (rút lệnh)**: mỗi lệnh chờ lớn là một thanh ngang kéo dài từ lúc xuất hiện đến lúc biến mất, đúng mức giá của nó. Cuối thanh có dấu hiệu: **✕** là bị rút lệnh, **▶** là bị khớp (có lệnh khớp ở đúng mức giá, phía chủ động đối diện), thanh mờ dần về bên phải là còn hiệu lực. Rê chuột vào thanh để xem phía, khối lượng lớn nhất, giờ bắt đầu và kết thúc, thời gian tồn tại và lý do kết thúc. Thu nhỏ biểu đồ thì chỉ giữ các vùng đủ dài để nhìn thấy (khoảng 6px). Ngưỡng cỡ lệnh chỉnh trong bảng Orderflow.
 
 Cách đọc heatmap cho dễ: thanh khoản thấp mờ dần vào nền (không sáng đều), nến rỗng màu xám khi bật heatmap để không lẫn với dải nhiệt, có chú giải thang màu, rê chuột vào heatmap thì hiện khối lượng bid và ask của ô đang trỏ. Đoạn chưa có sổ lệnh chi tiết (xem mục thu thập dữ liệu) được vẽ bằng độ sâu thô ±5% từ kho `bookDepth` của Binance, kèm ghi chú độ phủ. XAUUSD (vàng spot) không có sổ lệnh nên lấy từ XAUUSDT và dịch giá theo chênh lệch hiện tại, có ghi chú.

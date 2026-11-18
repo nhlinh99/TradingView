@@ -9,12 +9,12 @@ type Props = {
 }
 
 const OFF: Partial<Flow> = {
-  footprint: false, heatmap: false, zones: false, bubbles: false, iceberg: false, vpvr: false, delta: false, cvd: 'off', gex: false,
+  footprint: false, heatmap: false, dom: false, zones: false, bubbles: false, iceberg: false, vpvr: false, delta: false, cvd: 'off', gex: false,
 }
 const PRESETS: { id: string; label: string; hint: string; patch: Partial<Flow> }[] = [
   { id: 'clean', label: 'Sạch', hint: 'Chỉ nến và volume', patch: OFF },
   { id: 'footprint', label: 'Footprint', hint: 'Ô bid x ask, delta, CVD', patch: { ...OFF, footprint: true, delta: true, cvd: 'day', fpMode: 'bidask' } },
-  { id: 'bookmap', label: 'Bookmap', hint: 'Heatmap, chấm volume, iceberg', patch: { ...OFF, heatmap: true, zones: true, bubbles: true, iceberg: true, heatMode: 'bookmap', bestLines: true, strip: true, heatLo: 15, heatHi: 90 } },
+  { id: 'bookmap', label: 'Bookmap', hint: 'Heatmap, chấm volume, iceberg', patch: { ...OFF, heatmap: true, dom: true, zones: true, bubbles: true, iceberg: true, heatMode: 'bookmap', bestLines: true, strip: true, heatLo: 15, heatHi: 90 } },
   { id: 'profile', label: 'Profile', hint: 'VPVR và delta', patch: { ...OFF, vpvr: true, delta: true } },
 ]
 
@@ -63,7 +63,7 @@ export default function FlowMenu({ flow, setF, symbol, isVn }: Props) {
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
   }, [open])
 
-  const active = [flow.footprint && 'Footprint', flow.heatmap && 'Heatmap', flow.zones && 'Vùng', flow.bubbles && 'Chấm', flow.iceberg && 'Iceberg', flow.vpvr && 'VPVR', flow.delta && 'Delta', flow.cvd !== 'off' && 'CVD', flow.gex && 'GEX'].filter(Boolean) as string[]
+  const active = [flow.footprint && 'Footprint', flow.heatmap && 'Heatmap', flow.zones && 'Vùng', flow.dom && 'DOM', flow.bubbles && 'Chấm', flow.iceberg && 'Iceberg', flow.vpvr && 'VPVR', flow.delta && 'Delta', flow.cvd !== 'off' && 'CVD', flow.gex && 'GEX'].filter(Boolean) as string[]
   const noFlow = isVn ? 'Cổ phiếu VN không có dữ liệu tick và sổ lệnh sâu' : undefined
   const preset = PRESETS.find((p) => Object.entries(p.patch).every(([k, v]) => (flow as Record<string, unknown>)[k] === v))
 
@@ -100,6 +100,7 @@ export default function FlowMenu({ flow, setF, symbol, isVn }: Props) {
                 <Switch checked={flow.strip} onChange={(v) => setF({ strip: v })} label="Dải volume mua/bán" />
               </div>
             )}
+            <Switch checked={flow.dom} onChange={(v) => setF({ dom: v })} label="Bảng độ sâu (DOM)" hint="Cột thanh khoản chờ ở từng mức giá, sát trục giá bên phải: bid xanh, ask đỏ, ghi số ở các mức lớn nhất, cập nhật mỗi 2 giây." disabled={isVn} />
             <Switch checked={flow.zones} onChange={(v) => setF({ zones: v })} label="Vùng thanh khoản (rút lệnh)" hint="Mỗi lệnh chờ lớn là một thanh kéo dài từ lúc xuất hiện đến lúc biến mất. Dấu ✕ là bị rút lệnh, ▶ là bị khớp, thanh mờ dần là còn hiệu lực." disabled={isVn} />
             {flow.zones && !isVn && (
               <div className="opt">

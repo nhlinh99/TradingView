@@ -148,6 +148,23 @@ export function fetchDepthBands(symbol: string, from: number, to: number, tbucke
   return heavyJson<DepthBandsResponse>(`/api/depthbands?${q}`, { signal })
 }
 
+export type DomResponse = {
+  symbol: string; ts: number; age_ms: number; source: 'live' | 'book'; bucket: number; mult: number
+  best_bid: number | null; best_ask: number | null; bids: number[][]; asks: number[][]
+}
+/** Bảng độ sâu hiện tại (bid, ask theo bucket giá). XAUUSD dùng sổ lệnh XAUUSDT, giá dịch theo chênh lệch hai mã. */
+export async function fetchDom(symbol: string, mult: number, signal?: AbortSignal): Promise<DomResponse> {
+  const src = FLOW_SOURCE[symbol] ?? symbol
+  const q = new URLSearchParams({ symbol: src, mult: String(mult) })
+  const [res, off] = await Promise.all([json<Omit<DomResponse, 'mult'>>(`/api/dom?${q}`, { signal }), src === symbol ? Promise.resolve(0) : flowBasis(symbol, src)])
+  const shift = (rows: number[][]) => rows.map(([p, v]) => [Math.round((p + off) * 1e6) / 1e6, v])
+  return {
+    ...res, symbol, mult,
+    best_bid: res.best_bid === null ? null : res.best_bid + off, best_ask: res.best_ask === null ? null : res.best_ask + off,
+    bids: shift(res.bids), asks: shift(res.asks),
+  }
+}
+
 export type LiqZonesResponse = { symbol: string; from: number; to: number; bucket: number; scale: number; rows: (number | string)[][] }
 /** Vùng thanh khoản kéo dài theo thời gian: [phía, giá, bắt đầu, kết thúc, lớn nhất, còn lại, trạng thái] (rút lệnh, bị khớp, còn hiệu lực). */
 export function fetchLiqZones(symbol: string, from: number, to: number, mult: number, min: number, top: number, minS: number, signal?: AbortSignal) {

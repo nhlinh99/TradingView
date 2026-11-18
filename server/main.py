@@ -9,7 +9,7 @@ from fastapi import FastAPI, Request
 
 from common import store
 from server import memguard
-from server import alerts_api, bars_api, drawings_api, footprint_api, gex_api, heatmap_api, live_hub, pine_api, watchlist_api
+from server import alerts_api, bars_api, dom_api, drawings_api, footprint_api, gex_api, heatmap_api, live_hub, pine_api, watchlist_api
 
 @asynccontextmanager
 async def _lifespan(_: FastAPI):
@@ -31,6 +31,7 @@ async def _count_requests(request: Request, call_next):
 app.include_router(bars_api.router)
 app.include_router(footprint_api.router)
 app.include_router(heatmap_api.router)
+app.include_router(dom_api.router)
 app.include_router(gex_api.router)
 app.include_router(pine_api.router)
 app.include_router(drawings_api.router)

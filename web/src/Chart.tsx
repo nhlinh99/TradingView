@@ -8,6 +8,7 @@ import Footprint from './Footprint'
 import Profile from './Profile'
 import Heatmap from './Heatmap'
 import LiqZones from './LiqZones'
+import Dom from './Dom'
 import Bubbles from './Bubbles'
 import Icebergs from './Icebergs'
 import Gex from './Gex'
@@ -32,7 +33,7 @@ const crosshairOpts = (c: string) => ({
 })
 const volColor = (b: Bar, up: string, down: string) => (b.close >= b.open ? up + '88' : down + '88')
 
-export type Flow = { delta: boolean; cvd: 'off' | 'none' | 'day'; footprint: boolean; vpvr: boolean; heatmap: boolean; zones: boolean; zoneMin: number; bubbles: boolean; gex: boolean; ratio: number; heatMode: 'intensity' | 'side' | 'bookmap'; heatLo: number; heatHi: number; bestLines: boolean; strip: boolean; dotScale: number; dotMin: number; iceberg: boolean; fpMode: 'bidask' | 'delta' | 'volume' | 'profile' }
+export type Flow = { delta: boolean; cvd: 'off' | 'none' | 'day'; footprint: boolean; vpvr: boolean; heatmap: boolean; dom: boolean; zones: boolean; zoneMin: number; bubbles: boolean; gex: boolean; ratio: number; heatMode: 'intensity' | 'side' | 'bookmap'; heatLo: number; heatHi: number; bestLines: boolean; strip: boolean; dotScale: number; dotMin: number; iceberg: boolean; fpMode: 'bidask' | 'delta' | 'volume' | 'profile' }
 type Props = { symbol: string; tf: string; tz: string; flow: Flow; pines: { id: string; result: PineResult }[]; indLegend?: ReactNode; replay: number | null; onTotal: (n: number) => void; sync?: SyncBus; cellId?: number; theme: 'light' | 'dark'; onState: (s: StreamState) => void }
 type Legend = { time: number; bar: Bar } | null
 
@@ -356,6 +357,7 @@ export default function Chart({ symbol, tf, tz, flow, pines, indLegend, replay, 
     <div className="chart-wrap">
       <Heatmap on={flow.heatmap} mode={flow.heatMode} cutLo={flow.heatLo / 100} cutHi={flow.heatHi / 100} bestLines={flow.bestLines} strip={flow.strip} dark={theme === 'dark'} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
       <div ref={box} className="chart" data-testid="chart" />
+      <Dom on={flow.dom} dark={theme === 'dark'} symbol={symbol} chart={chartRef} candles={candles} bars={bars} version={version} />
       <LiqZones on={flow.zones} minPct={flow.zoneMin} dark={theme === 'dark'} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
       <Icebergs on={flow.iceberg} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
       <Bubbles on={flow.bubbles} dotScale={flow.dotScale / 100} dotMin={flow.dotMin / 100} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
