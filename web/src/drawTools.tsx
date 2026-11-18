@@ -83,7 +83,7 @@ const inBox = (px: number, py: number, a: Pt, b: Pt, pad = 6) =>
   px >= Math.min(a.x, b.x) - pad && px <= Math.max(a.x, b.x) + pad && py >= Math.min(a.y, b.y) - pad && py <= Math.max(a.y, b.y) + pad
 
 /** Nhãn hai dòng, màu nền bg, căn giữa quanh cx, trên đỉnh y; luôn nằm trong khung. */
-function tag(e: Env, l1: string, l2: string | null, cx: number, y: number, bg: string) {
+function tag(e: Env, l1: string, l2: string | null, cx: number, y: number, bg: string, anchor: 'center' | 'left' = 'center') {
   const { ctx } = e
   ctx.save()
   ctx.setLineDash([]); ctx.shadowBlur = 0
@@ -93,7 +93,7 @@ function tag(e: Env, l1: string, l2: string | null, cx: number, y: number, bg: s
   const w2 = l2 ? ctx.measureText(l2).width : 0
   const tw = Math.max(w1, w2) + 16
   const th = l2 ? 38 : 24
-  const bx = Math.min(Math.max(cx - tw / 2, 2), Math.max(2, e.plotW - tw - 2))
+  const bx = Math.min(Math.max(anchor === 'left' ? cx : cx - tw / 2, 2), Math.max(2, e.plotW - tw - 2))
   const by = Math.min(Math.max(y, 2), Math.max(2, e.h - th - 2))
   ctx.globalAlpha = 0.95; ctx.fillStyle = bg; ctx.fillRect(bx, by, tw, th); ctx.globalAlpha = 1
   ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
@@ -226,10 +226,11 @@ function positionTool(isLong: boolean): ToolDef {
         ctx.save(); ctx.fillStyle = color; ctx.globalAlpha = 0.18
         ctx.fillRect(x0, Math.min(P[0].y, yTo), x1 - x0, Math.abs(yTo - P[0].y)); ctx.restore()
       }
-      const label = (txt: string, yEdge: number, above: boolean, color: string) => {
-        ctx.save(); ctx.setLineDash([]); ctx.shadowBlur = 0; ctx.fillStyle = color
-        ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
-        ctx.fillText(txt, x0 + 6, yEdge + (above ? -8 : 8)); ctx.restore()
+      // chữ nằm bên phải hộp (không đè lên nội dung trong hộp, nhãn giá hay ghi chú người dùng đặt); hết chỗ thì nằm trong mép phải
+      const posLabel = (txt: string, yEdge: number, color: string) => {
+        ctx.save(); ctx.font = '11px system-ui, sans-serif'; const w = ctx.measureText(txt).width; ctx.restore()
+        const room = x1 + 6 + w <= e.plotW
+        label(e, txt, room ? x1 + 6 : x1 - 4, yEdge, color, room ? 'left' : 'right')
       }
       const pctOf = (p: number) => (entry !== 0 ? ((p - entry) / entry) * 100 : 0)
       let reward = NaN
@@ -239,21 +240,21 @@ function positionTool(isLong: boolean): ToolDef {
         const stop = D[1].price
         risk = sgn * (entry - stop)
         ctx.strokeStyle = DOWN; ctx.lineWidth = 1; seg(ctx, { x: x0, y: P[1].y }, { x: x1, y: P[1].y })
-        label(`Cắt lỗ ${fmtPrice(stop)}  (${pctOf(stop).toFixed(2)}%)`, P[1].y, P[1].y < P[0].y, DOWN)
+        posLabel(`Cắt lỗ ${fmtPrice(stop)}  (${pctOf(stop).toFixed(2)}%)`, P[1].y, DOWN)
       }
       if (P.length === 3) {
         zone(P[2].y, UP)
         const target = D[2].price
         reward = sgn * (target - entry)
         ctx.strokeStyle = UP; ctx.lineWidth = 1; seg(ctx, { x: x0, y: P[2].y }, { x: x1, y: P[2].y })
-        label(`Chốt lời ${fmtPrice(target)}  (${pctOf(target) >= 0 ? '+' : ''}${pctOf(target).toFixed(2)}%)`, P[2].y, P[2].y < P[0].y, UP)
+        posLabel(`Chốt lời ${fmtPrice(target)}  (${pctOf(target) >= 0 ? '+' : ''}${pctOf(target).toFixed(2)}%)`, P[2].y, UP)
       }
       ctx.strokeStyle = e.ink; ctx.lineWidth = 1.5; seg(ctx, { x: x0, y: P[0].y }, { x: x1, y: P[0].y })
       ctx.fillStyle = e.ink; dots(ctx, P)
       if (P.length === 3 && risk > 0 && reward > 0) {
-        tag(e, `R:R 1 : ${(reward / risk).toFixed(2)}`, `${isLong ? 'Long' : 'Short'} ${fmtPrice(entry)}`, (x0 + x1) / 2, P[0].y - 19, reward >= risk ? UP : DOWN)
+        tag(e, `R:R 1 : ${(reward / risk).toFixed(2)}`, `${isLong ? 'Long' : 'Short'} ${fmtPrice(entry)}`, x1 + 8, (P[0].y + P[2].y) / 2 - 19, reward >= risk ? UP : DOWN, 'left')
       } else if (P.length === 3) {
-        tag(e, 'Điểm không hợp lệ', isLong ? 'Long: cắt lỗ < vào < chốt lời' : 'Short: chốt lời < vào < cắt lỗ', (x0 + x1) / 2, P[0].y - 19, '#787b86')
+        tag(e, 'Điểm không hợp lệ', isLong ? 'Long: cắt lỗ < vào < chốt lời' : 'Short: chốt lời < vào < cắt lỗ', x1 + 8, (P[0].y + P[2].y) / 2 - 19, '#787b86', 'left')
       }
     },
     hit: (e, S, _D, px, py) => {
@@ -738,6 +739,7 @@ export const REGISTRY: Record<DrawKind, ToolDef> = {
       ctx.lineTo(box.x, P[0].y + 6)
       ctx.closePath()
       ctx.fillStyle = col; ctx.fill()
+      ctx.lineWidth = 1.5; ctx.strokeStyle = e.dark ? '#131722' : '#ffffff'; ctx.stroke()   // viền nền để tách khỏi hình nằm dưới
       ctx.fillStyle = '#fff'; ctx.font = 'bold 12px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
       ctx.fillText(txt, box.x + 8, P[0].y + 0.5)
       ctx.restore()
@@ -941,6 +943,12 @@ export const REGISTRY: Record<DrawKind, ToolDef> = {
 }
 
 export const KINDS = Object.keys(REGISTRY) as DrawKind[]
+
+/** Thứ tự vẽ: ghi chú, nhãn giá, cờ, chữ luôn nằm trên cùng để không bị vùng tô của hình khác (vị thế, Fib) che. Sắp xếp ổn định theo thứ tự tạo. */
+export function zOrdered<T extends { kind: DrawKind }>(items: T[]): T[] {
+  const rank = (k: DrawKind) => (REGISTRY[k]?.group === 'text' ? 1 : 0)
+  return items.map((it, i) => ({ it, i })).sort((a, b) => rank(a.it.kind) - rank(b.it.kind) || a.i - b.i).map((x) => x.it)
+}
 export const GROUP_ORDER: Group[] = ['line', 'fib', 'pitchfork', 'gann', 'position', 'measure', 'shape', 'text']
 
 /** Các tay nắm của một hình: hình dạng hộp có 4 góc, còn lại là các điểm neo. Kéo tay nắm đổi các điểm neo tương ứng. */

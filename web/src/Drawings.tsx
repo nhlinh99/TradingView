@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import type { IChartApi, ISeriesApi } from 'lightweight-charts'
 import { clearDrawings, createDrawing, deleteDrawing, fetchDrawings, updateDrawing } from './api'
 import { indexToTime, tfMs, timeToIndex, type Bar, type DrawKind, type DrawPoint, type Drawing } from './logic'
-import { GROUP_LABEL, GROUP_ORDER, KINDS, REGISTRY, handlesFor, type Geo, type Group, type Pt } from './drawTools'
+import { GROUP_LABEL, GROUP_ORDER, KINDS, REGISTRY, handlesFor, zOrdered, type Geo, type Group, type Pt } from './drawTools'
 
 type Tool = 'cursor' | DrawKind | 'erase'
 type Props = {
@@ -160,7 +160,7 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
       if (hideRef.current) { if (chipRef.current) { chipRef.current = null; setChip(null) } return }
       const plotW = w - g.c.priceScale('right').width()
       const ink = dark ? '#d1d4dc' : '#1b2430'
-      const shapes: { d: Pick<Drawing, 'kind' | 'payload'>; preview: boolean }[] = itemsRef.current.map((d) => ({ d, preview: false }))
+      const shapes: { d: Pick<Drawing, 'kind' | 'payload'>; preview: boolean }[] = zOrdered(itemsRef.current).map((d) => ({ d, preview: false }))
       const tl = toolRef.current
       if (pending.current.length > 0 && hv && tl in REGISTRY) {
         const kind = tl as DrawKind
@@ -239,7 +239,7 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
     const py = clientY - rect.top
     const plotW = rect.width - g.c.priceScale('right').width()
     let best: { d: Drawing; dist: number } | null = null
-    for (const d of itemsRef.current) {
+    for (const d of zOrdered(itemsRef.current)) {
       const def = REGISTRY[d.kind]
       if (!def) continue
       const P = d.payload.points.map((p) => toScreen(g, p))
