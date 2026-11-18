@@ -31,6 +31,12 @@ def test_crud_per_symbol(data_root):
     assert client.delete(f"/api/drawings/{a['id']}").status_code == 404
 
 
+def test_fib_extension_needs_three_points(data_root):
+    ok = client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": "fibx", "payload": pts((1, 10), (2, 20), (3, 15))})
+    assert ok.status_code == 200 and ok.json()["kind"] == "fibx"
+    assert client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": "fibx", "payload": pts((1, 10), (2, 20))}).status_code == 422
+
+
 def test_validation(data_root):
     bad = [
         {"symbol": "BTCUSDT", "kind": "star", "payload": pts((1, 1))},

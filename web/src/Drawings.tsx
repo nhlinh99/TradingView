@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject, type R
 import type { IChartApi, ISeriesApi } from 'lightweight-charts'
 import { clearDrawings, createDrawing, deleteDrawing, fetchDrawings } from './api'
 import {
-  FIB_LEVELS, distToSegment, indexToTime, tfMs, timeToIndex,
+  FIBX_LEVELS, FIB_LEVELS, distToSegment, indexToTime, tfMs, timeToIndex,
   type Bar, type DrawKind, type DrawPoint, type Drawing,
 } from './logic'
 
@@ -22,6 +22,7 @@ const TOOLS: { id: Tool; label: string; title: string }[] = [
   { id: 'hline', label: 'Ngang', title: 'Đường ngang: bấm một điểm' },
   { id: 'rect', label: 'Hộp', title: 'Hình chữ nhật: bấm hai góc' },
   { id: 'fib', label: 'Fib', title: 'Fibonacci retracement: bấm hai điểm' },
+  { id: 'fibx', label: 'Fib mở rộng', title: 'Fibonacci mở rộng theo xu hướng: bấm ba điểm A, B, C' },
   { id: 'text', label: 'Chữ', title: 'Văn bản: bấm một điểm' },
   { id: 'erase', label: 'Xoá', title: 'Bấm vào hình để xoá' },
 ]
@@ -32,6 +33,7 @@ const ICONS: Record<string, ReactElement> = {
   hline: <path d="M2 11h18M2 11l3-3M2 11l3 3" />,
   rect: <rect x="4" y="6" width="14" height="10" rx="1" />,
   fib: <path d="M3 4h16M3 9h16M3 13h16M3 18h16" />,
+  fibx: <><path d="M3 4h16M3 9h16M3 14h16" /><path d="M4 19l4-5 4 2 6-10" /></>,
   text: <path d="M5 5h12M11 5v12M8 17h6" />,
   erase: <path d="M4 15l8-9 6 5-6 7H8zM12 18h7" />,
   clear: <path d="M5 7h12M9 7V5h4v2M7 7l1 11h6l1-11" />,
@@ -40,7 +42,7 @@ function Icon({ id }: { id: string }) {
   return <svg viewBox="0 0 22 22" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{ICONS[id]}</svg>
 }
 
-const NEED: Record<DrawKind, number> = { trend: 2, hline: 1, rect: 2, fib: 2, text: 1 }
+const NEED: Record<DrawKind, number> = { trend: 2, hline: 1, rect: 2, fib: 2, fibx: 3, text: 1 }
 const COLOR = '#f0b90b'
 
 /** Lớp vẽ tay lên biểu đồ. Điểm neo lưu theo (thời gian, giá) nên đúng ở mọi khung thời gian; lưu trong SQLite qua /api/drawings. */
@@ -181,6 +183,26 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
             ctx.globalAlpha = 1
             ctx.fillText(`${lv} (${price.toFixed(2)})`, x0 + 3, y - 1)
           })
+        } else if (d.kind === 'fibx' && P.length >= 2) {
+          // A -> B là cú sóng gốc, B -> C là nhịp hồi; các mức tính từ C theo độ dài A -> B
+          ctx.globalAlpha = 0.6; ctx.setLineDash([4, 4])
+          ctx.beginPath(); ctx.moveTo(P[0].x, P[0].y); ctx.lineTo(P[1].x, P[1].y); if (P.length === 3) ctx.lineTo(P[2].x, P[2].y); ctx.stroke()
+          ctx.setLineDash(preview ? [5, 4] : []); ctx.globalAlpha = 1
+          if (P.length === 3) {
+            const [pa, pb, pc] = d.payload.points
+            const x0 = P[2].x
+            ctx.font = '10px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'
+            FIBX_LEVELS.forEach((lv) => {
+              const price = pc.price + (pb.price - pa.price) * lv
+              const y = g.s.priceToCoordinate(price)
+              if (y === null) return
+              ctx.globalAlpha = lv === 0 || lv === 1 ? 1 : 0.7
+              ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(plotW, y); ctx.stroke()
+              ctx.globalAlpha = 1
+              ctx.fillText(`${lv} (${price.toFixed(2)})`, x0 + 3, y - 1)
+            })
+          }
+          for (const p of P) { ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill() }
         } else if (d.kind === 'text') {
           ctx.fillStyle = ink
           ctx.font = '13px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
@@ -225,7 +247,15 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
       if (d.kind === 'trend') dist = distToSegment(px, py, S[0].x, S[0].y, S[1].x, S[1].y)
       else if (d.kind === 'hline') dist = Math.abs(py - S[0].y)
       else if (d.kind === 'text') dist = Math.hypot(px - S[0].x - 20, py - S[0].y)
-      else if (d.kind === 'rect' || d.kind === 'fib') {
+      else if (d.kind === 'fibx') {
+        const [pa, pb, pc] = d.payload.points
+        const plotX1 = rect.width
+        for (const lv of FIBX_LEVELS) {
+          const y = g.s.priceToCoordinate(pc.price + (pb.price - pa.price) * lv)
+          if (y !== null && px >= S[2].x - 6 && px <= plotX1) dist = Math.min(dist, Math.abs(py - y))
+        }
+        dist = Math.min(dist, distToSegment(px, py, S[0].x, S[0].y, S[1].x, S[1].y), distToSegment(px, py, S[1].x, S[1].y, S[2].x, S[2].y))
+      } else if (d.kind === 'rect' || d.kind === 'fib') {
         const x0 = Math.min(S[0].x, S[1].x); const x1 = Math.max(S[0].x, S[1].x)
         const y0 = Math.min(S[0].y, S[1].y); const y1 = Math.max(S[0].y, S[1].y)
         dist = px >= x0 - 6 && px <= x1 + 6 && py >= y0 - 6 && py <= y1 + 6 ? 0 : Infinity

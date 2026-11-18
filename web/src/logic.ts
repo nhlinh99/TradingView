@@ -231,10 +231,12 @@ export function indexToTime(times: number[], idx: number, stepSec: number): numb
   return times[lo] + (idx - lo) * (times[lo + 1] - times[lo])
 }
 
-export type DrawKind = 'trend' | 'hline' | 'rect' | 'fib' | 'text'
+export type DrawKind = 'trend' | 'hline' | 'rect' | 'fib' | 'fibx' | 'text'
 export type DrawPoint = { time: number; price: number }
 export type Drawing = { id: number; symbol: string; kind: DrawKind; payload: { points: DrawPoint[]; color?: string; text?: string } }
 export const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
+/** Fib mở rộng theo xu hướng (3 điểm A, B, C): mức = C + (B - A) * lv. */
+export const FIBX_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.414, 1.618, 2, 2.618, 3.618, 4.236]
 
 /** Khoảng cách (px) từ điểm (px,py) tới đoạn thẳng a-b. */
 export function distToSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
