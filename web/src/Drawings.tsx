@@ -344,6 +344,28 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
         if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return }
         if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); redo(); return }
       }
+      // phím mũi tên dời hình đang chọn: lên/xuống đổi giá (1px, giữ Shift là 10px), trái/phải dời một nến (Shift: 10 nến)
+      if (e.key.startsWith('Arrow') && selRef.current !== null && toolRef.current === 'cursor' && activeInstance === inst.current && !(e.ctrlKey || e.metaKey || e.altKey)) {
+        const d = itemsRef.current.find((x) => x.id === selRef.current)
+        const g = geo()
+        if (!d || !g || d.payload.locked) return
+        e.preventDefault()
+        const n = e.shiftKey ? 10 : 1
+        let pts = d.payload.points
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+          const dy = (e.key === 'ArrowUp' ? -1 : 1) * n
+          pts = pts.map((p) => {
+            const y = g.s.priceToCoordinate(p.price)
+            const np = y === null ? null : g.s.coordinateToPrice(y + dy)
+            return np === null ? p : { ...p, price: np }
+          })
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          const dt = (e.key === 'ArrowLeft' ? -1 : 1) * n * step
+          pts = pts.map((p) => ({ ...p, time: p.time + dt }))
+        } else return
+        patchSelected({ points: pts })
+        return
+      }
       if (e.key === 'Enter' && pending.current.length > 0) {
         const t = toolRef.current
         if (t !== 'cursor' && t !== 'erase') { e.preventDefault(); void completePendingRef.current(t) }

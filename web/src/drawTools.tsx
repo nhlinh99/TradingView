@@ -719,7 +719,7 @@ export const REGISTRY: Record<DrawKind, ToolDef> = {
     },
   },
   pricelabel: {
-    group: 'text', label: 'Nhãn giá', title: 'Nhãn giá: nhãn có mũi nhọn chỉ đúng mức giá, ghi giá tại điểm bấm', icon: I.pricelabel, min: 1, max: 1,
+    group: 'text', label: 'Nhãn giá', title: 'Nhãn giá: nhãn có mũi nhọn chỉ đúng mức giá. Chọn nhãn rồi dùng phím ↑ ↓ để nhích giá, ← → để dời nến (Shift: nhanh gấp 10)', icon: I.pricelabel, min: 1, max: 1,
     draw: (e, P, D) => {
       const { ctx } = e
       const col = ctx.strokeStyle as string
