@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
-  CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSeries, createChart,
+  CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSeries, LineStyle, createChart,
   type IChartApi, type ISeriesApi, type UTCTimestamp,
 } from 'lightweight-charts'
 import { fetchBars, openStream, type PineResult, type StreamState } from './api'
@@ -20,9 +20,15 @@ import {
 } from './logic'
 
 const PALETTE = {
-  light: { bg: '#ffffff', text: '#1b2430', line: '#d9e0ea', grid: '#eef1f5', up: '#0b8f5b', down: '#d1362f' },
-  dark: { bg: '#131722', text: '#d1d4dc', line: '#2a2e39', grid: '#1e222d', up: '#26a69a', down: '#ef5350' },
+  light: { bg: '#ffffff', text: '#1b2430', line: '#d9e0ea', grid: '#eef1f5', cross: '#5d6b7d', up: '#0b8f5b', down: '#d1362f' },
+  dark: { bg: '#131722', text: '#d1d4dc', line: '#2a2e39', grid: '#1e222d', cross: '#9598a1', up: '#26a69a', down: '#ef5350' },
 }
+/** Con trỏ chữ thập: nét đứt dọc và ngang đi theo chuột, kèm nhãn giá và giờ ở trục. */
+const crosshairOpts = (c: string) => ({
+  mode: CrosshairMode.Normal,
+  vertLine: { color: c, width: 1 as const, style: LineStyle.Dashed, labelBackgroundColor: c },
+  horzLine: { color: c, width: 1 as const, style: LineStyle.Dashed, labelBackgroundColor: c },
+})
 const volColor = (b: Bar, up: string, down: string) => (b.close >= b.open ? up + '88' : down + '88')
 
 export type Flow = { delta: boolean; cvd: 'off' | 'none' | 'day'; footprint: boolean; vpvr: boolean; heatmap: boolean; bubbles: boolean; gex: boolean; ratio: number; heatMode: 'intensity' | 'side' | 'bookmap'; heatLo: number; heatHi: number; bestLines: boolean; strip: boolean; dotScale: number; dotMin: number; iceberg: boolean; fpMode: 'bidask' | 'delta' | 'volume' | 'profile' }
@@ -65,7 +71,7 @@ export default function Chart({ symbol, tf, tz, flow, pines, indLegend, replay, 
       autoSize: true,
       layout: { background: { type: ColorType.Solid, color: P.bg }, textColor: P.text, panes: { separatorColor: P.line } },
       grid: { vertLines: { color: P.grid }, horzLines: { color: P.grid } },
-      crosshair: { mode: CrosshairMode.Normal },
+      crosshair: crosshairOpts(P.cross),
       rightPriceScale: { borderColor: P.line },
       timeScale: {
         borderColor: P.line, timeVisible: true, secondsVisible: false,
@@ -180,6 +186,7 @@ export default function Chart({ symbol, tf, tz, flow, pines, indLegend, replay, 
     chartRef.current?.applyOptions({
       layout: { background: { type: ColorType.Solid, color: flow.heatmap ? 'rgba(0,0,0,0)' : P.bg }, textColor: P.text, panes: { separatorColor: P.line } },
       grid: { vertLines: { color: P.grid }, horzLines: { color: P.grid } },
+      crosshair: crosshairOpts(P.cross),
       rightPriceScale: { borderColor: P.line }, timeScale: { borderColor: P.line },
     })
     candles.current?.applyOptions({ upColor: flow.footprint ? 'transparent' : P.up, downColor: flow.footprint ? 'transparent' : P.down, borderUpColor: P.up, borderDownColor: P.down, wickUpColor: P.up, wickDownColor: P.down })
