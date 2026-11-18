@@ -23,6 +23,7 @@ const TOOLS: { id: Tool; label: string; title: string }[] = [
   { id: 'rect', label: 'Hộp', title: 'Hình chữ nhật: bấm hai góc' },
   { id: 'fib', label: 'Fib', title: 'Fibonacci retracement: bấm hai điểm' },
   { id: 'fibx', label: 'Fib mở rộng', title: 'Fibonacci mở rộng theo xu hướng: bấm ba điểm A, B, C' },
+  { id: 'ruler', label: 'Thước', title: 'Thước đo: bấm hai điểm để xem % thay đổi, chênh giá và số nến' },
   { id: 'text', label: 'Chữ', title: 'Văn bản: bấm một điểm' },
   { id: 'erase', label: 'Xoá', title: 'Bấm vào hình để xoá' },
 ]
@@ -34,6 +35,7 @@ const ICONS: Record<string, ReactElement> = {
   rect: <rect x="4" y="6" width="14" height="10" rx="1" />,
   fib: <path d="M3 4h16M3 9h16M3 13h16M3 18h16" />,
   fibx: <><path d="M3 4h16M3 9h16M3 14h16" /><path d="M4 19l4-5 4 2 6-10" /></>,
+  ruler: <><rect x="2" y="8" width="18" height="6" rx="1" /><path d="M6 8v3M10 8v4M14 8v3M18 8v4" /></>,
   text: <path d="M5 5h12M11 5v12M8 17h6" />,
   erase: <path d="M4 15l8-9 6 5-6 7H8zM12 18h7" />,
   clear: <path d="M5 7h12M9 7V5h4v2M7 7l1 11h6l1-11" />,
@@ -42,7 +44,7 @@ function Icon({ id }: { id: string }) {
   return <svg viewBox="0 0 22 22" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{ICONS[id]}</svg>
 }
 
-const NEED: Record<DrawKind, number> = { trend: 2, hline: 1, rect: 2, fib: 2, fibx: 3, text: 1 }
+const NEED: Record<DrawKind, number> = { trend: 2, hline: 1, rect: 2, fib: 2, fibx: 3, ruler: 2, text: 1 }
 const COLOR = '#f0b90b'
 
 /** Lớp vẽ tay lên biểu đồ. Điểm neo lưu theo (thời gian, giá) nên đúng ở mọi khung thời gian; lưu trong SQLite qua /api/drawings. */
@@ -191,18 +193,50 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
           if (P.length === 3) {
             const [pa, pb, pc] = d.payload.points
             const x0 = P[2].x
+            const x1 = Math.min(plotW, x0 + Math.max(160, Math.abs(P[2].x - P[0].x)))   // chiều dài hữu hạn, không kéo hết mép phải
             ctx.font = '10px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'
             FIBX_LEVELS.forEach((lv) => {
               const price = pc.price + (pb.price - pa.price) * lv
               const y = g.s.priceToCoordinate(price)
               if (y === null) return
               ctx.globalAlpha = lv === 0 || lv === 1 ? 1 : 0.7
-              ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(plotW, y); ctx.stroke()
+              ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke()
               ctx.globalAlpha = 1
               ctx.fillText(`${lv} (${price.toFixed(2)})`, x0 + 3, y - 1)
             })
           }
           for (const p of P) { ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill() }
+        } else if (d.kind === 'ruler' && P.length === 2) {
+          const [a, b] = d.payload.points
+          const up = b.price >= a.price
+          const rc = up ? '#26a69a' : '#ef5350'
+          const x = Math.min(P[0].x, P[1].x); const y = Math.min(P[0].y, P[1].y)
+          const rw = Math.abs(P[1].x - P[0].x); const rh = Math.abs(P[1].y - P[0].y)
+          ctx.strokeStyle = rc; ctx.fillStyle = rc
+          ctx.globalAlpha = 0.14; ctx.fillRect(x, y, rw, rh); ctx.globalAlpha = 1
+          ctx.setLineDash([4, 4]); ctx.strokeRect(x, y, rw, rh); ctx.setLineDash(preview ? [5, 4] : [])
+          ctx.beginPath(); ctx.moveTo(P[0].x, P[0].y); ctx.lineTo(P[1].x, P[1].y); ctx.stroke()
+          const ang = Math.atan2(P[1].y - P[0].y, P[1].x - P[0].x)
+          ctx.beginPath(); ctx.moveTo(P[1].x, P[1].y)
+          ctx.lineTo(P[1].x - 9 * Math.cos(ang - 0.4), P[1].y - 9 * Math.sin(ang - 0.4))
+          ctx.lineTo(P[1].x - 9 * Math.cos(ang + 0.4), P[1].y - 9 * Math.sin(ang + 0.4)); ctx.closePath(); ctx.fill()
+          const diff = b.price - a.price
+          const pct = a.price !== 0 ? (diff / a.price) * 100 : 0
+          const nb = Math.round(timeToIndex(g.times, b.time, step) - timeToIndex(g.times, a.time, step))
+          const secs = Math.abs(b.time - a.time)
+          const dur = secs >= 86400 ? `${Math.floor(secs / 86400)}n ${Math.floor((secs % 86400) / 3600)}g` : secs >= 3600 ? `${Math.floor(secs / 3600)}g ${Math.floor((secs % 3600) / 60)}p` : `${Math.floor(secs / 60)}p`
+          const sign = diff >= 0 ? '+' : '−'
+          const l1 = `${sign}${Math.abs(pct).toFixed(2)}%   ${sign}${Math.abs(diff).toFixed(Math.abs(diff) < 1 ? 4 : 2)}`
+          const l2 = `${Math.abs(nb)} nến · ${dur}`
+          ctx.font = 'bold 12px system-ui, sans-serif'
+          const tw = Math.max(ctx.measureText(l1).width, ctx.measureText(l2).width) + 16
+          const bx = Math.min(Math.max(x + rw / 2 - tw / 2, 2), plotW - tw - 2)
+          const by = up ? Math.max(y - 46, 2) : Math.min(y + rh + 8, h - 44)
+          ctx.globalAlpha = 0.95; ctx.fillStyle = rc; ctx.fillRect(bx, by, tw, 38); ctx.globalAlpha = 1
+          ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+          ctx.fillText(l1, bx + tw / 2, by + 11)
+          ctx.font = '11px system-ui, sans-serif'
+          ctx.fillText(l2, bx + tw / 2, by + 27)
         } else if (d.kind === 'text') {
           ctx.fillStyle = ink
           ctx.font = '13px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
@@ -249,13 +283,13 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
       else if (d.kind === 'text') dist = Math.hypot(px - S[0].x - 20, py - S[0].y)
       else if (d.kind === 'fibx') {
         const [pa, pb, pc] = d.payload.points
-        const plotX1 = rect.width
+        const plotX1 = Math.min(rect.width, S[2].x + Math.max(160, Math.abs(S[2].x - S[0].x)))
         for (const lv of FIBX_LEVELS) {
           const y = g.s.priceToCoordinate(pc.price + (pb.price - pa.price) * lv)
           if (y !== null && px >= S[2].x - 6 && px <= plotX1) dist = Math.min(dist, Math.abs(py - y))
         }
         dist = Math.min(dist, distToSegment(px, py, S[0].x, S[0].y, S[1].x, S[1].y), distToSegment(px, py, S[1].x, S[1].y, S[2].x, S[2].y))
-      } else if (d.kind === 'rect' || d.kind === 'fib') {
+      } else if (d.kind === 'rect' || d.kind === 'fib' || d.kind === 'ruler') {
         const x0 = Math.min(S[0].x, S[1].x); const x1 = Math.max(S[0].x, S[1].x)
         const y0 = Math.min(S[0].y, S[1].y); const y1 = Math.max(S[0].y, S[1].y)
         dist = px >= x0 - 6 && px <= x1 + 6 && py >= y0 - 6 && py <= y1 + 6 ? 0 : Infinity

@@ -37,6 +37,11 @@ def test_fib_extension_needs_three_points(data_root):
     assert client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": "fibx", "payload": pts((1, 10), (2, 20))}).status_code == 422
 
 
+def test_ruler_needs_two_points(data_root):
+    assert client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": "ruler", "payload": pts((1, 10), (2, 20))}).status_code == 200
+    assert client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": "ruler", "payload": pts((1, 10))}).status_code == 422
+
+
 def test_validation(data_root):
     bad = [
         {"symbol": "BTCUSDT", "kind": "star", "payload": pts((1, 1))},
