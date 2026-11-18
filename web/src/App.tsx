@@ -237,7 +237,10 @@ export default function App() {
             <button onClick={() => { setReplay(null); setPlaying(false) }}>Thoát</button>
           </div>
         )}
-        {symbol.startsWith('XAU') && (
+        {symbol === 'XAUUSD' && (
+          <p className="srcnote">Bookmap, chấm volume và iceberg của XAUUSD lấy từ sổ lệnh và lệnh khớp của hợp đồng XAUUSDT (Binance), dịch giá theo chênh lệch hiện tại giữa hai mã. Đây là ước lượng, không phải sổ lệnh của vàng spot. Cuối tuần thị trường gốc nghỉ nhưng hợp đồng vẫn khớp lệnh.</p>
+        )}
+        {symbol === 'XAUUSDT' && (
           <p className="srcnote">Volume và orderflow của hợp đồng Binance (XAUUSDT, tính theo oz), không phải COMEX. Cuối tuần thị trường gốc nghỉ nhưng hợp đồng vẫn khớp lệnh.</p>
         )}
         {symbol && (

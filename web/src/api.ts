@@ -94,16 +94,44 @@ export function fetchProfile(symbol: string, from: number, to: number, mult: num
   return json<ProfileResponse>(`/api/profile?${q}`, { signal })
 }
 
+/** XAUUSD (vàng spot TVC) không có sổ lệnh: Bookmap, chấm volume và iceberg lấy từ XAUUSDT (Binance) rồi dịch giá theo chênh lệch hai mã. Là ước lượng. */
+const FLOW_SOURCE: Record<string, string> = { XAUUSD: 'XAUUSDT' }
+let basisCache: { key: string; at: number; p: Promise<number> } | null = null
+/** Chênh lệch giá trung vị (đóng cửa mã biểu đồ trừ đóng cửa mã nguồn) trên các nến 5 phút gần nhất. Dùng chung một lời hứa cho các yêu cầu đồng thời và nhớ 60 giây (lỗi: nhớ 5 giây, trả 0). */
+function flowBasis(symbol: string, src: string): Promise<number> {
+  const key = `${symbol}|${src}`
+  if (basisCache && basisCache.key === key && Date.now() - basisCache.at < 60_000) return basisCache.p
+  const get = async (s: string) => (await json<{ bars: number[][] }>(`/api/bars?symbol=${s}&tf=5m&limit=300`)).bars
+  const entry = { key, at: Date.now(), p: Promise.resolve(0) }
+  entry.p = Promise.all([get(symbol), get(src)]).then(([a, b]) => {
+    const close = new Map(b.map((r) => [r[0], r[4]] as [number, number]))
+    const diffs = a.filter((r) => close.has(r[0])).map((r) => r[4] - (close.get(r[0]) as number)).sort((x, y) => x - y)
+    return diffs.length > 0 ? diffs[Math.floor(diffs.length / 2)] : 0
+  }).catch(() => { entry.at = Date.now() - 55_000; return 0 })
+  basisCache = entry
+  return entry.p
+}
+async function viaFlowSource<T extends { rows: (number | string)[][] }>(symbol: string, call: (s: string) => Promise<T>): Promise<T> {
+  const src = FLOW_SOURCE[symbol]
+  if (!src) return call(symbol)
+  const [res, off] = await Promise.all([call(src), flowBasis(symbol, src)])
+  return { ...res, symbol, rows: res.rows.map((r) => { const x = [...r]; x[1] = Math.round((Number(r[1]) + off) * 1e6) / 1e6; return x }) }
+}
+
 export type HeatmapResponse = { symbol: string; from: number; to: number; tbucket: number; bucket: number; scale: number; rows: number[][] }
 export function fetchHeatmap(symbol: string, from: number, to: number, tbucket: number, mult: number, signal?: AbortSignal) {
-  const q = new URLSearchParams({ symbol, from: String(from), to: String(to), tbucket: String(tbucket), mult: String(mult) })
-  return json<HeatmapResponse>(`/api/heatmap?${q}`, { signal })
+  return viaFlowSource(symbol, (s) => {
+    const q = new URLSearchParams({ symbol: s, from: String(from), to: String(to), tbucket: String(tbucket), mult: String(mult) })
+    return json<HeatmapResponse>(`/api/heatmap?${q}`, { signal })
+  }) as Promise<HeatmapResponse>
 }
 
 export type BubblesResponse = { symbol: string; from: number; to: number; tbucket: number; bucket: number; rows: (number | string)[][] }
 export function fetchBubbles(symbol: string, from: number, to: number, tbucket: number, top: number, signal?: AbortSignal) {
-  const q = new URLSearchParams({ symbol, from: String(from), to: String(to), tbucket: String(tbucket), top: String(top) })
-  return json<BubblesResponse>(`/api/bubbles?${q}`, { signal })
+  return viaFlowSource(symbol, (s) => {
+    const q = new URLSearchParams({ symbol: s, from: String(from), to: String(to), tbucket: String(tbucket), top: String(top) })
+    return json<BubblesResponse>(`/api/bubbles?${q}`, { signal })
+  })
 }
 
 export type GexResponse = {
@@ -184,6 +212,8 @@ export const deleteAlert = (id: number) => json<{ deleted: number }>(`/api/alert
 
 export type IcebergsResponse = { symbol: string; from: number; to: number; tbucket: number; rows: (number | string)[][] }
 export function fetchIcebergs(symbol: string, from: number, to: number, tbucket: number, signal?: AbortSignal) {
-  const q = new URLSearchParams({ symbol, from: String(from), to: String(to), tbucket: String(tbucket) })
-  return json<IcebergsResponse>(`/api/icebergs?${q}`, { signal })
+  return viaFlowSource(symbol, (s) => {
+    const q = new URLSearchParams({ symbol: s, from: String(from), to: String(to), tbucket: String(tbucket) })
+    return json<IcebergsResponse>(`/api/icebergs?${q}`, { signal })
+  })
 }
