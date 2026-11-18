@@ -95,6 +95,15 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
     return () => { stop = true }
   }, [symbol])
 
+  // đang dùng một công cụ vẽ: ẩn hai đường chữ thập nét đứt theo chuột (nhãn giá và giờ ở trục vẫn giữ); về chế độ Trỏ thì hiện lại
+  useEffect(() => {
+    const c = chart.current
+    if (!c) return
+    const drawing = tool !== 'cursor' && tool !== 'erase'
+    c.applyOptions({ crosshair: { vertLine: { visible: !drawing }, horzLine: { visible: !drawing } } })
+    return () => { c.applyOptions({ crosshair: { vertLine: { visible: true }, horzLine: { visible: true } } }) }
+  }, [tool, chart])
+
   // đổi công cụ: bỏ hình đang vẽ dở
   useEffect(() => { pending.current = []; brush.current = null; hover.current = null; redraw.current() }, [tool])
   useEffect(() => { redraw.current() }, [items, hideAll])
