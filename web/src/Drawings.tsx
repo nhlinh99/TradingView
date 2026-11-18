@@ -19,6 +19,7 @@ type Props = {
 const TOOLS: { id: Tool; label: string; title: string }[] = [
   { id: 'cursor', label: 'Trỏ', title: 'Di chuyển biểu đồ' },
   { id: 'trend', label: 'Đường', title: 'Đường xu hướng: bấm hai điểm' },
+  { id: 'xline', label: 'Thẳng', title: 'Đường thẳng kéo dài hai phía: bấm hai điểm' },
   { id: 'hline', label: 'Ngang', title: 'Đường ngang: bấm một điểm' },
   { id: 'rect', label: 'Hộp', title: 'Hình chữ nhật: bấm hai góc' },
   { id: 'fib', label: 'Fib', title: 'Fibonacci retracement: bấm hai điểm' },
@@ -31,6 +32,7 @@ const TOOLS: { id: Tool; label: string; title: string }[] = [
 const ICONS: Record<string, ReactElement> = {
   cursor: <path d="M5 3l12 8-5.5 1.2L9 18z" />,
   trend: <><circle cx="5" cy="17" r="2" /><circle cx="17" cy="5" r="2" /><path d="M6.5 15.5L15.5 6.5" /></>,
+  xline: <><circle cx="8" cy="14" r="1.8" /><circle cx="14" cy="8" r="1.8" /><path d="M2 20L20 2" /></>,
   hline: <path d="M2 11h18M2 11l3-3M2 11l3 3" />,
   rect: <rect x="4" y="6" width="14" height="10" rx="1" />,
   fib: <path d="M3 4h16M3 9h16M3 13h16M3 18h16" />,
@@ -44,7 +46,7 @@ function Icon({ id }: { id: string }) {
   return <svg viewBox="0 0 22 22" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{ICONS[id]}</svg>
 }
 
-const NEED: Record<DrawKind, number> = { trend: 2, hline: 1, rect: 2, fib: 2, fibx: 3, ruler: 2, text: 1 }
+const NEED: Record<DrawKind, number> = { trend: 2, hline: 1, rect: 2, fib: 2, fibx: 3, ruler: 2, xline: 2, text: 1 }
 const COLOR = '#f0b90b'
 const BOX_KINDS: DrawKind[] = ['rect', 'fib', 'ruler']
 
@@ -224,6 +226,13 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
         if (d.kind === 'trend' && P.length === 2) {
           ctx.beginPath(); ctx.moveTo(P[0].x, P[0].y); ctx.lineTo(P[1].x, P[1].y); ctx.stroke()
           for (const p of P) { ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill() }
+        } else if (d.kind === 'xline' && P.length === 2) {
+          const dx = P[1].x - P[0].x; const dy = P[1].y - P[0].y
+          ctx.beginPath()
+          if (Math.abs(dx) < 1e-6) { ctx.moveTo(P[0].x, 0); ctx.lineTo(P[0].x, h) }
+          else { const m = dy / dx; ctx.moveTo(0, P[0].y - m * P[0].x); ctx.lineTo(plotW, P[0].y + m * (plotW - P[0].x)) }
+          ctx.stroke()
+          for (const p of P) { ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill() }
         } else if (d.kind === 'hline') {
           ctx.beginPath(); ctx.moveTo(0, P[0].y); ctx.lineTo(plotW, P[0].y); ctx.stroke()
           ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'
@@ -331,7 +340,10 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
       const S = P as { x: number; y: number }[]
       let dist = Infinity
       if (d.kind === 'trend') dist = distToSegment(px, py, S[0].x, S[0].y, S[1].x, S[1].y)
-      else if (d.kind === 'hline') dist = Math.abs(py - S[0].y)
+      else if (d.kind === 'xline') {
+        const dx = S[1].x - S[0].x; const dy = S[1].y - S[0].y; const len = Math.hypot(dx, dy)
+        dist = len < 1e-6 ? Math.hypot(px - S[0].x, py - S[0].y) : Math.abs(dy * (px - S[0].x) - dx * (py - S[0].y)) / len
+      } else if (d.kind === 'hline') dist = Math.abs(py - S[0].y)
       else if (d.kind === 'text') dist = Math.hypot(px - S[0].x - 20, py - S[0].y)
       else if (d.kind === 'fibx') {
         const [pa, pb, pc] = d.payload.points

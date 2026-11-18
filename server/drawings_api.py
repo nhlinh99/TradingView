@@ -1,6 +1,6 @@
 """Công cụ vẽ: lưu trong SQLite (bảng `drawings`), theo symbol.
 
-Mỗi hình có `kind` (trend, hline, rect, fib, fibx, ruler, text) và `payload` JSON chứa các điểm neo. Điểm neo dùng thời gian
+Mỗi hình có `kind` (trend, hline, rect, fib, fibx, ruler, xline, text) và `payload` JSON chứa các điểm neo. Điểm neo dùng thời gian
 (giây UTC) và giá thật, không dùng toạ độ màn hình hay chỉ số nến, nên hình đúng ở mọi khung thời gian.
 `layout_id` bỏ trống nghĩa là layout mặc định (một chart); layout nhiều ô dùng chung bản vẽ theo symbol.
 """
@@ -16,7 +16,7 @@ from common import appdb, store
 
 router = APIRouter()
 
-KINDS = {"trend": 2, "hline": 1, "rect": 2, "fib": 2, "fibx": 3, "ruler": 2, "text": 1}   # số điểm neo cần có
+KINDS = {"trend": 2, "hline": 1, "rect": 2, "fib": 2, "fibx": 3, "ruler": 2, "xline": 2, "text": 1}   # số điểm neo cần có
 MAX_PAYLOAD = 20_000
 
 

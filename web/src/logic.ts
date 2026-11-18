@@ -231,7 +231,7 @@ export function indexToTime(times: number[], idx: number, stepSec: number): numb
   return times[lo] + (idx - lo) * (times[lo + 1] - times[lo])
 }
 
-export type DrawKind = 'trend' | 'hline' | 'rect' | 'fib' | 'fibx' | 'ruler' | 'text'
+export type DrawKind = 'trend' | 'hline' | 'rect' | 'fib' | 'fibx' | 'ruler' | 'xline' | 'text'
 export type DrawPoint = { time: number; price: number }
 export type Drawing = { id: number; symbol: string; kind: DrawKind; payload: { points: DrawPoint[]; color?: string; text?: string } }
 export const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
