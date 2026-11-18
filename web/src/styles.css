@@ -544,3 +544,14 @@ kbd { font: 11px ui-monospace, Consolas, monospace; border: 1px solid var(--line
 .draw-fly button span { flex: 1; text-align: left; }
 .draw-tools .fold { color: var(--muted, currentColor); }
 .draw-tools.collapsed { padding: 2px; }
+
+/* trạng thái tải và tooltip của heatmap */
+.flow-status { position: absolute; left: 56px; bottom: 34px; z-index: 6; padding: 3px 9px; border-radius: 6px; font-size: 11px; background: var(--veil); border: 1px solid var(--line); color: var(--ink); pointer-events: none; }
+.flow-status.error { color: var(--bad); border-color: var(--bad); }
+.heat-tip { position: absolute; z-index: 7; pointer-events: none; display: flex; flex-direction: column; gap: 2px; padding: 6px 9px; border-radius: 8px; font-size: 11px; line-height: 1.35; background: var(--bg); color: var(--ink); border: 1px solid var(--line); box-shadow: var(--shadow); white-space: nowrap; }
+.heat-tip b { font-size: 12px; }
+.heat-tip span { opacity: .85; }
+.heat-tip i { font-style: normal; font-weight: 600; }
+.heat-tip i.bid { color: #00a65a; }
+.heat-tip i.ask { color: #e53935; }
+

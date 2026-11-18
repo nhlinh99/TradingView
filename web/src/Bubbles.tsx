@@ -32,6 +32,8 @@ export default function Bubbles({ on, dotScale, dotMin, symbol, tf, chart, candl
     let raf = 0
     let sig = ''
     let wantKey = ''
+    let timer = 0
+    const schedule = () => { window.clearTimeout(timer); timer = window.setTimeout(() => { void load() }, 350) }   // chờ ngừng kéo 0,35 giây rồi mới tải
     let ctrl: AbortController | null = null
     let rows: (number | string)[][] = []
     let tb = 10_000
@@ -49,13 +51,17 @@ export default function Bubbles({ on, dotScale, dotMin, symbol, tf, chart, candl
       const from = list[i0].time * 1000
       const to = list[i1].time * 1000 + tfMs(tf)
       const tbucket = Math.max(1000, Math.ceil((to - from) / Math.max(1, c.timeScale().width() / 10) / 1000) * 1000)
-      const key = `${symbol}|${from}|${to}|${tbucket}`
+      // làm tròn khoảng thời gian theo bội của ô để kéo nhẹ biểu đồ vẫn dùng lại cùng một yêu cầu (máy chủ nhớ kết quả)
+      const qm = tbucket * 8
+      const fromQ = Math.floor(from / qm) * qm
+      const toQ = Math.ceil(to / qm) * qm
+      const key = `${symbol}|${fromQ}|${toQ}|${tbucket}`
       if (key === wantKey) return
       wantKey = key
       ctrl?.abort()
       ctrl = new AbortController()
       try {
-        const j = await fetchBubbles(symbol, from, to, tbucket, 300, ctrl.signal)
+        const j = await fetchBubbles(symbol, fromQ, toQ, tbucket, 300, ctrl.signal)
         rows = j.rows
         tb = j.tbucket
         sig = ''
@@ -86,7 +92,7 @@ export default function Bubbles({ on, dotScale, dotMin, symbol, tf, chart, candl
       const newSig = `${r?.from}|${r?.to}|${s.priceToCoordinate(0)}|${s.priceToCoordinate(1000)}|${bars.current.length}|${rows.length}|${dotScale}|${dotMin}`
       if (newSig === sig) return
       sig = newSig
-      void load()
+      schedule()
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       ctx.clearRect(0, 0, w, h)
       if (rows.length === 0) return
@@ -122,6 +128,7 @@ export default function Bubbles({ on, dotScale, dotMin, symbol, tf, chart, candl
     raf = requestAnimationFrame(draw)
     return () => {
       stopped = true
+      window.clearTimeout(timer)
       cancelAnimationFrame(raf)
       ctrl?.abort()
       ctx.clearRect(0, 0, canvas.width, canvas.height)

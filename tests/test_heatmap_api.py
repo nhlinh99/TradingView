@@ -90,3 +90,53 @@ def test_icebergs_flag_traded_far_above_displayed(data_root):
     strict = client.get("/api/icebergs", params={"symbol": "BTCUSDT", "from": T0, "to": T0 + 60_000, "tbucket": 5000, "factor": 4})
     assert strict.json()["rows"] == []                  # ngưỡng 4 lần: 7 < 8 và 9 < 12
     assert client.get("/api/icebergs", params={"symbol": "BTCUSDT", "from": T0, "to": T0}).status_code == 400
+
+
+@pytest.fixture(autouse=True)
+def _clear_heavy_cache(monkeypatch):
+    """Bộ nhớ gộp yêu cầu là toàn cục: các test đổi dữ liệu giữa hai lần gọi cùng tham số nên tắt nhớ kết quả (chỉ còn gộp yêu cầu đang chạy)."""
+    from server import limits
+    monkeypatch.setattr(limits, "CACHE_TTL", 0.0)
+    limits._cache.clear()
+    yield
+    limits._cache.clear()
+
+
+def test_coalesce_shares_one_run_between_identical_requests():
+    import threading
+    import time
+    from server import limits
+    calls = []
+    gate = threading.Event()
+
+    def slow():
+        calls.append(1)
+        gate.wait(5)
+        return {"v": 1}
+
+    out = []
+    ts = [threading.Thread(target=lambda: out.append(limits.coalesce(("t", "same"), 5.0, slow))) for _ in range(4)]
+    for t in ts:
+        t.start()
+    time.sleep(0.3)
+    gate.set()
+    for t in ts:
+        t.join(5)
+    assert len(calls) == 1 and out == [{"v": 1}] * 4
+    assert limits.coalesce(("t", "same"), 5.0, slow) == {"v": 1} and len(calls) == 1   # còn trong bộ nhớ
+
+
+def test_coalesce_does_not_cache_errors():
+    from server import limits
+    n = []
+
+    def boom():
+        n.append(1)
+        raise RuntimeError("x")
+
+    for _ in range(2):
+        try:
+            limits.coalesce(("t", "err"), 5.0, boom)
+        except RuntimeError:
+            pass
+    assert len(n) == 2

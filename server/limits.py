@@ -10,8 +10,11 @@ from __future__ import annotations
 
 import os
 import threading
+import time
+from collections import OrderedDict
+from concurrent.futures import Future
 from contextlib import contextmanager
-from typing import Iterator
+from typing import Callable, Iterator, TypeVar
 
 from fastapi import HTTPException
 
@@ -39,6 +42,48 @@ def heavy() -> Iterator[None]:
         with _lock:
             _active -= 1
         _sem.release()
+
+
+T = TypeVar("T")
+_cache_lock = threading.Lock()
+_cache: "OrderedDict[tuple, tuple[float, Future]]" = OrderedDict()
+CACHE_MAX = int(os.environ.get("HEAVY_CACHE_ENTRIES", "24"))
+CACHE_TTL = float(os.environ.get("HEAVY_CACHE_TTL_S", "20"))   # giây nhớ kết quả heatmap, bong bóng, iceberg; 0 = chỉ gộp các yêu cầu đang chạy
+
+
+def coalesce(key: tuple, ttl: float, fn: Callable[[], T]) -> T:
+    """Gộp các yêu cầu nặng giống hệt nhau: yêu cầu đầu chạy `fn`, các yêu cầu cùng `key` đến sau chờ kết quả đó thay vì chiếm thêm lượt chạy.
+
+    Kết quả thành công được nhớ `ttl` giây. Lỗi không được nhớ. Giao diện huỷ yêu cầu khi kéo biểu đồ nhưng máy chủ vẫn chạy nốt,
+    nên nếu không gộp thì mỗi lần kéo xếp thêm một truy vấn nặng vào hàng đợi.
+    """
+    now = time.monotonic()
+    with _cache_lock:
+        hit = _cache.get(key)
+        if hit is not None and (not hit[1].done() or now - hit[0] < ttl):
+            _cache.move_to_end(key)
+            fut, owner = hit[1], False
+        else:
+            fut, owner = Future(), True
+            _cache[key] = (now, fut)
+            _cache.move_to_end(key)
+            while len(_cache) > CACHE_MAX:
+                _cache.popitem(last=False)
+    if not owner:
+        return fut.result(timeout=WAIT_S + 120)
+    try:
+        value = fn()
+    except BaseException as e:   # noqa: BLE001 - báo lỗi cho cả những yêu cầu đang chờ rồi bỏ khỏi bộ nhớ
+        with _cache_lock:
+            if _cache.get(key, (0, None))[1] is fut:
+                del _cache[key]
+        fut.set_exception(e)
+        raise
+    fut.set_result(value)
+    with _cache_lock:
+        if key in _cache and _cache[key][1] is fut:
+            _cache[key] = (time.monotonic(), fut)
+    return value
 
 
 def stats() -> dict:

@@ -1,7 +1,7 @@
-import { useEffect, useRef, type MutableRefObject } from 'react'
-import type { IChartApi, ISeriesApi } from 'lightweight-charts'
+import { useEffect, useRef, useState, type MutableRefObject } from 'react'
+import type { IChartApi, ISeriesApi, MouseEventParams } from 'lightweight-charts'
 import { fetchHeatmap } from './api'
-import { applyCutoff, bestBidAsk, heatColor, tfMs, timeToIndex, type Bar } from './logic'
+import { applyCutoff, bestBidAsk, heatColor, indexToTime, tfMs, timeToIndex, type Bar } from './logic'
 
 type Props = {
   on: boolean
@@ -24,6 +24,8 @@ const CELL_PX = 4
 /** Heatmap thanh khoản vẽ DƯỚI nến (canvas nằm sau biểu đồ; nền biểu đồ được đặt trong suốt). */
 export default function Heatmap({ on, mode, cutLo, cutHi, bestLines, strip, dark, symbol, tf, chart, candles, bars, version }: Props) {
   const cv = useRef<HTMLCanvasElement>(null)
+  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [tip, setTip] = useState<{ x: number; y: number; flip: boolean; price: string; time: string; bid: number; ask: number; rel: number } | null>(null)
 
   useEffect(() => {
     const canvas = cv.current!
@@ -36,8 +38,12 @@ export default function Heatmap({ on, mode, cutLo, cutHi, bestLines, strip, dark
     let raf = 0
     let sig = ''
     let wantKey = ''
+    let timer = 0
+    const schedule = () => { window.clearTimeout(timer); timer = window.setTimeout(() => { void load() }, 350) }   // chờ ngừng kéo 0,35 giây rồi mới tải
     let ctrl: AbortController | null = null
     let rows: number[][] = []
+    let byTime = new Map<number, number[][]>()
+    let retry = 0
     let scale = 1
     let bucket = 0
     let baseBucket = 0
@@ -68,23 +74,34 @@ export default function Heatmap({ on, mode, cutLo, cutHi, bestLines, strip, dark
         const pxPerPrice = Math.abs(y1 - y2) / (hi - lo)
         mult = Math.max(1, Math.ceil(CELL_PX / (pxPerPrice * baseBucket)))
       }
-      const key = `${symbol}|${from}|${to}|${tbucket}|${mult}`
+      // làm tròn khoảng thời gian theo bội của ô để kéo nhẹ biểu đồ vẫn dùng lại cùng một yêu cầu (máy chủ nhớ kết quả)
+      const qm = tbucket * 8
+      const fromQ = Math.floor(from / qm) * qm
+      const toQ = Math.ceil(to / qm) * qm
+      const key = `${symbol}|${fromQ}|${toQ}|${tbucket}|${mult}`
       if (key === wantKey) return
       wantKey = key
       ctrl?.abort()
       ctrl = new AbortController()
+      if (!stopped) setStatus('loading')
       try {
-        const j = await fetchHeatmap(symbol, from, to, tbucket, mult, ctrl.signal)
+        const j = await fetchHeatmap(symbol, fromQ, toQ, tbucket, mult, ctrl.signal)
         const first = baseBucket === 0
         rows = j.rows
+        byTime = new Map()
+        for (const r of rows) { const a = byTime.get(r[0]); if (a) a.push(r); else byTime.set(r[0], [r]) }
+        if (!stopped) setStatus('idle')
         scale = j.scale || 1
         bucket = j.bucket
         baseBucket = j.bucket / mult
         tb = j.tbucket
         sig = ''
         if (first) wantKey = '' // vừa biết bucket cơ sở: tính lại mult
-      } catch {
-        /* huỷ hoặc lỗi tạm */
+      } catch (e) {
+        if ((e as Error)?.name === 'AbortError' || stopped) return   // bị thay bằng yêu cầu mới hoặc đã đóng
+        wantKey = ''
+        setStatus('error')
+        retry = window.setTimeout(() => { sig = ''; void load() }, 6000) as unknown as number   // thử lại sau 6 giây
       }
     }
 
@@ -110,7 +127,7 @@ export default function Heatmap({ on, mode, cutLo, cutHi, bestLines, strip, dark
       const newSig = `${r?.from}|${r?.to}|${s.priceToCoordinate(0)}|${s.priceToCoordinate(1000)}|${bars.current.length}|${rows.length}|${mode}|${cutLo}|${cutHi}|${bestLines}|${strip}|${dark}`
       if (newSig === sig) return
       sig = newSig
-      void load()
+      schedule()
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       ctx.clearRect(0, 0, w, h)
       if (rows.length === 0 || bucket <= 0) return
@@ -187,15 +204,59 @@ export default function Heatmap({ on, mode, cutLo, cutHi, bestLines, strip, dark
       }
     }
 
+    // rê chuột: hiện thanh khoản chờ (bid/ask) tại ô thời gian và giá đang trỏ
+    const onMove = (p: MouseEventParams) => {
+      const c = chart.current
+      const s = candles.current
+      const el = canvas.parentElement
+      if (!c || !s || !el || !p.point || rows.length === 0 || bucket <= 0) { setTip(null); return }
+      const L = c.timeScale().coordinateToLogical(p.point.x)
+      const price = s.coordinateToPrice(p.point.y)
+      if (L === null || price === null) { setTip(null); return }
+      const times = bars.current.map((b) => b.time)
+      const t0 = Math.floor((indexToTime(times, Number(L) + 0.5, step) * 1000) / tb) * tb
+      const cell = byTime.get(t0)?.find((r) => price >= r[1] && price < r[1] + bucket)
+      if (!cell) { setTip(null); return }
+      const fmt = (v: number) => v.toLocaleString('en-US', { maximumFractionDigits: v < 1 ? 4 : 2 })
+      setTip({
+        x: p.point.x, y: p.point.y, flip: p.point.x > el.clientWidth * 0.6,
+        price: `${fmt(cell[1])} – ${fmt(cell[1] + bucket)}`,
+        time: new Date(t0).toLocaleTimeString('vi-VN', { hour12: false }),
+        bid: cell[2], ask: cell[3], rel: scale > 0 ? ((cell[2] + cell[3]) / scale) * 100 : 0,
+      })
+    }
+    chart.current?.subscribeCrosshairMove(onMove)
+
     void load()
     raf = requestAnimationFrame(draw)
     return () => {
       stopped = true
+      window.clearTimeout(timer)
+      window.clearTimeout(retry)
+      chart.current?.unsubscribeCrosshairMove(onMove)
+      setTip(null)
       cancelAnimationFrame(raf)
       ctrl?.abort()
       ctx.clearRect(0, 0, canvas.width, canvas.height)
     }
   }, [on, mode, cutLo, cutHi, bestLines, strip, dark, symbol, tf, chart, candles, bars, version])
 
-  return <canvas ref={cv} className="heat-canvas" aria-hidden="true" />
+  return (
+    <>
+      <canvas ref={cv} className="heat-canvas" aria-hidden="true" />
+      {on && status !== 'idle' && (
+        <div className={`flow-status ${status}`} role="status">
+          {status === 'loading' ? 'Đang tải heatmap…' : 'Chưa tải được heatmap, đang thử lại…'}
+        </div>
+      )}
+      {on && tip && (
+        <div className="heat-tip" style={{ left: tip.x, top: tip.y, transform: tip.flip ? 'translate(calc(-100% - 14px), 14px)' : 'translate(14px, 14px)' }}>
+          <b>{tip.price}</b>
+          <span>{tip.time}</span>
+          <span>Bid <i className="bid">{tip.bid.toLocaleString('en-US', { maximumFractionDigits: 3 })}</i> · Ask <i className="ask">{tip.ask.toLocaleString('en-US', { maximumFractionDigits: 3 })}</i></span>
+          <span>{tip.rel.toFixed(0)}% mức chuẩn (phân vị 99)</span>
+        </div>
+      )}
+    </>
+  )
 }
