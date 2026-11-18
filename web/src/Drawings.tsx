@@ -191,7 +191,7 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
         def.draw({ ctx, g, plotW, h, step, ink, dark, bars: bars.current, preview }, P, d.payload.points, d.payload.text)
         if (isSel && !(d.payload.locked)) {
           ctx.shadowBlur = 0; ctx.setLineDash([]); ctx.fillStyle = '#fff'; ctx.strokeStyle = col; ctx.lineWidth = 2
-          for (const q of handlesFor(d.kind, P)) { ctx.beginPath(); ctx.arc(q.x, q.y, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke() }
+          for (const q of handlesFor(d.kind, P, plotW)) { ctx.beginPath(); ctx.arc(q.x, q.y, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke() }
         }
         ctx.restore()
       }
@@ -245,7 +245,7 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
       const P = d.payload.points.map((p) => toScreen(g, p))
       if (P.some((p) => p === null)) continue
       const dist = def.hit({ g, bars: bars.current, step, plotW }, P as Pt[], d.payload.points, px, py)
-      if (dist <= 8 && (!best || dist < best.dist)) best = { d, dist }
+      if (dist <= 8 && (!best || dist <= best.dist)) best = { d, dist }   // hoà thì lấy hình vẽ sau (nằm trên)
     }
     return best?.d ?? null
   }
@@ -366,7 +366,7 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
     if (!host) return
     const onDownCap = (e: PointerEvent) => {
       if (toolRef.current !== 'cursor' || selRef.current === null || e.button !== 0 || hideRef.current) return
-      if ((e.target as HTMLElement | null)?.closest?.('.draw-chip, .draw-tools')) return
+      const overUi = !!(e.target as HTMLElement | null)?.closest?.('.draw-chip, .draw-tools')
       const g = geo()
       const rect = cv.current?.getBoundingClientRect()
       const d = itemsRef.current.find((x) => x.id === selRef.current)
@@ -375,8 +375,10 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
       if (S.some((p) => p === null)) return
       const px = e.clientX - rect.left
       const py = e.clientY - rect.top
-      const h = handlesFor(d.kind, S as Pt[]).find((q) => Math.hypot(px - q.x, py - q.y) <= 9)
-      const body = !h && hitAt(e.clientX, e.clientY)?.id === d.id
+      const plotW = rect.width - g.c.priceScale('right').width()
+      // tay nắm nằm dưới thanh công cụ vẫn kéo được; thân hình thì nhường cho thanh công cụ
+      const h = handlesFor(d.kind, S as Pt[], plotW).find((q) => Math.hypot(px - q.x, py - q.y) <= 12)
+      const body = !h && !overUi && hitAt(e.clientX, e.clientY)?.id === d.id
       if (!h && !body) return
       const start = pointFromClient(e.clientX, e.clientY, false)
       if (!start) return
@@ -401,8 +403,28 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
       }
       window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUpDrag)
     }
+    const onHover = (e: PointerEvent) => {
+      if (e.buttons !== 0) return
+      let cursor = ''
+      const d = toolRef.current === 'cursor' && selRef.current !== null && !hideRef.current ? itemsRef.current.find((x) => x.id === selRef.current) : undefined
+      if (d && !d.payload.locked) {
+        const g = geo()
+        const rect = cv.current?.getBoundingClientRect()
+        const S = g ? d.payload.points.map((p) => toScreen(g, p)) : []
+        if (g && rect && S.length > 0 && !S.some((p) => p === null)) {
+          const plotW = rect.width - g.c.priceScale('right').width()
+          const px = e.clientX - rect.left
+          const py = e.clientY - rect.top
+          const h = handlesFor(d.kind, S as Pt[], plotW).find((q) => Math.hypot(px - q.x, py - q.y) <= 12)
+          if (h) cursor = h.cursor
+          else if (!(e.target as HTMLElement | null)?.closest?.('.draw-chip, .draw-tools') && hitAt(e.clientX, e.clientY)?.id === d.id) cursor = 'move'
+        }
+      }
+      if (host.style.cursor !== cursor) host.style.cursor = cursor
+    }
     host.addEventListener('pointerdown', onDownCap, true)
-    return () => host.removeEventListener('pointerdown', onDownCap, true)
+    host.addEventListener('pointermove', onHover)
+    return () => { host.removeEventListener('pointerdown', onDownCap, true); host.removeEventListener('pointermove', onHover); host.style.cursor = '' }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geo])
 
@@ -459,6 +481,7 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
     const def = REGISTRY[t]
     if (pending.current.length < def.min) return
     const payload: Drawing['payload'] = { points: pending.current, color: COLOR }
+    if (t === 'long' || t === 'short') payload.points = payload.points.map((p, i) => (i === 2 ? { ...p, time: payload.points[1].time } : p))
     if (def.ask) {
       const text = window.prompt('Nội dung (xuống dòng bằng \\n)')
       if (!text) { pending.current = []; redraw.current(); return }

@@ -24,7 +24,7 @@ export type Env = {
   preview: boolean
 }
 export type HitEnv = { g: Geo; bars: Bar[]; step: number; plotW: number }
-export type Handle = Pt & { set: (pts: DrawPoint[], np: DrawPoint) => DrawPoint[] }
+export type Handle = Pt & { set: (pts: DrawPoint[], np: DrawPoint) => DrawPoint[]; cursor: string }
 
 export type Group = 'line' | 'fib' | 'pitchfork' | 'gann' | 'position' | 'measure' | 'shape' | 'text'
 export const GROUP_LABEL: Record<Group, string> = { line: 'Đường', fib: 'Fibonacci', pitchfork: 'Pitchfork', gann: 'Gann', position: 'Vị thế', measure: 'Đo', shape: 'Hình và bút', text: 'Chữ và ghi chú' }
@@ -219,7 +219,7 @@ function positionTool(isLong: boolean): ToolDef {
     draw: (e, P, D) => {
       const { ctx } = e
       const x0 = P[0].x
-      const x1 = Math.min(e.plotW, Math.max(x0 + 120, ...P.map((p) => p.x)))
+      const x1 = Math.min(e.plotW, Math.max(x0 + POSITION_MIN_W, ...P.map((p) => p.x)))
       const entry = D[0].price
       const sgn = isLong ? 1 : -1
       const zone = (yTo: number, color: string) => {
@@ -258,7 +258,7 @@ function positionTool(isLong: boolean): ToolDef {
     },
     hit: (e, S, _D, px, py) => {
       const x0 = S[0].x
-      const x1 = Math.min(e.plotW, Math.max(x0 + 120, ...S.map((p) => p.x)))
+      const x1 = Math.min(e.plotW, Math.max(x0 + POSITION_MIN_W, ...S.map((p) => p.x)))
       const ys = S.map((p) => p.y)
       return px >= x0 - 6 && px <= x1 + 6 && py >= Math.min(...ys) - 6 && py <= Math.max(...ys) + 6 ? 0 : Infinity
     },
@@ -266,6 +266,8 @@ function positionTool(isLong: boolean): ToolDef {
 }
 
 
+/** Bề rộng tối thiểu (px) của hộp vị thế Long/Short khi điểm cắt lỗ/chốt lời nằm sát điểm vào. */
+const POSITION_MIN_W = 40
 const FIB_CH_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.618, 2.618]
 const FIB_TIME_NUMBERS = [0, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144]
 const FIB_FAN_LEVELS = [0.236, 0.382, 0.5, 0.618, 0.786, 1]
@@ -321,6 +323,14 @@ function pitchforkTool(variant: 'andrews' | 'schiff' | 'mschiff'): ToolDef {
         distToSegment(px, py, S[2].x, S[2].y, f3.x, f3.y), distToSegment(px, py, S[1].x, S[1].y, S[2].x, S[2].y))
     },
   }
+}
+
+
+/** Hộp của nhãn giá: nằm bên phải điểm neo, cao 22px, căn giữa theo mức giá. Không có ctx thì ước lượng bề rộng theo số ký tự. */
+function priceLabelBox(ctx: CanvasRenderingContext2D | null, text: string, p: Pt) {
+  let w = text.length * 7.4
+  if (ctx) { ctx.save(); ctx.font = 'bold 12px system-ui, sans-serif'; w = ctx.measureText(text).width; ctx.restore() }
+  return { x: p.x + 9, y: p.y - 11, w: w + 16, h: 22 }
 }
 
 // ---------- biểu tượng ----------
@@ -708,13 +718,34 @@ export const REGISTRY: Record<DrawKind, ToolDef> = {
     },
   },
   pricelabel: {
-    group: 'text', label: 'Nhãn giá', title: 'Nhãn giá: ghi giá tại điểm bấm', icon: I.pricelabel, min: 1, max: 1,
+    group: 'text', label: 'Nhãn giá', title: 'Nhãn giá: nhãn có mũi nhọn chỉ đúng mức giá, ghi giá tại điểm bấm', icon: I.pricelabel, min: 1, max: 1,
     draw: (e, P, D) => {
-      const col = e.ctx.strokeStyle as string
-      tag(e, fmtPrice(D[0].price), null, P[0].x, P[0].y - 34, col)
-      e.ctx.fillStyle = col; e.ctx.beginPath(); e.ctx.moveTo(P[0].x - 5, P[0].y - 10); e.ctx.lineTo(P[0].x + 5, P[0].y - 10); e.ctx.lineTo(P[0].x, P[0].y); e.ctx.closePath(); e.ctx.fill()
+      const { ctx } = e
+      const col = ctx.strokeStyle as string
+      const txt = fmtPrice(D[0].price)
+      const box = priceLabelBox(e.ctx, txt, P[0])
+      ctx.save()
+      ctx.setLineDash([]); ctx.shadowBlur = 0
+      // thân nhãn bo góc + mũi nhọn bên trái chỉ đúng điểm giá
+      const r = 4
+      ctx.beginPath()
+      ctx.moveTo(P[0].x, P[0].y)
+      ctx.lineTo(box.x, P[0].y - 6)
+      ctx.lineTo(box.x, box.y + r); ctx.arcTo(box.x, box.y, box.x + r, box.y, r)
+      ctx.lineTo(box.x + box.w - r, box.y); ctx.arcTo(box.x + box.w, box.y, box.x + box.w, box.y + r, r)
+      ctx.lineTo(box.x + box.w, box.y + box.h - r); ctx.arcTo(box.x + box.w, box.y + box.h, box.x + box.w - r, box.y + box.h, r)
+      ctx.lineTo(box.x + r, box.y + box.h); ctx.arcTo(box.x, box.y + box.h, box.x, box.y + box.h - r, r)
+      ctx.lineTo(box.x, P[0].y + 6)
+      ctx.closePath()
+      ctx.fillStyle = col; ctx.fill()
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 12px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
+      ctx.fillText(txt, box.x + 8, P[0].y + 0.5)
+      ctx.restore()
     },
-    hit: (_e, S, _D, px, py) => (Math.abs(px - S[0].x) <= 30 && py >= S[0].y - 36 && py <= S[0].y + 4 ? 0 : Infinity),
+    hit: (_e, S, D, px, py) => {
+      const box = priceLabelBox(null, fmtPrice(D[0].price), S[0])
+      return px >= S[0].x - 4 && px <= box.x + box.w + 4 && py >= box.y - 3 && py <= box.y + box.h + 3 ? 0 : Infinity
+    },
   },
   flag: {
     group: 'text', label: 'Cờ', title: 'Cờ đánh dấu: bấm một điểm', icon: I.flag, min: 1, max: 1,
@@ -913,9 +944,24 @@ export const KINDS = Object.keys(REGISTRY) as DrawKind[]
 export const GROUP_ORDER: Group[] = ['line', 'fib', 'pitchfork', 'gann', 'position', 'measure', 'shape', 'text']
 
 /** Các tay nắm của một hình: hình dạng hộp có 4 góc, còn lại là các điểm neo. Kéo tay nắm đổi các điểm neo tương ứng. */
-export function handlesFor(kind: DrawKind, P: Pt[]): Handle[] {
+export function handlesFor(kind: DrawKind, P: Pt[], plotW = Infinity): Handle[] {
   const def = REGISTRY[kind]
   if (def.noHandles) return []
+  if ((kind === 'long' || kind === 'short') && P.length === 3) {
+    // vị thế: điểm 1 là giá vào (mép trái), điểm 2 và 3 cùng thời gian (mép phải) là cắt lỗ và chốt lời → 4 góc + 2 tay nắm ở giá vào
+    const x0 = P[0].x
+    const x1 = Math.min(plotW, Math.max(x0 + POSITION_MIN_W, P[1].x, P[2].x))
+    const right = (pts: DrawPoint[], np: DrawPoint) => pts.map((p, i) => (i >= 1 ? { ...p, time: np.time } : p))
+    const mk = (x: number, y: number, set: Handle['set'], cursor: string): Handle => ({ x, y, set, cursor })
+    return [
+      mk(x0, P[2].y, (pts, np) => pts.map((p, i) => (i === 0 ? { ...p, time: np.time } : i === 2 ? { ...p, price: np.price } : p)), 'nwse-resize'),
+      mk(x1, P[2].y, (pts, np) => right(pts, np).map((p, i) => (i === 2 ? { ...p, price: np.price } : p)), 'nesw-resize'),
+      mk(x0, P[1].y, (pts, np) => pts.map((p, i) => (i === 0 ? { ...p, time: np.time } : i === 1 ? { ...p, price: np.price } : p)), 'nesw-resize'),
+      mk(x1, P[1].y, (pts, np) => right(pts, np).map((p, i) => (i === 1 ? { ...p, price: np.price } : p)), 'nwse-resize'),
+      mk(x0, P[0].y, (pts, np) => pts.map((p, i) => (i === 0 ? { time: np.time, price: np.price } : p)), 'move'),
+      mk(x1, P[0].y, (pts, np) => right(pts, np).map((p, i) => (i === 0 ? { ...p, price: np.price } : p)), 'ew-resize'),
+    ]
+  }
   if (def.box && P.length === 2) {
     const li = P[0].x <= P[1].x ? 0 : 1
     const ti = P[0].y <= P[1].y ? 0 : 1
@@ -926,11 +972,12 @@ export function handlesFor(kind: DrawKind, P: Pt[]): Handle[] {
         const yi = top ? ti : 1 - ti
         out.push({
           x: P[xi].x, y: P[yi].y,
+          cursor: left === top ? 'nwse-resize' : 'nesw-resize',
           set: (pts, np) => pts.map((p, i) => ({ time: i === xi ? np.time : p.time, price: i === yi ? np.price : p.price })),
         })
       }
     }
     return out
   }
-  return P.map((q, k) => ({ ...q, set: (pts, np) => pts.map((p, i) => (i === k ? np : p)) }))
+  return P.map((q, k) => ({ ...q, cursor: 'move', set: (pts, np) => pts.map((p, i) => (i === k ? np : p)) }))
 }
