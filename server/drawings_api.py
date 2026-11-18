@@ -16,22 +16,30 @@ from common import appdb, store
 
 router = APIRouter()
 
-KINDS = {"trend": 2, "hline": 1, "rect": 2, "fib": 2, "fibx": 3, "ruler": 2, "xline": 2, "text": 1}   # số điểm neo cần có
-MAX_PAYLOAD = 20_000
+# số điểm neo cho phép (tối thiểu, tối đa); brush là nét vẽ tự do nên có nhiều điểm
+KINDS = {
+    "trend": (2, 2), "ray": (2, 2), "hray": (1, 1), "xline": (2, 2), "hline": (1, 1), "vline": (1, 1), "cross": (1, 1),
+    "info": (2, 2), "angle": (2, 2), "arrow": (2, 2), "channel": (3, 3), "regression": (2, 2),
+    "rect": (2, 2), "brush": (2, 400), "fib": (2, 2), "fibx": (3, 3), "ruler": (2, 2), "daterange": (2, 2),
+    "pricerange": (2, 2), "text": (1, 1),
+}
+MAX_PAYLOAD = 40_000
 
 
 class DrawingBody(BaseModel):
     symbol: str
     kind: str
     payload: dict
+    id: int | None = None   # khi hoàn tác một lần xoá: tạo lại đúng id cũ
 
 
 def _validate(kind: str, payload: dict) -> None:
     if kind not in KINDS:
         raise HTTPException(422, f"loại hình không hợp lệ: {kind}; có: {sorted(KINDS)}")
     pts = payload.get("points")
-    if not isinstance(pts, list) or len(pts) != KINDS[kind]:
-        raise HTTPException(422, f"{kind} cần đúng {KINDS[kind]} điểm neo")
+    lo, hi = KINDS[kind]
+    if not isinstance(pts, list) or not lo <= len(pts) <= hi:
+        raise HTTPException(422, f"{kind} cần " + (f"đúng {lo}" if lo == hi else f"từ {lo} đến {hi}") + " điểm neo")
     for p in pts:
         if not (isinstance(p, dict) and all(isinstance(p.get(k), (int, float)) and math.isfinite(p[k]) for k in ("time", "price"))):
             raise HTTPException(422, "mỗi điểm neo cần time (giây) và price là số hữu hạn")
@@ -71,8 +79,14 @@ def create_drawing(body: DrawingBody) -> dict:
     appdb.init()
     con = appdb.connect()
     try:
-        cur = con.execute("INSERT INTO drawings(layout_id, symbol, kind, payload) VALUES (NULL, ?, ?, ?)",
-                          (sym, body.kind, json.dumps(body.payload)))
+        if body.id is not None:
+            if con.execute("SELECT 1 FROM drawings WHERE id = ?", (body.id,)).fetchone():
+                raise HTTPException(409, "id đã tồn tại")
+            cur = con.execute("INSERT INTO drawings(id, layout_id, symbol, kind, payload) VALUES (?, NULL, ?, ?, ?)",
+                              (body.id, sym, body.kind, json.dumps(body.payload)))
+        else:
+            cur = con.execute("INSERT INTO drawings(layout_id, symbol, kind, payload) VALUES (NULL, ?, ?, ?)",
+                              (sym, body.kind, json.dumps(body.payload)))
         con.commit()
         return {"id": cur.lastrowid, "symbol": sym, "kind": body.kind, "payload": body.payload}
     finally:

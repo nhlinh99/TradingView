@@ -520,3 +520,24 @@ kbd { font: 11px ui-monospace, Consolas, monospace; border: 1px solid var(--line
 .cells-2 .draw-tools button, .cells-4 .draw-tools button { width: 26px; height: 26px; }
 .cells-2 .legend, .cells-4 .legend { left: 10px; }
 .cells-2 .indlegend, .cells-4 .indlegend { top: 64px; left: 8px; }
+
+/* thanh thuộc tính của hình đang chọn */
+.draw-chip { position: absolute; z-index: 6; display: flex; align-items: center; gap: 4px; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); box-shadow: var(--shadow); }
+.draw-chip input[type=color] { width: 26px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer; }
+.draw-chip select { height: 26px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font-size: 12px; }
+.draw-chip button { width: 26px; height: 26px; padding: 0; display: grid; place-items: center; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--ink); cursor: pointer; }
+.draw-chip button:hover:not(:disabled) { background: var(--hover); }
+.draw-chip button[aria-pressed=true] { background: var(--accent); color: #fff; }
+.draw-chip button.del { color: var(--bad); }
+.draw-chip button.del:hover:not(:disabled) { background: var(--bad); color: #fff; }
+.draw-chip button:disabled, .draw-chip select:disabled, .draw-chip input:disabled { opacity: .4; cursor: default; }
+.draw-chip svg { width: 16px; height: 16px; }
+/* nhóm công cụ: bấm biểu tượng để chọn công cụ vừa dùng, bấm mũi tên để mở danh sách */
+.draw-grp { position: relative; }
+.draw-tools .draw-grp .caret { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; padding: 0; font-size: 8px; line-height: 1; display: grid; place-items: center; background: transparent; color: var(--muted, currentColor); }
+.draw-fly { position: absolute; left: calc(100% + 8px); top: 0; z-index: 8; min-width: 190px; display: flex; flex-direction: column; gap: 1px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); box-shadow: var(--shadow); }
+.draw-fly .fly-title { padding: 3px 8px 5px; font-size: 11px; font-weight: 600; color: var(--muted, currentColor); opacity: .8; }
+.draw-tools .draw-fly button { width: 100%; height: 30px; padding: 0 8px; display: flex; align-items: center; gap: 8px; justify-content: flex-start; font-size: 12px; white-space: nowrap; }
+.draw-tools .draw-fly button span { flex: 1; text-align: left; }
+.cells-2 .draw-fly, .cells-4 .draw-fly { left: 0; top: calc(100% + 6px); }
+@media (max-width: 700px) { .draw-fly { left: 0; top: calc(100% + 6px); } }

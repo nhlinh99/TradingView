@@ -47,6 +47,31 @@ def test_extended_line_needs_two_points(data_root):
     assert client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": "xline", "payload": pts((1, 10))}).status_code == 422
 
 
+def test_new_line_tools_point_counts(data_root):
+    need = {"ray": 2, "hray": 1, "vline": 1, "cross": 1, "info": 2, "angle": 2, "arrow": 2, "channel": 3, "regression": 2,
+            "daterange": 2, "pricerange": 2}
+    for kind, n in need.items():
+        good = pts(*[(i + 1, 10 + i) for i in range(n)])
+        bad = pts(*[(i + 1, 10 + i) for i in range(n + 1)])
+        assert client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": kind, "payload": good}).status_code == 200, kind
+        assert client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": kind, "payload": bad}).status_code == 422, kind
+
+
+def test_brush_accepts_many_points_but_not_too_many(data_root):
+    many = pts(*[(i, 100 + i) for i in range(300)])
+    assert client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": "brush", "payload": many}).status_code == 200
+    assert client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": "brush", "payload": pts((1, 1))}).status_code == 422
+    assert client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": "brush", "payload": pts(*[(i, 1) for i in range(401)])}).status_code == 422
+
+
+def test_recreate_with_same_id_for_undo(data_root):
+    a = client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": "hline", "payload": pts((1, 5))}).json()
+    assert client.delete(f"/api/drawings/{a['id']}").status_code == 200
+    back = client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": "hline", "payload": pts((1, 5)), "id": a["id"]})
+    assert back.status_code == 200 and back.json()["id"] == a["id"]
+    assert client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": "hline", "payload": pts((1, 5)), "id": a["id"]}).status_code == 409
+
+
 def test_validation(data_root):
     bad = [
         {"symbol": "BTCUSDT", "kind": "star", "payload": pts((1, 1))},

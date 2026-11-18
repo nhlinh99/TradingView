@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactElement } from 'react'
 import type { IChartApi, ISeriesApi } from 'lightweight-charts'
 import { clearDrawings, createDrawing, deleteDrawing, fetchDrawings, updateDrawing } from './api'
-import {
-  FIBX_LEVELS, FIB_LEVELS, distToSegment, indexToTime, tfMs, timeToIndex,
-  type Bar, type DrawKind, type DrawPoint, type Drawing,
-} from './logic'
+import { indexToTime, tfMs, timeToIndex, type Bar, type DrawKind, type DrawPoint, type Drawing } from './logic'
+import { GROUP_LABEL, GROUP_ORDER, KINDS, REGISTRY, handlesFor, type Geo, type Group, type Pt } from './drawTools'
 
 type Tool = 'cursor' | DrawKind | 'erase'
 type Props = {
@@ -16,77 +14,42 @@ type Props = {
   bars: MutableRefObject<Bar[]>
 }
 
-const TOOLS: { id: Tool; label: string; title: string }[] = [
-  { id: 'cursor', label: 'Trỏ', title: 'Di chuyển biểu đồ' },
-  { id: 'trend', label: 'Đường', title: 'Đường xu hướng: bấm hai điểm' },
-  { id: 'xline', label: 'Thẳng', title: 'Đường thẳng kéo dài hai phía: bấm hai điểm' },
-  { id: 'hline', label: 'Ngang', title: 'Đường ngang: bấm một điểm' },
-  { id: 'rect', label: 'Hộp', title: 'Hình chữ nhật: bấm hai góc' },
-  { id: 'fib', label: 'Fib', title: 'Fibonacci retracement: bấm hai điểm' },
-  { id: 'fibx', label: 'Fib mở rộng', title: 'Fibonacci mở rộng theo xu hướng: bấm ba điểm A, B, C' },
-  { id: 'ruler', label: 'Thước', title: 'Thước đo: bấm hai điểm để xem % thay đổi, chênh giá và số nến' },
-  { id: 'text', label: 'Chữ', title: 'Văn bản: bấm một điểm' },
-  { id: 'erase', label: 'Xoá', title: 'Bấm vào hình để xoá' },
-]
-
 const ICONS: Record<string, ReactElement> = {
   cursor: <path d="M5 3l12 8-5.5 1.2L9 18z" />,
-  trend: <><circle cx="5" cy="17" r="2" /><circle cx="17" cy="5" r="2" /><path d="M6.5 15.5L15.5 6.5" /></>,
-  xline: <><circle cx="8" cy="14" r="1.8" /><circle cx="14" cy="8" r="1.8" /><path d="M2 20L20 2" /></>,
-  hline: <path d="M2 11h18M2 11l3-3M2 11l3 3" />,
-  rect: <rect x="4" y="6" width="14" height="10" rx="1" />,
-  fib: <path d="M3 4h16M3 9h16M3 13h16M3 18h16" />,
-  fibx: <><path d="M3 4h16M3 9h16M3 14h16" /><path d="M4 19l4-5 4 2 6-10" /></>,
-  ruler: <><rect x="2" y="8" width="18" height="6" rx="1" /><path d="M6 8v3M10 8v4M14 8v3M18 8v4" /></>,
-  text: <path d="M5 5h12M11 5v12M8 17h6" />,
   erase: <path d="M4 15l8-9 6 5-6 7H8zM12 18h7" />,
   clear: <path d="M5 7h12M9 7V5h4v2M7 7l1 11h6l1-11" />,
+  magnet: <path d="M5 3v8a6 6 0 0 0 12 0V3h-4v8a2 2 0 0 1-4 0V3zM5 7h4M13 7h4" />,
+  eye: <><path d="M2 11s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z" /><circle cx="11" cy="11" r="2.5" /></>,
+  eyeoff: <><path d="M2 11s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z" /><path d="M3 3l16 16" /></>,
+  undo: <path d="M7 5L3 9l4 4M3 9h9a5 5 0 0 1 0 10H8" />,
+  redo: <path d="M15 5l4 4-4 4M19 9h-9a5 5 0 0 0 0 10h4" />,
+  lock: <><rect x="5" y="10" width="12" height="9" rx="1.5" /><path d="M8 10V7a3 3 0 0 1 6 0v3" /></>,
+  unlock: <><rect x="5" y="10" width="12" height="9" rx="1.5" /><path d="M8 10V7a3 3 0 0 1 5.5-1.6" /></>,
+  clone: <><rect x="7" y="7" width="11" height="11" rx="1.5" /><path d="M4 14V5a1 1 0 0 1 1-1h9" /></>,
 }
-function Icon({ id }: { id: string }) {
-  return <svg viewBox="0 0 22 22" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{ICONS[id]}</svg>
+function Icon({ node }: { node: ReactElement }) {
+  return <svg viewBox="0 0 22 22" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{node}</svg>
 }
 
-const NEED: Record<DrawKind, number> = { trend: 2, hline: 1, rect: 2, fib: 2, fibx: 3, ruler: 2, xline: 2, text: 1 }
 const COLOR = '#f0b90b'
-const BOX_KINDS: DrawKind[] = ['rect', 'fib', 'ruler']
-
-/** Màu từng mức Fibonacci, theo bảng màu mặc định của TradingView. */
-const FIB_COLORS: Record<number, string> = {
-  0: '#787b86', 0.236: '#f23645', 0.382: '#ff9800', 0.5: '#4caf50', 0.618: '#089981', 0.786: '#00bcd4', 1: '#787b86',
-  1.272: '#9c27b0', 1.414: '#e91e63', 1.618: '#2962ff', 2: '#089981', 2.618: '#f23645', 3.618: '#9c27b0', 4.236: '#e91e63',
-}
-const fmtPrice = (p: number) => p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: p < 1 ? 6 : 2 })
-
-type XY = { x: number; y: number }
-type Handle = XY & { set: (pts: DrawPoint[], np: DrawPoint) => DrawPoint[] }
-/** Các tay nắm của một hình: hình dạng hộp (hộp, fib, thước) có 4 góc, hình khác có đúng các điểm neo. Kéo tay nắm đổi các điểm neo tương ứng. */
-function handlesFor(kind: DrawKind, P: XY[]): Handle[] {
-  if (BOX_KINDS.includes(kind) && P.length === 2) {
-    const li = P[0].x <= P[1].x ? 0 : 1
-    const ti = P[0].y <= P[1].y ? 0 : 1
-    const out: Handle[] = []
-    for (const left of [true, false]) {
-      for (const top of [true, false]) {
-        const xi = left ? li : 1 - li
-        const yi = top ? ti : 1 - ti
-        out.push({
-          x: P[xi].x, y: P[yi].y,
-          set: (pts, np) => pts.map((p, i) => ({ time: i === xi ? np.time : p.time, price: i === yi ? np.price : p.price })),
-        })
-      }
-    }
-    return out
-  }
-  return P.map((q, k) => ({ ...q, set: (pts, np) => pts.map((p, i) => (i === k ? np : p)) }))
-}
+const DASH: Record<string, number[]> = { solid: [], dash: [7, 5], dot: [2, 4] }
+const MAX_HISTORY = 60
+let nextInstance = 1
+let activeInstance = 0   // ô biểu đồ cuối cùng được bấm vào; phím tắt hoàn tác chỉ áp dụng cho ô này
 
 /** Lớp vẽ tay lên biểu đồ. Điểm neo lưu theo (thời gian, giá) nên đúng ở mọi khung thời gian; lưu trong SQLite qua /api/drawings. */
 export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Props) {
   const cv = useRef<HTMLCanvasElement>(null)
+  const inst = useRef(nextInstance++)
   const [tool, setTool] = useState<Tool>('cursor')
   const [items, setItems] = useState<Drawing[]>([])
   const [err, setErr] = useState<string | null>(null)
+  const [hideAll, setHideAll] = useState(false)
+  const [magnet, setMagnet] = useState(false)
+  const [openGrp, setOpenGrp] = useState<Group | null>(null)
+  const [lastTool, setLastTool] = useState<Record<Group, DrawKind>>({ line: 'trend', fib: 'fib', measure: 'ruler', shape: 'rect', text: 'text' })
   const pending = useRef<DrawPoint[]>([])
+  const brush = useRef<DrawPoint[] | null>(null)
   const hover = useRef<DrawPoint | null>(null)
   const itemsRef = useRef<Drawing[]>([])
   const [selected, setSelected] = useState<number | null>(null)
@@ -94,25 +57,43 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
   const chipRef = useRef<{ x: number; y: number } | null>(null)
   const selRef = useRef<number | null>(null)
   const toolRef = useRef<Tool>('cursor')
+  const hideRef = useRef(false)
+  const magnetRef = useRef(false)
   const redraw = useRef<() => void>(() => {})
+  const hist = useRef<{ undo: Drawing[][]; redo: Drawing[][] }>({ undo: [], redo: [] })
+  const [histLen, setHistLen] = useState({ undo: 0, redo: 0 })
   itemsRef.current = items
   selRef.current = selected
   toolRef.current = tool
+  hideRef.current = hideAll
+  magnetRef.current = magnet
   const step = tfMs(tf) / 1000
+
+  const syncHist = () => setHistLen({ undo: hist.current.undo.length, redo: hist.current.redo.length })
+  /** Ghi lại trạng thái trước một thay đổi để hoàn tác được. */
+  const pushHistory = (before: Drawing[]) => {
+    hist.current.undo.push(before)
+    if (hist.current.undo.length > MAX_HISTORY) hist.current.undo.shift()
+    hist.current.redo = []
+    syncHist()
+  }
 
   useEffect(() => {
     let stop = false
     setItems([])
     setSelected(null)
     pending.current = []
+    hist.current = { undo: [], redo: [] }
+    syncHist()
     fetchDrawings(symbol).then((d) => { if (!stop) setItems(d) }).catch((e: unknown) => setErr(String(e)))
     return () => { stop = true }
   }, [symbol])
 
   // đổi công cụ: bỏ hình đang vẽ dở
-  useEffect(() => { pending.current = []; hover.current = null; redraw.current() }, [tool])
+  useEffect(() => { pending.current = []; brush.current = null; hover.current = null; redraw.current() }, [tool])
+  useEffect(() => { redraw.current() }, [items, hideAll])
 
-  const geo = useCallback(() => {
+  const geo = useCallback((): (Geo & { c: IChartApi }) | null => {
     const c = chart.current
     const s = candles.current
     const list = bars.current
@@ -130,10 +111,11 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
       c, s, times,
       x: (time: number) => xa + (timeToIndex(times, time, step) - a) * sp,
       time: (px: number) => indexToTime(times, a + (px - xa) / sp, step),
+      idx: (time: number) => timeToIndex(times, time, step),
     }
   }, [chart, candles, bars, step])
 
-  const toScreen = useCallback((g: NonNullable<ReturnType<typeof geo>>, p: DrawPoint) => {
+  const toScreen = useCallback((g: Geo, p: DrawPoint): Pt | null => {
     const y = g.s.priceToCoordinate(p.price)
     return y === null ? null : { x: g.x(p.time), y }
   }, [])
@@ -144,35 +126,6 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
     let raf = 0
     let stopped = false
     let sig = ''
-    /** Vẽ các mức Fib kiểu TradingView: dải tô màu giữa hai mức liền kề, vạch màu theo mức, nhãn "mức (giá)" nằm bên trái vạch. */
-    const drawFib = (levels: number[], priceOf: (lv: number) => number, x0: number, x1: number, g: NonNullable<ReturnType<typeof geo>>, dashed: boolean) => {
-      const ys = levels.map((lv) => g.s.priceToCoordinate(priceOf(lv)))
-      ctx.lineWidth = 1; ctx.shadowBlur = 0
-      for (let i = 0; i < levels.length - 1; i++) {
-        const ya = ys[i]; const yb = ys[i + 1]
-        if (ya === null || yb === null) continue
-        ctx.fillStyle = FIB_COLORS[levels[i + 1]] ?? '#787b86'
-        ctx.globalAlpha = 0.12
-        ctx.fillRect(x0, Math.min(ya, yb), x1 - x0, Math.abs(yb - ya))
-      }
-      ctx.globalAlpha = 1
-      ctx.font = '11px system-ui, sans-serif'; ctx.textBaseline = 'middle'
-      levels.forEach((lv, i) => {
-        const y = ys[i]
-        if (y === null) return
-        const col = FIB_COLORS[lv] ?? '#787b86'
-        ctx.strokeStyle = col; ctx.fillStyle = col; ctx.setLineDash(dashed ? [5, 4] : [])
-        ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke()
-        const label = `${lv} (${fmtPrice(priceOf(lv))})`
-        const inside = x0 < ctx.measureText(label).width + 12   // sát mép trái thì ghi nhãn bên trong
-        ctx.textAlign = inside ? 'left' : 'right'
-        const lx = inside ? x0 + 4 : x0 - 5
-        ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = dark ? 'rgba(19,23,34,0.85)' : 'rgba(255,255,255,0.85)'   // viền nền để chữ đọc được trên nến
-        ctx.strokeText(label, lx, y)
-        ctx.fillText(label, lx, y)
-      })
-      ctx.setLineDash([])
-    }
     const draw = (force = false) => {
       raf = requestAnimationFrame(() => draw())
       if (stopped) return
@@ -193,24 +146,29 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
       canvas.style.clipPath = `inset(0 0 ${Math.max(0, h - paneH)}px 0)`
       const r = g.c.timeScale().getVisibleLogicalRange()
       const hv = hover.current
-      const ns = `${r?.from}|${r?.to}|${g.s.priceToCoordinate(0)}|${g.s.priceToCoordinate(1000)}|${itemsRef.current.length}|${pending.current.length}|${hv?.time}|${hv?.price}|${dark}|${g.times.length}|${selRef.current}`
+      const ns = `${r?.from}|${r?.to}|${g.s.priceToCoordinate(0)}|${g.s.priceToCoordinate(1000)}|${itemsRef.current.length}|${pending.current.length}|${brush.current?.length}|${hv?.time}|${hv?.price}|${dark}|${g.times.length}|${selRef.current}|${hideRef.current}`
       if (!force && ns === sig) return
       sig = ns
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       ctx.clearRect(0, 0, w, h)
+      if (hideRef.current) { if (chipRef.current) { chipRef.current = null; setChip(null) } return }
       const plotW = w - g.c.priceScale('right').width()
       const ink = dark ? '#d1d4dc' : '#1b2430'
       const shapes: { d: Pick<Drawing, 'kind' | 'payload'>; preview: boolean }[] = itemsRef.current.map((d) => ({ d, preview: false }))
-      if (pending.current.length > 0 && hv) {
-        const kind = toolRef.current as DrawKind
-        if (kind in NEED) shapes.push({ d: { kind, payload: { points: [...pending.current, hv].slice(0, NEED[kind]) } }, preview: true })
+      const tl = toolRef.current
+      if (pending.current.length > 0 && hv && tl in REGISTRY) {
+        const kind = tl as DrawKind
+        shapes.push({ d: { kind, payload: { points: [...pending.current, hv].slice(0, REGISTRY[kind].max) } }, preview: true })
       }
+      if (brush.current && brush.current.length >= 2) shapes.push({ d: { kind: 'brush', payload: { points: brush.current } }, preview: true })
       let anchor: { x: number; y: number } | null = null
       for (const { d, preview } of shapes) {
-        const col = d.payload.color ?? COLOR
+        const def = REGISTRY[d.kind]
+        if (!def) continue
         const pts = d.payload.points.map((p) => toScreen(g, p))
         if (pts.some((p) => p === null)) continue
-        const P = pts as { x: number; y: number }[]
+        const P = pts as Pt[]
+        const col = d.payload.color ?? COLOR
         ctx.save()
         ctx.strokeStyle = col
         ctx.fillStyle = col
@@ -218,84 +176,14 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
         if (isSel) {
           const ax = d.kind === 'hline' ? plotW - 64 : Math.max(...P.map((q) => q.x))
           const ay = d.kind === 'hline' ? P[0].y : Math.min(...P.map((q) => q.y))
-          anchor = { x: Math.min(Math.max(ax + 6, 8), plotW - 62), y: Math.min(Math.max(ay - 30, 4), h - 34) }
+          anchor = { x: Math.min(Math.max(ax + 6, 8), Math.max(8, plotW - 250)), y: Math.min(Math.max(ay - 38, 4), h - 40) }
         }
-        ctx.lineWidth = isSel ? 3 : 1.5
+        const bw = d.payload.width ?? 1.5
+        ctx.lineWidth = isSel ? bw + 1.5 : bw
         if (isSel) { ctx.shadowColor = col; ctx.shadowBlur = 8 }
-        ctx.setLineDash(preview ? [5, 4] : [])
-        if (d.kind === 'trend' && P.length === 2) {
-          ctx.beginPath(); ctx.moveTo(P[0].x, P[0].y); ctx.lineTo(P[1].x, P[1].y); ctx.stroke()
-          for (const p of P) { ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill() }
-        } else if (d.kind === 'xline' && P.length === 2) {
-          const dx = P[1].x - P[0].x; const dy = P[1].y - P[0].y
-          ctx.beginPath()
-          if (Math.abs(dx) < 1e-6) { ctx.moveTo(P[0].x, 0); ctx.lineTo(P[0].x, h) }
-          else { const m = dy / dx; ctx.moveTo(0, P[0].y - m * P[0].x); ctx.lineTo(plotW, P[0].y + m * (plotW - P[0].x)) }
-          ctx.stroke()
-          for (const p of P) { ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill() }
-        } else if (d.kind === 'hline') {
-          ctx.beginPath(); ctx.moveTo(0, P[0].y); ctx.lineTo(plotW, P[0].y); ctx.stroke()
-          ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'
-          ctx.fillText(String(d.payload.points[0].price), 6, P[0].y - 2)
-        } else if (d.kind === 'rect' && P.length === 2) {
-          const x = Math.min(P[0].x, P[1].x); const y = Math.min(P[0].y, P[1].y)
-          ctx.globalAlpha = 0.12; ctx.fillRect(x, y, Math.abs(P[1].x - P[0].x), Math.abs(P[1].y - P[0].y)); ctx.globalAlpha = 1
-          ctx.strokeRect(x, y, Math.abs(P[1].x - P[0].x), Math.abs(P[1].y - P[0].y))
-        } else if (d.kind === 'fib' && P.length === 2) {
-          const [a, b] = d.payload.points
-          const x0 = Math.min(P[0].x, P[1].x); const x1 = Math.max(P[0].x, P[1].x, x0 + 60)
-          drawFib(FIB_LEVELS, (lv) => b.price + (a.price - b.price) * lv, x0, x1, g, preview)
-          ctx.strokeStyle = '#787b86'; ctx.lineWidth = 1; ctx.setLineDash([4, 4])
-          ctx.beginPath(); ctx.moveTo(P[0].x, P[0].y); ctx.lineTo(P[1].x, P[1].y); ctx.stroke(); ctx.setLineDash([])
-        } else if (d.kind === 'fibx' && P.length >= 2) {
-          // A -> B là cú sóng gốc, B -> C là nhịp hồi; các mức tính từ C theo độ dài A -> B
-          ctx.strokeStyle = '#787b86'; ctx.lineWidth = 1; ctx.setLineDash([4, 4])
-          ctx.beginPath(); ctx.moveTo(P[0].x, P[0].y); ctx.lineTo(P[1].x, P[1].y); if (P.length === 3) ctx.lineTo(P[2].x, P[2].y); ctx.stroke(); ctx.setLineDash([])
-          if (P.length === 3) {
-            const [pa, pb, pc] = d.payload.points
-            const x0 = P[2].x
-            const x1 = Math.min(plotW, x0 + Math.max(160, Math.abs(P[2].x - P[0].x)))   // chiều dài hữu hạn, không kéo hết mép phải
-            drawFib(FIBX_LEVELS, (lv) => pc.price + (pb.price - pa.price) * lv, x0, x1, g, preview)
-          }
-          ctx.fillStyle = '#787b86'
-          for (const p of P) { ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill() }
-        } else if (d.kind === 'ruler' && P.length === 2) {
-          const [a, b] = d.payload.points
-          const up = b.price >= a.price
-          const rc = up ? '#26a69a' : '#ef5350'
-          const x = Math.min(P[0].x, P[1].x); const y = Math.min(P[0].y, P[1].y)
-          const rw = Math.abs(P[1].x - P[0].x); const rh = Math.abs(P[1].y - P[0].y)
-          ctx.strokeStyle = rc; ctx.fillStyle = rc
-          ctx.globalAlpha = 0.14; ctx.fillRect(x, y, rw, rh); ctx.globalAlpha = 1
-          ctx.setLineDash([4, 4]); ctx.strokeRect(x, y, rw, rh); ctx.setLineDash(preview ? [5, 4] : [])
-          ctx.beginPath(); ctx.moveTo(P[0].x, P[0].y); ctx.lineTo(P[1].x, P[1].y); ctx.stroke()
-          const ang = Math.atan2(P[1].y - P[0].y, P[1].x - P[0].x)
-          ctx.beginPath(); ctx.moveTo(P[1].x, P[1].y)
-          ctx.lineTo(P[1].x - 9 * Math.cos(ang - 0.4), P[1].y - 9 * Math.sin(ang - 0.4))
-          ctx.lineTo(P[1].x - 9 * Math.cos(ang + 0.4), P[1].y - 9 * Math.sin(ang + 0.4)); ctx.closePath(); ctx.fill()
-          const diff = b.price - a.price
-          const pct = a.price !== 0 ? (diff / a.price) * 100 : 0
-          const nb = Math.round(timeToIndex(g.times, b.time, step) - timeToIndex(g.times, a.time, step))
-          const secs = Math.abs(b.time - a.time)
-          const dur = secs >= 86400 ? `${Math.floor(secs / 86400)}n ${Math.floor((secs % 86400) / 3600)}g` : secs >= 3600 ? `${Math.floor(secs / 3600)}g ${Math.floor((secs % 3600) / 60)}p` : `${Math.floor(secs / 60)}p`
-          const sign = diff >= 0 ? '+' : '−'
-          const l1 = `${sign}${Math.abs(pct).toFixed(2)}%   ${sign}${Math.abs(diff).toFixed(Math.abs(diff) < 1 ? 4 : 2)}`
-          const l2 = `${Math.abs(nb)} nến · ${dur}`
-          ctx.font = 'bold 12px system-ui, sans-serif'
-          const tw = Math.max(ctx.measureText(l1).width, ctx.measureText(l2).width) + 16
-          const bx = Math.min(Math.max(x + rw / 2 - tw / 2, 2), plotW - tw - 2)
-          const by = up ? Math.max(y - 46, 2) : Math.min(y + rh + 8, h - 44)
-          ctx.globalAlpha = 0.95; ctx.fillStyle = rc; ctx.fillRect(bx, by, tw, 38); ctx.globalAlpha = 1
-          ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-          ctx.fillText(l1, bx + tw / 2, by + 11)
-          ctx.font = '11px system-ui, sans-serif'
-          ctx.fillText(l2, bx + tw / 2, by + 27)
-        } else if (d.kind === 'text') {
-          ctx.fillStyle = ink
-          ctx.font = '13px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
-          ctx.fillText(d.payload.text ?? '', P[0].x, P[0].y)
-        }
-        if (isSel) {
+        ctx.setLineDash(preview ? [5, 4] : DASH[d.payload.dash ?? 'solid'])
+        def.draw({ ctx, g, plotW, h, step, ink, dark, bars: bars.current, preview }, P, d.payload.points, d.payload.text)
+        if (isSel && !(d.payload.locked)) {
           ctx.shadowBlur = 0; ctx.setLineDash([]); ctx.fillStyle = '#fff'; ctx.strokeStyle = col; ctx.lineWidth = 2
           for (const q of handlesFor(d.kind, P)) { ctx.beginPath(); ctx.arc(q.x, q.y, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke() }
         }
@@ -307,75 +195,133 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
     redraw.current = () => draw(true)
     raf = requestAnimationFrame(() => draw(true))
     return () => { stopped = true; cancelAnimationFrame(raf); ctx.clearRect(0, 0, canvas.width, canvas.height) }
-  }, [geo, toScreen, dark])
+  }, [geo, toScreen, dark, bars, step])
 
-  const pointAt = (e: React.PointerEvent): DrawPoint | null => {
-    const g = geo()
-    const rect = cv.current?.getBoundingClientRect()
-    if (!g || !rect) return null
-    const px = e.clientX - rect.left
-    const py = e.clientY - rect.top
-    const price = g.s.coordinateToPrice(py)
-    return price === null ? null : { time: g.time(px), price }
-  }
-
-  const pointFromClient = (clientX: number, clientY: number): DrawPoint | null => {
-    const g = geo()
-    const rect = cv.current?.getBoundingClientRect()
-    if (!g || !rect) return null
-    const price = g.s.coordinateToPrice(clientY - rect.top)
-    return price === null ? null : { time: g.time(clientX - rect.left), price }
-  }
-
-  const hitAt = (clientX: number, clientY: number): Drawing | null => {
+  /** Đổi toạ độ màn hình thành (thời gian, giá). Có nam châm thì bắt vào nến và giá O/H/L/C gần nhất. */
+  const pointFromClient = (clientX: number, clientY: number, snap = true): DrawPoint | null => {
     const g = geo()
     const rect = cv.current?.getBoundingClientRect()
     if (!g || !rect) return null
     const px = clientX - rect.left
     const py = clientY - rect.top
+    const price = g.s.coordinateToPrice(py)
+    if (price === null) return null
+    let p: DrawPoint = { time: g.time(px), price }
+    if (snap && magnetRef.current && bars.current.length > 0) {
+      const list = bars.current
+      const i = Math.round(g.idx(p.time))
+      if (i >= 0 && i < list.length) {
+        const b = list[i]
+        let best = p.price
+        let bd = 24
+        for (const v of [b.open, b.high, b.low, b.close]) {
+          const y = g.s.priceToCoordinate(v)
+          if (y !== null && Math.abs(y - py) < bd) { bd = Math.abs(y - py); best = v }
+        }
+        p = { time: b.time, price: best }
+      }
+    }
+    return p
+  }
+
+  const hitAt = (clientX: number, clientY: number): Drawing | null => {
+    if (hideRef.current) return null
+    const g = geo()
+    const rect = cv.current?.getBoundingClientRect()
+    if (!g || !rect) return null
+    const px = clientX - rect.left
+    const py = clientY - rect.top
+    const plotW = rect.width - g.c.priceScale('right').width()
     let best: { d: Drawing; dist: number } | null = null
     for (const d of itemsRef.current) {
+      const def = REGISTRY[d.kind]
+      if (!def) continue
       const P = d.payload.points.map((p) => toScreen(g, p))
       if (P.some((p) => p === null)) continue
-      const S = P as { x: number; y: number }[]
-      let dist = Infinity
-      if (d.kind === 'trend') dist = distToSegment(px, py, S[0].x, S[0].y, S[1].x, S[1].y)
-      else if (d.kind === 'xline') {
-        const dx = S[1].x - S[0].x; const dy = S[1].y - S[0].y; const len = Math.hypot(dx, dy)
-        dist = len < 1e-6 ? Math.hypot(px - S[0].x, py - S[0].y) : Math.abs(dy * (px - S[0].x) - dx * (py - S[0].y)) / len
-      } else if (d.kind === 'hline') dist = Math.abs(py - S[0].y)
-      else if (d.kind === 'text') dist = Math.hypot(px - S[0].x - 20, py - S[0].y)
-      else if (d.kind === 'fibx') {
-        const [pa, pb, pc] = d.payload.points
-        const plotX1 = Math.min(rect.width, S[2].x + Math.max(160, Math.abs(S[2].x - S[0].x)))
-        for (const lv of FIBX_LEVELS) {
-          const y = g.s.priceToCoordinate(pc.price + (pb.price - pa.price) * lv)
-          if (y !== null && px >= S[2].x - 6 && px <= plotX1) dist = Math.min(dist, Math.abs(py - y))
-        }
-        dist = Math.min(dist, distToSegment(px, py, S[0].x, S[0].y, S[1].x, S[1].y), distToSegment(px, py, S[1].x, S[1].y, S[2].x, S[2].y))
-      } else if (d.kind === 'rect' || d.kind === 'fib' || d.kind === 'ruler') {
-        const x0 = Math.min(S[0].x, S[1].x); const x1 = Math.max(S[0].x, S[1].x)
-        const y0 = Math.min(S[0].y, S[1].y); const y1 = Math.max(S[0].y, S[1].y)
-        dist = px >= x0 - 6 && px <= x1 + 6 && py >= y0 - 6 && py <= y1 + 6 ? 0 : Infinity
-      }
+      const dist = def.hit({ g, bars: bars.current, step, plotW }, P as Pt[], d.payload.points, px, py)
       if (dist <= 8 && (!best || dist < best.dist)) best = { d, dist }
     }
     return best?.d ?? null
   }
   const hit = (e: React.PointerEvent) => hitAt(e.clientX, e.clientY)
 
+  // ---------- thay đổi dữ liệu (đều ghi lịch sử để hoàn tác) ----------
+
   const remove = async (id: number) => {
+    const d = itemsRef.current.find((x) => x.id === id)
+    if (!d || d.payload.locked) return
+    pushHistory(itemsRef.current)
     try { await deleteDrawing(id); setItems((l) => l.filter((x) => x.id !== id)); setSelected((c) => (c === id ? null : c)); setErr(null) } catch (x) { setErr(String(x)) }
   }
 
-  // Chế độ Trỏ: bấm vào hình để chọn (kéo biểu đồ không tính là bấm). Delete hoặc Backspace xoá hình đã chọn, Esc bỏ chọn.
+  /** Đưa kho (và màn hình) về đúng danh sách `target`: xoá hình thừa, tạo lại hình thiếu với id cũ, cập nhật hình đã đổi. */
+  const restore = async (target: Drawing[]) => {
+    const cur = itemsRef.current
+    setItems(target); setSelected(null)
+    try {
+      for (const d of cur) if (!target.some((t) => t.id === d.id)) await deleteDrawing(d.id)
+      for (const t of target) {
+        const c = cur.find((x) => x.id === t.id)
+        if (!c) await createDrawing(symbol, t.kind, t.payload, t.id)
+        else if (JSON.stringify(c.payload) !== JSON.stringify(t.payload)) await updateDrawing(t.id, symbol, t.kind, t.payload)
+      }
+      setErr(null)
+    } catch (x) { setErr(String(x)) }
+  }
+  const undo = () => {
+    const t = hist.current.undo.pop()
+    if (!t) return
+    hist.current.redo.push(itemsRef.current)
+    syncHist()
+    void restore(t)
+  }
+  const redo = () => {
+    const t = hist.current.redo.pop()
+    if (!t) return
+    hist.current.undo.push(itemsRef.current)
+    syncHist()
+    void restore(t)
+  }
+
+  // chỉnh kiểu: áp ngay lên màn hình, gửi lên máy chủ sau khi ngừng chỉnh 0,5 giây (một lần hoàn tác cho cả đợt chỉnh)
+  const burst = useRef<{ id: number; timer: number } | null>(null)
+  const patchSelected = (patch: Partial<Drawing['payload']>, immediate = false) => {
+    const id = selRef.current
+    const d = itemsRef.current.find((x) => x.id === id)
+    if (!d) return
+    if (!burst.current || burst.current.id !== d.id) pushHistory(itemsRef.current)
+    const next = { ...d, payload: { ...d.payload, ...patch } }
+    itemsRef.current = itemsRef.current.map((x) => (x.id === d.id ? next : x))
+    setItems(itemsRef.current)
+    if (burst.current) window.clearTimeout(burst.current.timer)
+    const send = async () => {
+      burst.current = null
+      const latest = itemsRef.current.find((x) => x.id === d.id)
+      if (!latest) return
+      try { await updateDrawing(latest.id, latest.symbol, latest.kind, latest.payload); setErr(null) } catch (x) { setErr(String(x)) }
+    }
+    if (immediate) { burst.current = null; void send() } else burst.current = { id: d.id, timer: window.setTimeout(() => void send(), 500) }
+  }
+
+  const clone = async () => {
+    const d = itemsRef.current.find((x) => x.id === selRef.current)
+    if (!d) return
+    pushHistory(itemsRef.current)
+    const shift = step * 3
+    try {
+      const n = await createDrawing(symbol, d.kind, { ...d.payload, locked: false, points: d.payload.points.map((p) => ({ ...p, time: p.time + shift })) })
+      setItems((l) => [...l, n]); setSelected(n.id); setErr(null)
+    } catch (x) { setErr(String(x)) }
+  }
+
+  // Chế độ Trỏ: bấm vào hình để chọn (kéo biểu đồ không tính là bấm). Delete xoá, Esc bỏ chọn, Ctrl+Z / Ctrl+Y hoàn tác / làm lại.
   useEffect(() => {
     const host = cv.current?.parentElement
     if (!host) return
     let down: { x: number; y: number } | null = null
-    const onDown = (e: PointerEvent) => { down = { x: e.clientX, y: e.clientY } }
+    const onDown = (e: PointerEvent) => { activeInstance = inst.current; down = { x: e.clientX, y: e.clientY } }
     const onUp = (e: PointerEvent) => {
-      if ((e.target as HTMLElement | null)?.closest?.('.draw-del, .draw-tools')) { down = null; return }
+      if ((e.target as HTMLElement | null)?.closest?.('.draw-chip, .draw-tools')) { down = null; return }
       if (!down || toolRef.current !== 'cursor') return
       const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4
       down = null
@@ -387,7 +333,12 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
-      if (e.key === 'Escape') { setSelected(null); redraw.current() }
+      if ((e.ctrlKey || e.metaKey) && activeInstance === inst.current) {
+        const k = e.key.toLowerCase()
+        if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return }
+        if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); redo(); return }
+      }
+      if (e.key === 'Escape') { setSelected(null); setOpenGrp(null); setTool('cursor'); redraw.current() }
       else if ((e.key === 'Delete' || e.key === 'Backspace') && selRef.current !== null) { e.preventDefault(); void remove(selRef.current) }
     }
     host.addEventListener('pointerdown', onDown)
@@ -397,34 +348,35 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geo])
 
-  // Kéo hình đang chọn: kéo tay nắm (4 góc với hộp/fib/thước, các điểm neo với hình khác) để đổi cỡ, kéo thân hình để di chuyển.
+  // Kéo hình đang chọn: kéo tay nắm (4 góc với hình dạng hộp, các điểm neo với hình khác) để đổi cỡ, kéo thân hình để di chuyển.
   // Chạy ở pha capture để biểu đồ không bị cuộn theo khi đang kéo hình.
   useEffect(() => {
     const host = cv.current?.parentElement
     if (!host) return
     const onDownCap = (e: PointerEvent) => {
-      if (toolRef.current !== 'cursor' || selRef.current === null || e.button !== 0) return
-      if ((e.target as HTMLElement | null)?.closest?.('.draw-del, .draw-tools')) return
+      if (toolRef.current !== 'cursor' || selRef.current === null || e.button !== 0 || hideRef.current) return
+      if ((e.target as HTMLElement | null)?.closest?.('.draw-chip, .draw-tools')) return
       const g = geo()
       const rect = cv.current?.getBoundingClientRect()
       const d = itemsRef.current.find((x) => x.id === selRef.current)
-      if (!g || !rect || !d) return
+      if (!g || !rect || !d || d.payload.locked) return
       const S = d.payload.points.map((p) => toScreen(g, p))
       if (S.some((p) => p === null)) return
       const px = e.clientX - rect.left
       const py = e.clientY - rect.top
-      const hs = handlesFor(d.kind, S as XY[])
-      const h = hs.find((q) => Math.hypot(px - q.x, py - q.y) <= 9)
+      const h = handlesFor(d.kind, S as Pt[]).find((q) => Math.hypot(px - q.x, py - q.y) <= 9)
       const body = !h && hitAt(e.clientX, e.clientY)?.id === d.id
       if (!h && !body) return
-      const start = pointFromClient(e.clientX, e.clientY)
+      const start = pointFromClient(e.clientX, e.clientY, false)
       if (!start) return
       e.stopPropagation(); e.preventDefault()
+      activeInstance = inst.current
+      const before = itemsRef.current
       const orig = d.payload.points
       let cur = orig
       const apply = (pts: DrawPoint[]) => { cur = pts; setItems((l) => l.map((x) => (x.id === d.id ? { ...x, payload: { ...x.payload, points: pts } } : x))); redraw.current() }
       const onMove = (ev: PointerEvent) => {
-        const np = pointFromClient(ev.clientX, ev.clientY)
+        const np = pointFromClient(ev.clientX, ev.clientY, !!h)
         if (!np) return
         if (h) apply(h.set(orig, np))
         else apply(orig.map((p) => ({ time: p.time + (np.time - start.time), price: p.price + (np.price - start.price) })))
@@ -432,6 +384,7 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
       const onUpDrag = async () => {
         window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUpDrag)
         if (cur === orig) return
+        pushHistory(before)
         try { await updateDrawing(d.id, d.symbol, d.kind, { ...d.payload, points: cur }); setErr(null) }
         catch (x) { setErr(String(x)); setItems((l) => l.map((y) => (y.id === d.id ? d : y))); redraw.current() }
       }
@@ -442,7 +395,27 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geo])
 
+  // đóng menu nhóm công cụ khi bấm ra ngoài
+  useEffect(() => {
+    if (!openGrp) return
+    const close = (e: PointerEvent) => { if (!(e.target as HTMLElement | null)?.closest?.('.draw-grp')) setOpenGrp(null) }
+    window.addEventListener('pointerdown', close)
+    return () => window.removeEventListener('pointerdown', close)
+  }, [openGrp])
+
+  const finishCreate = async (kind: DrawKind, payload: Drawing['payload']) => {
+    pushHistory(itemsRef.current)
+    try {
+      const d = await createDrawing(symbol, kind, payload)
+      setItems((l) => [...l, d])
+      setSelected(d.id)
+      setTool('cursor')
+      setErr(null)
+    } catch (x) { setErr(String(x)) }
+  }
+
   const onDown = async (e: React.PointerEvent) => {
+    activeInstance = inst.current
     const t = toolRef.current
     if (t === 'cursor') return
     if (t === 'erase') {
@@ -450,10 +423,15 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
       if (d) await remove(d.id)
       return
     }
-    const p = pointAt(e)
+    const p = pointFromClient(e.clientX, e.clientY)
     if (!p) return
+    if (t === 'brush') {
+      brush.current = [p]
+      try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId) } catch { /* không bắt buộc */ }
+      return
+    }
     pending.current = [...pending.current, p]
-    if (pending.current.length >= NEED[t]) {
+    if (pending.current.length >= REGISTRY[t].max) {
       const payload: Drawing['payload'] = { points: pending.current, color: COLOR }
       if (t === 'text') {
         const text = window.prompt('Nội dung văn bản')
@@ -461,21 +439,47 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
         payload.text = text
       }
       pending.current = []
-      try {
-        const d = await createDrawing(symbol, t, payload)
-        setItems((l) => [...l, d])
-        setSelected(d.id)
-        setTool('cursor')
-        setErr(null)
-      } catch (x) { setErr(String(x)) }
+      await finishCreate(t, payload)
     }
     redraw.current()
   }
 
+  const onMove = (e: React.PointerEvent) => {
+    if (brush.current) {
+      const p = pointFromClient(e.clientX, e.clientY, false)
+      const g = geo()
+      const last = brush.current[brush.current.length - 1]
+      if (p && g) {
+        const a = toScreen(g, last); const b = toScreen(g, p)
+        if (a && b && Math.hypot(a.x - b.x, a.y - b.y) >= 3 && brush.current.length < REGISTRY.brush.max) { brush.current = [...brush.current, p]; redraw.current() }
+      }
+      return
+    }
+    if (pending.current.length > 0) { hover.current = pointFromClient(e.clientX, e.clientY); redraw.current() }
+  }
+
+  const onUp = async () => {
+    const pts = brush.current
+    if (!pts) return
+    brush.current = null
+    if (pts.length < 2) { redraw.current(); return }
+    await finishCreate('brush', { points: pts, color: COLOR, width: 2 })
+  }
+
   const clearAll = async () => {
     if (items.length === 0 || !window.confirm(`Xoá ${items.length} hình của ${symbol}?`)) return
+    pushHistory(itemsRef.current)
     try { await clearDrawings(symbol); setItems([]); setSelected(null) } catch (x) { setErr(String(x)) }
   }
+
+  const pick = (k: DrawKind) => {
+    setTool(k); setOpenGrp(null)
+    setLastTool((m) => ({ ...m, [REGISTRY[k].group]: k }))
+  }
+
+  const sel = items.find((x) => x.id === selected) ?? null
+  const selDef = sel ? REGISTRY[sel.kind] : null
+  const toolGroup = tool !== 'cursor' && tool !== 'erase' ? REGISTRY[tool].group : null
 
   return (
     <>
@@ -483,23 +487,57 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
         ref={cv} className="draw-canvas" aria-hidden="true" data-tool={tool}
         style={{ pointerEvents: tool === 'cursor' ? 'none' : 'auto', cursor: tool === 'erase' ? 'pointer' : 'crosshair' }}
         onPointerDown={(e) => void onDown(e)}
-        onPointerMove={(e) => { if (pending.current.length > 0) { hover.current = pointAt(e); redraw.current() } }}
+        onPointerMove={onMove}
+        onPointerUp={() => void onUp()}
       />
-      {selected !== null && chip && (
-        <button className="draw-del" style={{ left: chip.x, top: chip.y }} onClick={() => void remove(selected)} title="Xoá hình này (Delete)" aria-label="Xoá hình đang chọn">
-          <Icon id="clear" /> Xoá
-        </button>
+      {sel && selDef && chip && !hideAll && (
+        <div className="draw-chip" style={{ left: chip.x, top: chip.y }} role="toolbar" aria-label="Thuộc tính hình đang chọn">
+          {!selDef.ownColors && (
+            <input type="color" title="Màu" aria-label="Màu" disabled={sel.payload.locked} value={sel.payload.color ?? COLOR} onChange={(e) => patchSelected({ color: e.target.value })} />
+          )}
+          <select title="Độ dày nét" aria-label="Độ dày nét" disabled={sel.payload.locked} value={String(sel.payload.width ?? 1.5)} onChange={(e) => patchSelected({ width: Number(e.target.value) }, true)}>
+            {[1, 1.5, 2, 3, 4].map((w) => <option key={w} value={w}>{w}px</option>)}
+          </select>
+          <select title="Kiểu nét" aria-label="Kiểu nét" disabled={sel.payload.locked} value={sel.payload.dash ?? 'solid'} onChange={(e) => patchSelected({ dash: e.target.value as 'solid' | 'dash' | 'dot' }, true)}>
+            <option value="solid">Liền</option><option value="dash">Đứt</option><option value="dot">Chấm</option>
+          </select>
+          <button title={sel.payload.locked ? 'Mở khoá hình' : 'Khoá hình (không kéo, không xoá được)'} aria-label="Khoá hình" aria-pressed={!!sel.payload.locked} onClick={() => patchSelected({ locked: !sel.payload.locked }, true)}><Icon node={ICONS[sel.payload.locked ? 'lock' : 'unlock']} /></button>
+          <button title="Nhân bản hình" aria-label="Nhân bản hình" onClick={() => void clone()}><Icon node={ICONS.clone} /></button>
+          <button className="del" title="Xoá hình này (Delete)" aria-label="Xoá hình đang chọn" disabled={sel.payload.locked} onClick={() => void remove(sel.id)}><Icon node={ICONS.clear} /></button>
+        </div>
       )}
       <div className="draw-tools" role="toolbar" aria-label="Công cụ vẽ">
-        {TOOLS.map((t) => (
-          <button key={t.id} title={t.title} aria-label={t.title} aria-pressed={tool === t.id} className={tool === t.id ? 'on' : ''} onClick={() => setTool(t.id)}>
-            <Icon id={t.id} />
-          </button>
-        ))}
+        <button title="Trỏ: di chuyển biểu đồ, bấm để chọn hình" aria-label="Trỏ" aria-pressed={tool === 'cursor'} className={tool === 'cursor' ? 'on' : ''} onClick={() => setTool('cursor')}><Icon node={ICONS.cursor} /></button>
+        {GROUP_ORDER.map((gr) => {
+          const kinds = KINDS.filter((k) => REGISTRY[k].group === gr)
+          const cur = lastTool[gr]
+          return (
+            <div className="draw-grp" key={gr}>
+              <button title={`${REGISTRY[cur].title}`} aria-label={REGISTRY[cur].label} aria-pressed={toolGroup === gr} className={toolGroup === gr ? 'on' : ''} onClick={() => pick(cur)}>
+                <Icon node={REGISTRY[toolGroup === gr ? (tool as DrawKind) : cur].icon} />
+              </button>
+              {kinds.length > 1 && <button className="caret" title={`Thêm công cụ ${GROUP_LABEL[gr].toLowerCase()}`} aria-label={`Mở nhóm ${GROUP_LABEL[gr]}`} aria-expanded={openGrp === gr} onClick={() => setOpenGrp(openGrp === gr ? null : gr)}>▾</button>}
+              {openGrp === gr && (
+                <div className="draw-fly" role="menu" aria-label={GROUP_LABEL[gr]}>
+                  <div className="fly-title">{GROUP_LABEL[gr]}</div>
+                  {kinds.map((k) => (
+                    <button key={k} role="menuitem" title={REGISTRY[k].title} className={tool === k ? 'on' : ''} onClick={() => pick(k)}>
+                      <Icon node={REGISTRY[k].icon} /><span>{REGISTRY[k].label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
+        <button title="Xoá: bấm vào hình để xoá" aria-label="Xoá" aria-pressed={tool === 'erase'} className={tool === 'erase' ? 'on' : ''} onClick={() => setTool('erase')}><Icon node={ICONS.erase} /></button>
         <span className="sep" aria-hidden="true" />
-        <button title="Xoá hình đang chọn (Delete)" aria-label="Xoá hình đang chọn" className="del" disabled={selected === null} onClick={() => { if (selected !== null) void remove(selected) }}><Icon id="erase" /></button>
-        <button title="Xoá mọi hình của symbol này" aria-label="Xoá mọi hình" onClick={() => void clearAll()} disabled={items.length === 0}><Icon id="clear" /></button>
-        {err && <span className="bad" role="alert">{err}</span>}
+        <button title="Nam châm: bắt điểm vào giá mở, cao, thấp, đóng của nến" aria-label="Nam châm" aria-pressed={magnet} className={magnet ? 'on' : ''} onClick={() => setMagnet((v) => !v)}><Icon node={ICONS.magnet} /></button>
+        <button title={hideAll ? 'Hiện mọi hình' : 'Ẩn mọi hình'} aria-label="Ẩn hiện hình" aria-pressed={hideAll} className={hideAll ? 'on' : ''} onClick={() => setHideAll((v) => !v)}><Icon node={ICONS[hideAll ? 'eyeoff' : 'eye']} /></button>
+        <button title="Hoàn tác (Ctrl+Z)" aria-label="Hoàn tác" disabled={histLen.undo === 0} onClick={undo}><Icon node={ICONS.undo} /></button>
+        <button title="Làm lại (Ctrl+Y)" aria-label="Làm lại" disabled={histLen.redo === 0} onClick={redo}><Icon node={ICONS.redo} /></button>
+        <button title="Xoá mọi hình của symbol này" aria-label="Xoá mọi hình" onClick={() => void clearAll()} disabled={items.length === 0}><Icon node={ICONS.clear} /></button>
+        {err && <span className="bad" role="alert" title={err}>{err.length > 40 ? `${err.slice(0, 40)}…` : err}</span>}
       </div>
     </>
   )
