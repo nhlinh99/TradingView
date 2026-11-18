@@ -355,9 +355,9 @@ export default function Chart({ symbol, tf, tz, flow, pines, indLegend, replay, 
   const b = legend?.bar
   return (
     <div className="chart-wrap">
+      <div className="chart-main">
       <Heatmap on={flow.heatmap} mode={flow.heatMode} cutLo={flow.heatLo / 100} cutHi={flow.heatHi / 100} bestLines={flow.bestLines} strip={flow.strip} dark={theme === 'dark'} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
       <div ref={box} className="chart" data-testid="chart" />
-      <Dom on={flow.dom} dark={theme === 'dark'} symbol={symbol} chart={chartRef} candles={candles} bars={bars} version={version} />
       <LiqZones on={flow.zones} minPct={flow.zoneMin} dark={theme === 'dark'} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
       <Icebergs on={flow.iceberg} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
       <Bubbles on={flow.bubbles} dotScale={flow.dotScale / 100} dotMin={flow.dotMin / 100} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
@@ -389,6 +389,8 @@ export default function Chart({ symbol, tf, tz, flow, pines, indLegend, replay, 
       </div>
       {loading && <div className="overlay">Đang tải...</div>}
       {error && <div className="overlay bad" role="alert">Không tải được nến: {error}</div>}
+      </div>
+      <Dom on={flow.dom} dark={theme === 'dark'} symbol={symbol} chart={chartRef} candles={candles} bars={bars} version={version} />
     </div>
   )
 }
