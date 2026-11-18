@@ -285,3 +285,30 @@ def test_cvd_tolerates_chart_bars_without_intrabar_data():
     res = run("cvd_range", base, provider=lambda s, tf: late if tf in ("1", "1m") else None)
     assert plot(res, "Intrabars in this bar")["values"][5] in (0.0, None)
     assert plot(res, "Intrabars in this bar")["values"][50] == 5.0
+
+
+# ---------------------------------------------------------------- Volume Profile by Range (hàm ngày giờ dạng gọi hàm)
+
+@pytest.mark.parametrize("rng, n, step", [
+    ("1 Hour", 600, 60_000), ("Day", 600, 3_600_000), ("Week", 400, 6 * 3_600_000),
+    ("Month", 400, 12 * 3_600_000), ("3 Month", 400, DAY), ("6 Month", 500, DAY),
+])
+def test_volume_profile_range_every_period(rng, n, step):
+    bars = make_bars(n, seed=5, start=1_735_689_600_000, step=step)   # bắt đầu 2025-01-01 để có đủ ranh giới quý và nửa năm
+    res = runner.run_script(src("volume_profile_range"), bars, symbol="BTCUSDT", tf="1d", tick=0.1, inputs={"  Range": rng})
+    assert len(res["objects"]["boxes"]) > 0, rng
+    assert len(res["objects"]["lines"]) > 0, rng
+
+
+def test_date_functions_match_variables_and_timezone():
+    from pine.interp import Bars as B
+    t0 = 1_735_689_600_000   # 2025-01-01 00:00 UTC (thứ Tư)
+    bars = B(time=[t0 + i * 3_600_000 for i in range(30)], open=[1.0] * 30, high=[2.0] * 30, low=[1.0] * 30, close=[1.0] * 30, volume=[1.0] * 30)
+    code = ('indicator("t")\n'
+            'plot(month(time) - month, "dm")\nplot(hour(time) - hour, "dh")\nplot(dayofmonth(time) - dayofmonth, "dd")\n'
+            'plot(year(time), "y")\nplot(hour(time, "UTC+7"), "h7")\nplot(dayofweek(time), "dw")\n')
+    res = runner.run_script(code, bars, symbol="X", tf="60", tick=0.01)
+    g = lambda title: next(p for p in res["plots"] if p["title"] == title)["values"]
+    assert set(g("dm")) == {0.0} and set(g("dh")) == {0.0} and set(g("dd")) == {0.0}
+    assert g("y")[0] == 2025.0 and g("dw")[0] == 4.0
+    assert g("h7")[0] == 7.0 and g("h7")[20] == 3.0   # 20:00 UTC = 03:00 hôm sau theo UTC+7

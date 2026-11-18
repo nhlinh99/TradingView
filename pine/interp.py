@@ -865,6 +865,39 @@ def f_time(it, node, args, kw):
     return (local // step) * step - it.tz
 
 
+def _tz_offset_ms(it, tzname) -> float:
+    """Độ lệch múi giờ (ms) từ tham số timezone của hour(time, tz)...: 'UTC+7', 'GMT-5', tên IANA; không có thì dùng múi giờ biểu đồ."""
+    if tzname is None or isna(tzname):
+        return it.tz
+    import re
+    t = str(tzname).strip()
+    m = re.fullmatch(r"(?:UTC|GMT)\s*([+-])\s*(\d{1,2})(?::?(\d{2}))?", t, re.I)
+    if m:
+        sign = -1 if m.group(1) == "-" else 1
+        return sign * (int(m.group(2)) * 3_600_000 + int(m.group(3) or 0) * 60_000)
+    if t.upper() in ("UTC", "GMT", "Z"):
+        return 0
+    try:
+        import datetime as dt
+        from zoneinfo import ZoneInfo
+        return ZoneInfo(t).utcoffset(dt.datetime.now(dt.timezone.utc)).total_seconds() * 1000
+    except Exception:  # noqa: BLE001 - tên múi giờ lạ: dùng múi giờ biểu đồ
+        return it.tz
+
+
+def _date_part(part: str):
+    """Dạng hàm của các biến ngày giờ Pine: hour(time), month(time, "UTC+7")... Trả về thành phần ngày giờ của mốc thời gian (ms)."""
+    def f(it, node, args, kw):
+        import datetime as dt
+        ts = A(args, kw, 0, "time", NAN)
+        if isna(ts):
+            return NAN
+        d = dt.datetime.fromtimestamp((_num(ts) + _tz_offset_ms(it, A(args, kw, 1, "timezone", None))) / 1000, dt.timezone.utc)
+        return float({"hour": d.hour, "minute": d.minute, "second": d.second, "dayofmonth": d.day, "month": d.month, "year": d.year,
+                      "dayofweek": (d.isoweekday() % 7) + 1, "weekofyear": d.isocalendar()[1]}[part])
+    return f
+
+
 def f_na(it, node, args, kw):
     return isna(args[0])
 
@@ -1251,6 +1284,7 @@ class Strategy:
 BUILTINS: dict[str, Callable] = {
     "indicator": f_indicator, "strategy": f_strategy, "plot": f_plot, "plotshape": f_plotshape, "bgcolor": f_bgcolor,
     "hline": f_hline, "alertcondition": f_alertcondition, "time": f_time, "na": f_na, "nz": f_nz,
+    **{_p: _date_part(_p) for _p in ("hour", "minute", "second", "dayofmonth", "dayofweek", "month", "year", "weekofyear")},
     "color.new": f_color_new, "color.rgb": f_color_rgb,
     "input": input_generic, "input.int": make_input("int"), "input.float": make_input("float"), "input.bool": make_input("bool"),
     "input.string": make_input("string"), "input.symbol": make_input("symbol"), "input.timeframe": make_input("timeframe"),
