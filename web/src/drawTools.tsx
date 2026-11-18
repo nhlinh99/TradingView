@@ -26,8 +26,8 @@ export type Env = {
 export type HitEnv = { g: Geo; bars: Bar[]; step: number; plotW: number }
 export type Handle = Pt & { set: (pts: DrawPoint[], np: DrawPoint) => DrawPoint[] }
 
-export type Group = 'line' | 'fib' | 'measure' | 'shape' | 'text'
-export const GROUP_LABEL: Record<Group, string> = { line: 'Đường', fib: 'Fibonacci', measure: 'Đo', shape: 'Hình và bút', text: 'Chữ' }
+export type Group = 'line' | 'fib' | 'position' | 'measure' | 'shape' | 'text'
+export const GROUP_LABEL: Record<Group, string> = { line: 'Đường', fib: 'Fibonacci', position: 'Vị thế', measure: 'Đo', shape: 'Hình và bút', text: 'Chữ và ghi chú' }
 
 export type ToolDef = {
   group: Group
@@ -41,6 +41,8 @@ export type ToolDef = {
   box?: boolean
   /** false: không có tay nắm, chỉ di chuyển cả hình (brush) */
   noHandles?: boolean
+  /** true: hỏi người dùng nội dung văn bản khi vẽ xong */
+  ask?: boolean
   /** true: dùng màu mức riêng, bỏ qua màu người dùng chọn */
   ownColors?: boolean
   draw: (e: Env, P: Pt[], D: DrawPoint[], text?: string) => void
@@ -171,6 +173,98 @@ function regressScreen(e: { g: Geo; bars: Bar[] }, D: DrawPoint[]) {
   return { a, b, off: yu - ya, offL: yl - ya }
 }
 
+
+function pointInPoly(px: number, py: number, S: Pt[]): boolean {
+  let inside = false
+  for (let i = 0, j = S.length - 1; i < S.length; j = i++) {
+    if ((S[i].y > py) !== (S[j].y > py) && px < ((S[j].x - S[i].x) * (py - S[i].y)) / (S[j].y - S[i].y) + S[i].x) inside = !inside
+  }
+  return inside
+}
+function polyDist(px: number, py: number, S: Pt[], closed: boolean): number {
+  let best = Infinity
+  const n = S.length
+  for (let i = 1; i < n; i++) best = Math.min(best, distToSegment(px, py, S[i - 1].x, S[i - 1].y, S[i].x, S[i].y))
+  if (closed && n > 2) best = Math.min(best, distToSegment(px, py, S[n - 1].x, S[n - 1].y, S[0].x, S[0].y))
+  return best
+}
+
+/** Hộp ghi chú nhiều dòng: kích thước theo nội dung. */
+const NOTE_FONT = '12px system-ui, sans-serif'
+function noteLines(text: string): string[] { return (text || ' ').split('\n').slice(0, 8) }
+function noteBox(e: Env, text: string, x: number, y: number) {
+  const lines = noteLines(text)
+  let w = 40
+  e.ctx.save(); e.ctx.font = NOTE_FONT
+  for (const l of lines) w = Math.max(w, e.ctx.measureText(l).width)
+  e.ctx.restore()
+  return { x, y, w: w + 16, h: lines.length * 16 + 10 }
+}
+/** Khi bấm chọn không có ctx: ước lượng bề rộng theo số ký tự của dòng dài nhất. Nội dung văn bản nằm ở payload.text, nhưng hit chỉ nhận điểm neo nên dùng cỡ trung bình. */
+function noteBoxHit(_e: HitEnv, _D: DrawPoint[], x: number, y: number) { return { x, y, w: 140, h: 28 } }
+function drawNoteText(e: Env, text: string, b: { x: number; y: number; w: number; h: number }) {
+  e.ctx.save()
+  e.ctx.setLineDash([]); e.ctx.shadowBlur = 0
+  e.ctx.fillStyle = e.ink; e.ctx.font = NOTE_FONT; e.ctx.textAlign = 'left'; e.ctx.textBaseline = 'middle'
+  noteLines(text).forEach((l, i) => e.ctx.fillText(l, b.x + 8, b.y + 13 + i * 16))
+  e.ctx.restore()
+}
+
+/** Vị thế Long/Short: điểm 1 là giá vào, điểm 2 là cắt lỗ, điểm 3 là chốt lời. Hiện lợi nhuận, rủi ro và tỉ lệ R:R. */
+function positionTool(isLong: boolean): ToolDef {
+  return {
+    group: 'position', label: isLong ? 'Vị thế Long' : 'Vị thế Short',
+    title: `${isLong ? 'Long' : 'Short'}: bấm giá vào, giá cắt lỗ rồi giá chốt lời`,
+    icon: isLong ? I.long : I.short, min: 3, max: 3, ownColors: true,
+    draw: (e, P, D) => {
+      const { ctx } = e
+      const x0 = P[0].x
+      const x1 = Math.min(e.plotW, Math.max(x0 + 120, ...P.map((p) => p.x)))
+      const entry = D[0].price
+      const sgn = isLong ? 1 : -1
+      const zone = (yTo: number, color: string) => {
+        ctx.save(); ctx.fillStyle = color; ctx.globalAlpha = 0.18
+        ctx.fillRect(x0, Math.min(P[0].y, yTo), x1 - x0, Math.abs(yTo - P[0].y)); ctx.restore()
+      }
+      const label = (txt: string, yEdge: number, above: boolean, color: string) => {
+        ctx.save(); ctx.setLineDash([]); ctx.shadowBlur = 0; ctx.fillStyle = color
+        ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
+        ctx.fillText(txt, x0 + 6, yEdge + (above ? -8 : 8)); ctx.restore()
+      }
+      const pctOf = (p: number) => (entry !== 0 ? ((p - entry) / entry) * 100 : 0)
+      let reward = NaN
+      let risk = NaN
+      if (P.length >= 2) {
+        zone(P[1].y, DOWN)
+        const stop = D[1].price
+        risk = sgn * (entry - stop)
+        ctx.strokeStyle = DOWN; ctx.lineWidth = 1; seg(ctx, { x: x0, y: P[1].y }, { x: x1, y: P[1].y })
+        label(`Cắt lỗ ${fmtPrice(stop)}  (${pctOf(stop).toFixed(2)}%)`, P[1].y, P[1].y < P[0].y, DOWN)
+      }
+      if (P.length === 3) {
+        zone(P[2].y, UP)
+        const target = D[2].price
+        reward = sgn * (target - entry)
+        ctx.strokeStyle = UP; ctx.lineWidth = 1; seg(ctx, { x: x0, y: P[2].y }, { x: x1, y: P[2].y })
+        label(`Chốt lời ${fmtPrice(target)}  (${pctOf(target) >= 0 ? '+' : ''}${pctOf(target).toFixed(2)}%)`, P[2].y, P[2].y < P[0].y, UP)
+      }
+      ctx.strokeStyle = e.ink; ctx.lineWidth = 1.5; seg(ctx, { x: x0, y: P[0].y }, { x: x1, y: P[0].y })
+      ctx.fillStyle = e.ink; dots(ctx, P)
+      if (P.length === 3 && risk > 0 && reward > 0) {
+        tag(e, `R:R 1 : ${(reward / risk).toFixed(2)}`, `${isLong ? 'Long' : 'Short'} ${fmtPrice(entry)}`, (x0 + x1) / 2, P[0].y - 19, reward >= risk ? UP : DOWN)
+      } else if (P.length === 3) {
+        tag(e, 'Điểm không hợp lệ', isLong ? 'Long: cắt lỗ < vào < chốt lời' : 'Short: chốt lời < vào < cắt lỗ', (x0 + x1) / 2, P[0].y - 19, '#787b86')
+      }
+    },
+    hit: (e, S, _D, px, py) => {
+      const x0 = S[0].x
+      const x1 = Math.min(e.plotW, Math.max(x0 + 120, ...S.map((p) => p.x)))
+      const ys = S.map((p) => p.y)
+      return px >= x0 - 6 && px <= x1 + 6 && py >= Math.min(...ys) - 6 && py <= Math.max(...ys) + 6 ? 0 : Infinity
+    },
+  }
+}
+
 // ---------- biểu tượng ----------
 
 const I = {
@@ -194,6 +288,16 @@ const I = {
   daterange: <path d="M4 3v16M18 3v16M4 11h14M4 11l3-2.5M4 11l3 2.5M18 11l-3-2.5M18 11l-3 2.5" />,
   pricerange: <path d="M3 4h16M3 18h16M11 4v14M11 4l-2.5 3M11 4l2.5 3M11 18l-2.5-3M11 18l2.5-3" />,
   text: <path d="M5 5h12M11 5v12M8 17h6" />,
+  long: <><path d="M3 11h16" /><path d="M3 3h16v8H3z" /><path d="M3 11h16v7H3z" opacity=".5" /></>,
+  short: <><path d="M3 11h16" /><path d="M3 4h16v7H3z" opacity=".5" /><path d="M3 11h16v8H3z" /></>,
+  circle: <circle cx="11" cy="11" r="7" />,
+  ellipse: <ellipse cx="11" cy="11" rx="8" ry="5" />,
+  triangle: <path d="M11 4l8 14H3z" />,
+  polyline: <path d="M3 17l5-9 5 6 6-10" />,
+  note: <path d="M4 4h14v10H11l-4 4v-4H4z" />,
+  callout: <><path d="M10 4h9v7h-9z" /><path d="M10 9L3 18" /></>,
+  pricelabel: <path d="M3 8h11l5 3-5 3H3z" />,
+  flag: <path d="M6 19V3M6 4h11l-3 4 3 4H6" />,
 }
 
 // ---------- các công cụ ----------
@@ -451,6 +555,108 @@ export const REGISTRY: Record<DrawKind, ToolDef> = {
       return inBox(px, py, { x: x0, y: S[0].y }, { x: x1, y: S[1].y }) ? 0 : Infinity
     },
   },
+  long: positionTool(true),
+  short: positionTool(false),
+  circle: {
+    group: 'shape', label: 'Hình tròn', title: 'Hình tròn: bấm tâm rồi một điểm trên đường tròn', icon: I.circle, min: 2, max: 2,
+    draw: (e, P) => {
+      const r = Math.hypot(P[1].x - P[0].x, P[1].y - P[0].y)
+      e.ctx.beginPath(); e.ctx.arc(P[0].x, P[0].y, r, 0, Math.PI * 2)
+      e.ctx.save(); e.ctx.globalAlpha = 0.12; e.ctx.fill(); e.ctx.restore(); e.ctx.stroke()
+      dots(e.ctx, [P[0]])
+    },
+    hit: (_e, S, _D, px, py) => {
+      const r = Math.hypot(S[1].x - S[0].x, S[1].y - S[0].y)
+      const d = Math.hypot(px - S[0].x, py - S[0].y)
+      return d <= r ? 0 : d - r
+    },
+  },
+  ellipse: {
+    group: 'shape', label: 'Ellipse', title: 'Ellipse: bấm hai góc của hình chữ nhật bao', icon: I.ellipse, min: 2, max: 2, box: true,
+    draw: (e, P) => {
+      const cx = (P[0].x + P[1].x) / 2; const cy = (P[0].y + P[1].y) / 2
+      const a = Math.max(1, Math.abs(P[1].x - P[0].x) / 2); const b = Math.max(1, Math.abs(P[1].y - P[0].y) / 2)
+      e.ctx.beginPath(); e.ctx.ellipse(cx, cy, a, b, 0, 0, Math.PI * 2)
+      e.ctx.save(); e.ctx.globalAlpha = 0.12; e.ctx.fill(); e.ctx.restore(); e.ctx.stroke()
+    },
+    hit: (_e, S, _D, px, py) => {
+      const cx = (S[0].x + S[1].x) / 2; const cy = (S[0].y + S[1].y) / 2
+      const a = Math.max(1, Math.abs(S[1].x - S[0].x) / 2); const b = Math.max(1, Math.abs(S[1].y - S[0].y) / 2)
+      const n = Math.hypot((px - cx) / a, (py - cy) / b)
+      return n <= 1 ? 0 : (n - 1) * Math.min(a, b)
+    },
+  },
+  triangle: {
+    group: 'shape', label: 'Tam giác', title: 'Tam giác: bấm ba đỉnh', icon: I.triangle, min: 3, max: 3,
+    draw: (e, P) => {
+      e.ctx.beginPath(); e.ctx.moveTo(P[0].x, P[0].y)
+      for (let i = 1; i < P.length; i++) e.ctx.lineTo(P[i].x, P[i].y)
+      if (P.length === 3) {
+        e.ctx.closePath()
+        e.ctx.save(); e.ctx.globalAlpha = 0.12; e.ctx.fill(); e.ctx.restore()
+      }
+      e.ctx.stroke()
+    },
+    hit: (_e, S, _D, px, py) => (pointInPoly(px, py, S) ? 0 : polyDist(px, py, S, true)),
+  },
+  polyline: {
+    group: 'shape', label: 'Đường gấp khúc', title: 'Đường gấp khúc: bấm từng điểm, bấm đúp hoặc Enter để kết thúc (tối đa 50 điểm)', icon: I.polyline, min: 2, max: 50,
+    draw: (e, P) => {
+      e.ctx.lineJoin = 'round'
+      e.ctx.beginPath(); e.ctx.moveTo(P[0].x, P[0].y)
+      for (let i = 1; i < P.length; i++) e.ctx.lineTo(P[i].x, P[i].y)
+      e.ctx.stroke(); dots(e.ctx, P)
+    },
+    hit: (_e, S, _D, px, py) => polyDist(px, py, S, false),
+  },
+  note: {
+    group: 'text', label: 'Ghi chú', title: 'Ghi chú: hộp chữ có nền, bấm một điểm', icon: I.note, min: 1, max: 1, ask: true,
+    draw: (e, P, _D, text) => {
+      const b = noteBox(e, text ?? '', P[0].x, P[0].y)
+      e.ctx.save(); e.ctx.globalAlpha = 0.16; e.ctx.fillRect(b.x, b.y, b.w, b.h); e.ctx.restore()
+      e.ctx.strokeRect(b.x, b.y, b.w, b.h)
+      drawNoteText(e, text ?? '', b)
+    },
+    hit: (e, S, D, px, py) => {
+      const b = noteBoxHit(e, D, S[0].x, S[0].y)
+      return px >= b.x - 4 && px <= b.x + b.w + 4 && py >= b.y - 4 && py <= b.y + b.h + 4 ? 0 : Infinity
+    },
+  },
+  callout: {
+    group: 'text', label: 'Chú thích', title: 'Chú thích: bấm điểm cần chỉ, rồi vị trí hộp chữ', icon: I.callout, min: 2, max: 2, ask: true,
+    draw: (e, P, _D, text) => {
+      const b = noteBox(e, text ?? '', P[1].x, P[1].y)
+      const tx = Math.min(Math.max(P[0].x, b.x), b.x + b.w); const ty = Math.min(Math.max(P[0].y, b.y), b.y + b.h)
+      seg(e.ctx, P[0], { x: tx, y: ty })
+      dot(e.ctx, P[0], 3.5)
+      e.ctx.save(); e.ctx.globalAlpha = 0.16; e.ctx.fillRect(b.x, b.y, b.w, b.h); e.ctx.restore()
+      e.ctx.strokeRect(b.x, b.y, b.w, b.h)
+      drawNoteText(e, text ?? '', b)
+    },
+    hit: (e, S, D, px, py) => {
+      const b = noteBoxHit(e, D, S[1].x, S[1].y)
+      const inside = px >= b.x - 4 && px <= b.x + b.w + 4 && py >= b.y - 4 && py <= b.y + b.h + 4
+      return inside ? 0 : distToSegment(px, py, S[0].x, S[0].y, b.x + b.w / 2, b.y + b.h / 2)
+    },
+  },
+  pricelabel: {
+    group: 'text', label: 'Nhãn giá', title: 'Nhãn giá: ghi giá tại điểm bấm', icon: I.pricelabel, min: 1, max: 1,
+    draw: (e, P, D) => {
+      const col = e.ctx.strokeStyle as string
+      tag(e, fmtPrice(D[0].price), null, P[0].x, P[0].y - 34, col)
+      e.ctx.fillStyle = col; e.ctx.beginPath(); e.ctx.moveTo(P[0].x - 5, P[0].y - 10); e.ctx.lineTo(P[0].x + 5, P[0].y - 10); e.ctx.lineTo(P[0].x, P[0].y); e.ctx.closePath(); e.ctx.fill()
+    },
+    hit: (_e, S, _D, px, py) => (Math.abs(px - S[0].x) <= 30 && py >= S[0].y - 36 && py <= S[0].y + 4 ? 0 : Infinity),
+  },
+  flag: {
+    group: 'text', label: 'Cờ', title: 'Cờ đánh dấu: bấm một điểm', icon: I.flag, min: 1, max: 1,
+    draw: (e, P) => {
+      const { ctx } = e
+      seg(ctx, P[0], { x: P[0].x, y: P[0].y - 30 })
+      ctx.beginPath(); ctx.moveTo(P[0].x, P[0].y - 30); ctx.lineTo(P[0].x + 18, P[0].y - 30); ctx.lineTo(P[0].x + 13, P[0].y - 24); ctx.lineTo(P[0].x + 18, P[0].y - 18); ctx.lineTo(P[0].x, P[0].y - 18); ctx.closePath(); ctx.fill()
+    },
+    hit: (_e, S, _D, px, py) => (px >= S[0].x - 6 && px <= S[0].x + 20 && py >= S[0].y - 32 && py <= S[0].y + 2 ? 0 : Infinity),
+  },
   text: {
     group: 'text', label: 'Chữ', title: 'Văn bản: bấm một điểm', icon: I.text, min: 1, max: 1,
     draw: (e, P, _D, text) => {
@@ -464,7 +670,7 @@ export const REGISTRY: Record<DrawKind, ToolDef> = {
 }
 
 export const KINDS = Object.keys(REGISTRY) as DrawKind[]
-export const GROUP_ORDER: Group[] = ['line', 'fib', 'measure', 'shape', 'text']
+export const GROUP_ORDER: Group[] = ['line', 'fib', 'position', 'measure', 'shape', 'text']
 
 /** Các tay nắm của một hình: hình dạng hộp có 4 góc, còn lại là các điểm neo. Kéo tay nắm đổi các điểm neo tương ứng. */
 export function handlesFor(kind: DrawKind, P: Pt[]): Handle[] {

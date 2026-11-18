@@ -47,7 +47,7 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
   const [hideAll, setHideAll] = useState(false)
   const [magnet, setMagnet] = useState(false)
   const [openGrp, setOpenGrp] = useState<Group | null>(null)
-  const [lastTool, setLastTool] = useState<Record<Group, DrawKind>>({ line: 'trend', fib: 'fib', measure: 'ruler', shape: 'rect', text: 'text' })
+  const [lastTool, setLastTool] = useState<Record<Group, DrawKind>>({ line: 'trend', fib: 'fib', position: 'long', measure: 'ruler', shape: 'rect', text: 'text' })
   const pending = useRef<DrawPoint[]>([])
   const brush = useRef<DrawPoint[] | null>(null)
   const hover = useRef<DrawPoint | null>(null)
@@ -60,6 +60,7 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
   const hideRef = useRef(false)
   const magnetRef = useRef(false)
   const redraw = useRef<() => void>(() => {})
+  const completePendingRef = useRef<(t: DrawKind) => Promise<void>>(async () => {})
   const hist = useRef<{ undo: Drawing[][]; redo: Drawing[][] }>({ undo: [], redo: [] })
   const [histLen, setHistLen] = useState({ undo: 0, redo: 0 })
   itemsRef.current = items
@@ -338,7 +339,12 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
         if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return }
         if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); redo(); return }
       }
-      if (e.key === 'Escape') { setSelected(null); setOpenGrp(null); setTool('cursor'); redraw.current() }
+      if (e.key === 'Enter' && pending.current.length > 0) {
+        const t = toolRef.current
+        if (t !== 'cursor' && t !== 'erase') { e.preventDefault(); void completePendingRef.current(t) }
+        return
+      }
+      if (e.key === 'Escape') { pending.current = []; setSelected(null); setOpenGrp(null); setTool('cursor'); redraw.current() }
       else if ((e.key === 'Delete' || e.key === 'Backspace') && selRef.current !== null) { e.preventDefault(); void remove(selRef.current) }
     }
     host.addEventListener('pointerdown', onDown)
@@ -430,19 +436,35 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
       try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId) } catch { /* không bắt buộc */ }
       return
     }
-    pending.current = [...pending.current, p]
-    if (pending.current.length >= REGISTRY[t].max) {
-      const payload: Drawing['payload'] = { points: pending.current, color: COLOR }
-      if (t === 'text') {
-        const text = window.prompt('Nội dung văn bản')
-        if (!text) { pending.current = []; redraw.current(); return }
-        payload.text = text
-      }
-      pending.current = []
-      await finishCreate(t, payload)
+    const def = REGISTRY[t]
+    const g0 = geo()
+    const lastP = pending.current[pending.current.length - 1]
+    if (g0 && lastP && def.min !== def.max) {
+      // công cụ nhiều điểm: bỏ qua cú bấm trùng điểm trước (nửa sau của bấm đúp)
+      const a = toScreen(g0, lastP); const b = toScreen(g0, p)
+      if (a && b && Math.hypot(a.x - b.x, a.y - b.y) < 4) return
     }
+    pending.current = [...pending.current, p]
+    if (pending.current.length >= def.max) await completePending(t)
     redraw.current()
   }
+
+  /** Hoàn tất hình đang vẽ dở: hỏi nội dung nếu là công cụ chữ, rồi lưu. */
+  const completePending = async (t: DrawKind) => {
+    const def = REGISTRY[t]
+    if (pending.current.length < def.min) return
+    const payload: Drawing['payload'] = { points: pending.current, color: COLOR }
+    if (def.ask) {
+      const text = window.prompt('Nội dung (xuống dòng bằng \\n)')
+      if (!text) { pending.current = []; redraw.current(); return }
+      payload.text = text.replace(/\\n/g, '\n')
+    }
+    pending.current = []
+    hover.current = null
+    await finishCreate(t, payload)
+  }
+
+  completePendingRef.current = completePending
 
   const onMove = (e: React.PointerEvent) => {
     if (brush.current) {
@@ -489,6 +511,7 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
         onPointerDown={(e) => void onDown(e)}
         onPointerMove={onMove}
         onPointerUp={() => void onUp()}
+        onDoubleClick={() => { const t = toolRef.current; if (t !== 'cursor' && t !== 'erase' && REGISTRY[t].min !== REGISTRY[t].max && t !== 'brush') void completePending(t) }}
       />
       {sel && selDef && chip && !hideAll && (
         <div className="draw-chip" style={{ left: chip.x, top: chip.y }} role="toolbar" aria-label="Thuộc tính hình đang chọn">

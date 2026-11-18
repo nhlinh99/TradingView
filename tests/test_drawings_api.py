@@ -72,6 +72,22 @@ def test_recreate_with_same_id_for_undo(data_root):
     assert client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": "hline", "payload": pts((1, 5)), "id": a["id"]}).status_code == 409
 
 
+def test_phase2_tools_point_counts(data_root):
+    need = {"long": 3, "short": 3, "circle": 2, "ellipse": 2, "triangle": 3, "note": 1, "callout": 2, "pricelabel": 1, "flag": 1}
+    for kind, n in need.items():
+        good = pts(*[(i + 1, 10 + i) for i in range(n)])
+        bad = pts(*[(i + 1, 10 + i) for i in range(n + 1)])
+        assert client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": kind, "payload": good}).status_code == 200, kind
+        assert client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": kind, "payload": bad}).status_code == 422, kind
+
+
+def test_polyline_range(data_root):
+    ok = pts(*[(i, 10 + i) for i in range(50)])
+    assert client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": "polyline", "payload": ok}).status_code == 200
+    assert client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": "polyline", "payload": pts((1, 1))}).status_code == 422
+    assert client.post("/api/drawings", json={"symbol": "BTCUSDT", "kind": "polyline", "payload": pts(*[(i, 1) for i in range(51)])}).status_code == 422
+
+
 def test_validation(data_root):
     bad = [
         {"symbol": "BTCUSDT", "kind": "star", "payload": pts((1, 1))},
