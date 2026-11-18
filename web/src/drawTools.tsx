@@ -569,7 +569,9 @@ export const REGISTRY: Record<DrawKind, ToolDef> = {
       const x1 = Math.min(e.plotW, S[2].x + Math.max(160, Math.abs(S[2].x - S[0].x)))
       let dist = Math.min(distToSegment(px, py, S[0].x, S[0].y, S[1].x, S[1].y), distToSegment(px, py, S[1].x, S[1].y, S[2].x, S[2].y))
       for (const lv of FIBX_LEVELS) {
-        const y = e.g.s.priceToCoordinate(pc.price + (pb.price - pa.price) * lv)
+        const price = pc.price + (pb.price - pa.price) * lv
+        if (price <= 0) continue   // mức âm không được vẽ nên không bấm trúng
+        const y = e.g.s.priceToCoordinate(price)
         if (y !== null && px >= S[2].x - 6 && px <= x1) dist = Math.min(dist, Math.abs(py - y))
       }
       return dist

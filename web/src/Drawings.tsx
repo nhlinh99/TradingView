@@ -176,6 +176,11 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
         const P = pts as Pt[]
         const col = d.payload.color ?? COLOR
         ctx.save()
+        // Fib, Pitchfork, Gann kéo dài ra nhiều mức: không vẽ phần dưới giá 0 (giá không âm)
+        if (def.group === 'fib' || def.group === 'pitchfork' || def.group === 'gann') {
+          const y0 = g.s.priceToCoordinate(0)
+          if (y0 !== null && y0 < h) { ctx.beginPath(); ctx.rect(0, 0, w, Math.max(0, y0)); ctx.clip() }
+        }
         ctx.strokeStyle = col
         ctx.fillStyle = col
         const isSel = !preview && (d as Drawing).id === selRef.current
