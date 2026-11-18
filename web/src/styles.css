@@ -554,4 +554,4 @@ kbd { font: 11px ui-monospace, Consolas, monospace; border: 1px solid var(--line
 .heat-tip i { font-style: normal; font-weight: 600; }
 .heat-tip i.bid { color: #00a65a; }
 .heat-tip i.ask { color: #e53935; }
-
+.flow-status.info { max-width: min(560px, 60%); white-space: normal; line-height: 1.35; opacity: .92; }

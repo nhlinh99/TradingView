@@ -189,3 +189,107 @@ def icebergs_endpoint(
         with limits.heavy():
             return get_icebergs(sym, from_, to, tbucket, factor, min_qty, top)
     return limits.coalesce(("icebergs", sym, from_, to, tbucket, factor, min_qty, top), limits.CACHE_TTL, run)
+
+
+# ---------- độ phủ dữ liệu sổ lệnh và dải độ sâu thô ----------
+
+GAP_MS = 3 * 60_000          # hai mẫu sổ lệnh cách nhau quá 3 phút là một khoảng hở
+MAX_DEPTH_ROWS = 60_000
+
+
+def get_coverage(symbol: str, start_ms: int, end_ms: int) -> dict:
+    """Các đoạn thời gian đã ghi sổ lệnh chi tiết (heatmap) trong [start_ms, end_ms): [[bắt đầu, kết thúc], ...] (ms).
+
+    Gộp hai mẫu liền nhau nếu cách nhau không quá 3 phút. Dùng để giao diện đánh dấu đoạn không có heatmap.
+    """
+    try:
+        store.symbol_config(symbol)
+    except (ValueError, KeyError) as e:
+        raise HTTPException(400, str(e)) from e
+    if end_ms <= start_ms:
+        raise HTTPException(400, "to phải lớn hơn from")
+    parts = [f"SELECT ts FROM ({s})" for s in (store.range_select("book", symbol, start_ms, end_ms),
+                                                   store.range_select("book_1m", symbol, start_ms, end_ms)) if s]
+    segs: list[list[int]] = []
+    first = last = None
+    if parts:
+        con = store.query_conn()
+        try:
+            minutes = [r[0] for r in con.execute(
+                f"SELECT DISTINCT ts // 60000 AS m FROM ({' UNION ALL '.join(parts)}) ORDER BY m").fetchall()]
+        finally:
+            con.close()
+        for m in minutes:
+            t0, t1 = m * 60_000, (m + 1) * 60_000
+            if segs and t0 - segs[-1][1] <= GAP_MS:
+                segs[-1][1] = t1
+            else:
+                segs.append([t0, t1])
+        if segs:
+            first, last = segs[0][0], segs[-1][1]
+    covered = sum(b - a for a, b in segs)
+    return {"symbol": symbol, "from": start_ms, "to": end_ms, "segments": segs, "first": first, "last": last, "covered_ms": covered}
+
+
+@router.get("/api/heatmap/coverage")
+def coverage_endpoint(symbol: str, from_: int = Query(..., alias="from"), to: int = Query(...)) -> dict:
+    sym = symbol.upper()
+    return limits.coalesce(("coverage", sym, from_, to), limits.CACHE_TTL, lambda: get_coverage(sym, from_, to))
+
+
+def get_depthbands(symbol: str, start_ms: int, end_ms: int, tbucket_ms: int) -> dict:
+    """Độ sâu thô từ kho Binance `bookDepth` (độ sâu cộng dồn tới ±0,2%, 1%...5% quanh giá, 30 giây/mẫu): không có từng mức giá.
+
+    Mỗi dòng: [t, lo_pct, hi_pct, mật_độ]. Dải nằm giữa hai mốc liền nhau của cùng một phía (lo, hi theo % so với giá giữa; âm là phía mua),
+    mật_độ là giá trị lệnh chờ (USD) trên mỗi 1% khoảng cách. `scale` là phân vị 99 để chuẩn hoá màu.
+    """
+    try:
+        store.symbol_config(symbol)
+    except (ValueError, KeyError) as e:
+        raise HTTPException(400, str(e)) from e
+    if end_ms <= start_ms:
+        raise HTTPException(400, "to phải lớn hơn from")
+    tb = max(tbucket_ms, 60_000)
+    src = store.range_select("bookdepth", symbol, start_ms, end_ms)
+    rows: list[list] = []
+    scale = 0.0
+    if src:
+        con = store.query_conn()
+        try:
+            data = con.execute(
+                f"SELECT (ts // {tb}) * {tb} AS t, round(pct::DOUBLE, 3) AS p, avg(notional) AS n FROM ({src}) "
+                f"GROUP BY 1, 2 ORDER BY 1, 2").fetchall()
+        finally:
+            con.close()
+        by_t: dict[int, dict[float, float]] = {}
+        for t, p, n in data:
+            by_t.setdefault(t, {})[p] = n
+        for t in sorted(by_t):
+            lv = by_t[t]
+            for sign in (-1, 1):
+                prev_p, prev_n = 0.0, 0.0
+                for p in sorted((q for q in lv if q * sign > 0), key=abs):
+                    width = abs(p) - prev_p
+                    dens = (lv[p] - prev_n) / width if width > 0 else 0.0
+                    if dens > 0:
+                        lo, hi = (-abs(p), -prev_p) if sign < 0 else (prev_p, abs(p))
+                        rows.append([t, round(lo, 3), round(hi, 3), round(dens, 1)])
+                    prev_p, prev_n = abs(p), lv[p]
+        if len(rows) > MAX_DEPTH_ROWS:
+            raise HTTPException(400, "quá nhiều dòng; tăng tbucket")
+        if rows:
+            dens = sorted(r[3] for r in rows)
+            scale = dens[min(len(dens) - 1, int(len(dens) * 0.99))]   # phân vị 99
+    return {"symbol": symbol, "from": start_ms, "to": end_ms, "tbucket": tb, "scale": round(float(scale), 1), "rows": rows}
+
+
+@router.get("/api/depthbands")
+def depthbands_endpoint(
+    symbol: str, from_: int = Query(..., alias="from"), to: int = Query(...), tbucket: int = Query(900_000, ge=1),
+) -> dict:
+    sym = symbol.upper()
+
+    def run() -> dict:
+        with limits.heavy():
+            return get_depthbands(sym, from_, to, tbucket)
+    return limits.coalesce(("depthbands", sym, from_, to, tbucket), limits.CACHE_TTL, run)

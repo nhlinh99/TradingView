@@ -9,7 +9,7 @@ Ký hiệu: `[ ]` chưa làm, `[~]` làm dở, `[x]` xong. **Chặn** nghĩa là
 - [x] Giữ tick một năm hay gom nén: đã chọn gom nén (`full_days = 30`) và đã chạy ngày 15/11. Tick BTCUSDT và XAUUSDT quá 30 ngày thành footprint 1 phút. Muốn lấy lại tick cũ thì tải lại từ kho Binance bằng `collector.backfill`. Xem [10](docs/plan/10-memory-data-optimization.md).
 - [ ] **Khởi động lại `dev.ps1` một lần nữa** để nạp giới hạn bộ nhớ DuckDB và bộ giám sát bộ nhớ của server. Server Python không tự nạp lại. [01](docs/plan/01-collector-storage.md)
 - [ ] **Theo dõi bộ nhớ server khi chạy nhiều giờ.** Chưa biết nguyên nhân thật của lần phình 28 GB ngày 15/11; xem dòng cảnh báo `server.mem` nếu server tự thoát (mã 75). [01](docs/plan/01-collector-storage.md)
-- [ ] **Chạy collector bằng Task Scheduler** thay vì phiên làm việc: `scripts/run-collectors.ps1` (nay có crawl bù khi khởi động) và `python -m collector.daily --vn` lúc 03:00. Sáng 15/11 mất 8 giờ sổ lệnh vì collector dừng theo phiên, và không lấy lại được. Lệnh `schtasks` có trong README. Cần bạn đồng ý vì đây là thay đổi hệ thống. [01](docs/plan/01-collector-storage.md)
+- [x] **Chạy collector bằng Task Scheduler** (đã đăng ký ngày 18/11 bằng `scripts/install-tasks.ps1`: `TradingView-Collectors` lúc đăng nhập, `TradingView-Daily` lúc 03:00). Còn: tắt bộ collector đang chạy tay rồi để tác vụ tự bật ở lần đăng nhập sau. Ghi chú cũ: thay vì phiên làm việc: `scripts/run-collectors.ps1` (nay có crawl bù khi khởi động) và `python -m collector.daily --vn` lúc 03:00. Sáng 15/11 mất 8 giờ sổ lệnh vì collector dừng theo phiên, và không lấy lại được. Lệnh `schtasks` có trong README. Cần bạn đồng ý vì đây là thay đổi hệ thống. [01](docs/plan/01-collector-storage.md)
 
 ## 2. Việc của bạn
 

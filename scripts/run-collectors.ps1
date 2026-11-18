@@ -6,6 +6,11 @@ param([string]$Symbols = 'BTCUSDT,XAUUSDT', [switch]$SkipCatchup)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 
+# Only one instance at a time: a scheduled task and a manual start must not both write the same data.
+$createdNew = $false
+$script:mutex = New-Object System.Threading.Mutex($true, 'Global\TradingViewCollectors', [ref]$createdNew)
+if (-not $createdNew) { Write-Host 'collectors already running (another run-collectors.ps1 holds the lock); exiting'; exit 0 }
+
 $dataDir = $null
 foreach ($line in Get-Content (Join-Path $root '.env')) {
   if ($line -match '^\s*DATA_DIR\s*=\s*(.+?)\s*$') { $dataDir = $Matches[1] }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react'
 import type { IChartApi, ISeriesApi, MouseEventParams } from 'lightweight-charts'
-import { fetchHeatmap } from './api'
+import { fetchCoverage, fetchDepthBands, fetchHeatmap } from './api'
 import { applyCutoff, bestBidAsk, heatColor, indexToTime, tfMs, timeToIndex, type Bar } from './logic'
 
 type Props = {
@@ -25,6 +25,7 @@ const CELL_PX = 4
 export default function Heatmap({ on, mode, cutLo, cutHi, bestLines, strip, dark, symbol, tf, chart, candles, bars, version }: Props) {
   const cv = useRef<HTMLCanvasElement>(null)
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [note, setNote] = useState<string | null>(null)
   const [tip, setTip] = useState<{ x: number; y: number; flip: boolean; price: string; time: string; bid: number; ask: number; rel: number } | null>(null)
 
   useEffect(() => {
@@ -44,6 +45,13 @@ export default function Heatmap({ on, mode, cutLo, cutHi, bestLines, strip, dark
     let rows: number[][] = []
     let byTime = new Map<number, number[][]>()
     let retry = 0
+    // đoạn đã có sổ lệnh chi tiết và dải độ sâu thô (chỉ dùng cho đoạn chưa có sổ lệnh chi tiết)
+    let segs: [number, number][] = []
+    let depthRows: number[][] = []
+    let depthScale = 1
+    let depthTb = 900_000
+    let auxKey = ''
+    let auxCtrl: AbortController | null = null
     let scale = 1
     let bucket = 0
     let baseBucket = 0
@@ -97,11 +105,44 @@ export default function Heatmap({ on, mode, cutLo, cutHi, bestLines, strip, dark
         tb = j.tbucket
         sig = ''
         if (first) wantKey = '' // vừa biết bucket cơ sở: tính lại mult
+        void loadAux(fromQ, toQ, wpx)
       } catch (e) {
         if ((e as Error)?.name === 'AbortError' || stopped) return   // bị thay bằng yêu cầu mới hoặc đã đóng
         wantKey = ''
         setStatus('error')
         retry = window.setTimeout(() => { sig = ''; void load() }, 6000) as unknown as number   // thử lại sau 6 giây
+      }
+    }
+
+    /** Độ phủ dữ liệu của cửa sổ đang xem; chỗ nào thiếu thì nạp thêm độ sâu thô. Chạy sau khi heatmap chi tiết đã tải xong. */
+    const loadAux = async (fromQ: number, toQ: number, wpx: number) => {
+      const key = `${symbol}|${fromQ}|${toQ}`
+      if (key === auxKey) return
+      auxKey = key
+      auxCtrl?.abort()
+      auxCtrl = new AbortController()
+      try {
+        const cov = await fetchCoverage(symbol, fromQ, toQ, auxCtrl.signal)
+        if (stopped) return
+        segs = cov.segments
+        const win = toQ - fromQ
+        const pct = win > 0 ? (cov.covered_ms / win) * 100 : 0
+        const hours = Math.round(cov.covered_ms / 3_600_000)
+        const fmt = (ms: number) => new Date(ms).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+        setNote(cov.first === null
+          ? 'Chưa có sổ lệnh chi tiết trong khoảng này; phần hiển thị là độ sâu thô (±5%).'
+          : pct >= 98 ? null
+            : `Sổ lệnh chi tiết: ${hours} giờ (${pct.toFixed(0)}% khoảng đang xem), từ ${fmt(cov.first)}. Chỗ thiếu hiển thị độ sâu thô (±5%).`)
+        if (pct >= 98) { depthRows = []; sig = ''; return }
+        const tbD = Math.max(60_000, Math.ceil(win / Math.max(1, wpx / 6) / 60_000) * 60_000)
+        const d = await fetchDepthBands(symbol, fromQ, toQ, tbD, auxCtrl.signal)
+        depthRows = d.rows
+        depthScale = d.scale || 1
+        depthTb = d.tbucket
+        sig = ''
+      } catch (e) {
+        if ((e as Error)?.name === 'AbortError') return
+        auxKey = ''   // lỗi tạm: lần sau thử lại
       }
     }
 
@@ -149,6 +190,27 @@ export default function Heatmap({ on, mode, cutLo, cutHi, bestLines, strip, dark
           cache.set(t, v)
         }
         return v
+      }
+      // độ sâu thô (dưới cùng): chỉ vẽ ở các ô thời gian chưa có sổ lệnh chi tiết
+      if (depthRows.length > 0) {
+        const nb = bars.current.length
+        const covered = (t: number) => { const m = t + depthTb / 2; return segs.some(([a, b]) => m >= a && m <= b) }
+        const dspan = (t: number): [number, number] => [xOf(timeToIndex(times, t / 1000, step) - 0.5), xOf(timeToIndex(times, (t + depthTb) / 1000, step) - 0.5)]
+        for (const [t, lo, hi, dens] of depthRows) {
+          if (covered(t)) continue
+          const [x0, x1] = dspan(t)
+          if (Number.isNaN(x0) || x1 < 0 || x0 > plotW) continue
+          const bi = Math.min(nb - 1, Math.max(0, Math.round(timeToIndex(times, (t + depthTb / 2) / 1000, step))))
+          const ref = bars.current[bi]?.close
+          if (!ref) continue
+          const yt = s.priceToCoordinate(ref * (1 + hi / 100))
+          const yb = s.priceToCoordinate(ref * (1 + lo / 100))
+          if (yt === null || yb === null) continue
+          const [R, G, B, A] = heatColor(applyCutoff(dens / depthScale, cutLo, cutHi), mode === 'bookmap' ? 'bookmap' : undefined)
+          if (A === 0) continue
+          ctx.fillStyle = `rgba(${R | 0},${G | 0},${B | 0},${(A * 0.55).toFixed(2)})`
+          ctx.fillRect(x0, Math.min(yt, yb), Math.max(1, x1 - x0 + 0.5), Math.max(1, Math.abs(yb - yt) + 0.5))
+        }
       }
       for (const [t, price, bid, ask] of rows) {
         const [x0, x1] = span(t)
@@ -233,6 +295,7 @@ export default function Heatmap({ on, mode, cutLo, cutHi, bestLines, strip, dark
       stopped = true
       window.clearTimeout(timer)
       window.clearTimeout(retry)
+      auxCtrl?.abort()
       chart.current?.unsubscribeCrosshairMove(onMove)
       setTip(null)
       cancelAnimationFrame(raf)
@@ -249,6 +312,7 @@ export default function Heatmap({ on, mode, cutLo, cutHi, bestLines, strip, dark
           {status === 'loading' ? 'Đang tải heatmap…' : 'Chưa tải được heatmap, đang thử lại…'}
         </div>
       )}
+      {on && note && status === 'idle' && <div className="flow-status info" role="note">{note}</div>}
       {on && tip && (
         <div className="heat-tip" style={{ left: tip.x, top: tip.y, transform: tip.flip ? 'translate(calc(-100% - 14px), 14px)' : 'translate(14px, 14px)' }}>
           <b>{tip.price}</b>

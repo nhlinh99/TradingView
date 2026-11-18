@@ -140,3 +140,32 @@ def test_coalesce_does_not_cache_errors():
         except RuntimeError:
             pass
     assert len(n) == 2
+
+
+def test_coverage_segments_merge_small_gaps_and_split_large(data_root):
+    rows = [(T0 + i * 5000, 670000, 1.0, 1.0) for i in range(0, 60)]                 # 5 phút liên tục
+    rows += [(T0 + 20 * 60_000 + i * 5000, 670000, 1.0, 1.0) for i in range(0, 60)]  # đoạn thứ hai cách 15 phút
+    put_book(rows)
+    r = client.get("/api/heatmap/coverage", params={"symbol": "BTCUSDT", "from": T0, "to": T0 + 3_600_000})
+    assert r.status_code == 200, r.text
+    j = r.json()
+    assert len(j["segments"]) == 2
+    assert j["segments"][0][0] <= T0 and j["segments"][1][0] >= T0 + 20 * 60_000 - 60_000
+    assert j["first"] == j["segments"][0][0] and j["last"] == j["segments"][1][1]
+    assert 0 < j["covered_ms"] < 3_600_000
+    empty = client.get("/api/heatmap/coverage", params={"symbol": "XAUUSDT", "from": T0, "to": T0 + 3_600_000}).json()
+    assert empty["segments"] == [] and empty["first"] is None
+
+
+def test_depthbands_turn_cumulative_depth_into_density_per_percent(data_root):
+    # độ sâu cộng dồn tới 1% là 100, tới 2% là 300 -> dải 0-1% mật độ 100/1%, dải 1-2% mật độ 200/1%
+    rows = [(T0, -1.0, 1.0, 100.0), (T0, -2.0, 3.0, 300.0), (T0, 1.0, 1.0, 50.0), (T0, 2.0, 2.0, 80.0)]
+    store.write_partition("bookdepth", "BTCUSDT", DAY, rows)
+    r = client.get("/api/depthbands", params={"symbol": "BTCUSDT", "from": T0, "to": T0 + 600_000, "tbucket": 600_000})
+    assert r.status_code == 200, r.text
+    j = r.json()
+    got = {(x[1], x[2]): x[3] for x in j["rows"]}
+    assert got[(-1.0, 0.0)] == 100.0 and got[(-2.0, -1.0)] == 200.0
+    assert got[(0.0, 1.0)] == 50.0 and got[(1.0, 2.0)] == 30.0
+    assert j["scale"] > 0
+    assert client.get("/api/depthbands", params={"symbol": "NOPE", "from": T0, "to": T0 + 1000}).status_code == 400

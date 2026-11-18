@@ -181,6 +181,8 @@ C:\tv-data\.venv\Scripts\python.exe -m collector.daily --vn
 
 Dòng đầu khởi động mọi collector nền (tick, sổ lệnh, Deribit, cảnh báo, gộp nóng, sổ lệnh VN100), tự bật lại tiến trình nào thoát và tự crawl bù dữ liệu thiếu mỗi lần khởi động. Dòng thứ hai là việc hằng đêm: đồng bộ nến, tải bù khoảng hở từ kho Binance, cập nhật nến VN100 và gom nén. Collector chỉ chạy khi cửa sổ còn mở, nên nên lên lịch cả hai bằng Task Scheduler. Đừng chạy hai bộ collector cùng lúc, vì sẽ ghi trùng.
 
+**Chạy tự động.** `.\scripts\install-tasks.ps1` đăng ký hai tác vụ Task Scheduler cho người dùng hiện tại (không cần quyền quản trị): `TradingView-Collectors` chạy `run-collectors.ps1` mỗi lần đăng nhập, `TradingView-Daily` chạy `collector.daily --vn` lúc 03:00 (lần lỡ giờ sẽ chạy bù khi máy bật lại). `run-collectors.ps1` có khoá nên không bao giờ chạy hai bản cùng lúc. Gỡ bằng `.\scripts\install-tasks.ps1 -Remove`. Máy phải bật thì mới có dữ liệu: heatmap chỉ dài bằng thời gian collector đã chạy, vì Binance không cung cấp sổ lệnh chi tiết trong quá khứ. Đoạn chưa có sổ lệnh chi tiết được vẽ bằng độ sâu thô (±5%) từ kho `bookDepth`.
+
 Lệnh của từng collector, cách lên lịch bằng `schtasks`, và chính sách gom nén: [`docs/plan/01-collector-storage.md`](docs/plan/01-collector-storage.md). Ghi chú kỹ thuật và số đo: [`docs/plan/engineering-notes.md`](docs/plan/engineering-notes.md).
 
 ## Cấu trúc

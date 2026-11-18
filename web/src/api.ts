@@ -10,6 +10,22 @@ export type BarsResponse = {
   bars: number[][]
 }
 
+/** Yêu cầu nặng: thử lại đúng một lần sau 2 giây khi máy chủ báo bận (503), vì mỗi lần thử lại sẽ xếp thêm một truy vấn nặng. */
+async function heavyJson<T>(url: string, init?: RequestInit): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    const r = await fetch(url, init)
+    if (r.status === 503 && attempt < 1) {
+      await new Promise<void>((resolve, reject) => {
+        const t = setTimeout(resolve, 2000)
+        init?.signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Aborted', 'AbortError')) }, { once: true })
+      })
+      continue
+    }
+    if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`)
+    return (await r.json()) as T
+  }
+}
+
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
   const r = await fetch(url, init)
   if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`)
@@ -116,6 +132,20 @@ async function viaFlowSource<T extends { rows: (number | string)[][] }>(symbol: 
   if (!src) return call(symbol)
   const [res, off] = await Promise.all([call(src), flowBasis(symbol, src)])
   return { ...res, symbol, rows: res.rows.map((r) => { const x = [...r]; x[1] = Math.round((Number(r[1]) + off) * 1e6) / 1e6; return x }) }
+}
+
+export type CoverageResponse = { symbol: string; from: number; to: number; segments: [number, number][]; first: number | null; last: number | null; covered_ms: number }
+/** Các đoạn thời gian đã ghi sổ lệnh chi tiết (cho heatmap). XAUUSD dùng sổ lệnh XAUUSDT. */
+export function fetchCoverage(symbol: string, from: number, to: number, signal?: AbortSignal) {
+  const q = new URLSearchParams({ symbol: FLOW_SOURCE[symbol] ?? symbol, from: String(from), to: String(to) })
+  return json<CoverageResponse>(`/api/heatmap/coverage?${q}`, { signal })
+}
+
+export type DepthBandsResponse = { symbol: string; from: number; to: number; tbucket: number; scale: number; rows: number[][] }
+/** Độ sâu thô (±0,2% đến ±5% quanh giá, kho bookDepth của Binance) cho đoạn chưa có heatmap chi tiết. Dải tính theo % nên không cần dịch giá. */
+export function fetchDepthBands(symbol: string, from: number, to: number, tbucket: number, signal?: AbortSignal) {
+  const q = new URLSearchParams({ symbol: FLOW_SOURCE[symbol] ?? symbol, from: String(from), to: String(to), tbucket: String(tbucket) })
+  return heavyJson<DepthBandsResponse>(`/api/depthbands?${q}`, { signal })
 }
 
 export type HeatmapResponse = { symbol: string; from: number; to: number; tbucket: number; bucket: number; scale: number; rows: number[][] }
