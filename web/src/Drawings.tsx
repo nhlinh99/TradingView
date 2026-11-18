@@ -48,6 +48,13 @@ const NEED: Record<DrawKind, number> = { trend: 2, hline: 1, rect: 2, fib: 2, fi
 const COLOR = '#f0b90b'
 const BOX_KINDS: DrawKind[] = ['rect', 'fib', 'ruler']
 
+/** Màu từng mức Fibonacci, theo bảng màu mặc định của TradingView. */
+const FIB_COLORS: Record<number, string> = {
+  0: '#787b86', 0.236: '#f23645', 0.382: '#ff9800', 0.5: '#4caf50', 0.618: '#089981', 0.786: '#00bcd4', 1: '#787b86',
+  1.272: '#9c27b0', 1.414: '#e91e63', 1.618: '#2962ff', 2: '#089981', 2.618: '#f23645', 3.618: '#9c27b0', 4.236: '#e91e63',
+}
+const fmtPrice = (p: number) => p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: p < 1 ? 6 : 2 })
+
 type XY = { x: number; y: number }
 type Handle = XY & { set: (pts: DrawPoint[], np: DrawPoint) => DrawPoint[] }
 /** Các tay nắm của một hình: hình dạng hộp (hộp, fib, thước) có 4 góc, hình khác có đúng các điểm neo. Kéo tay nắm đổi các điểm neo tương ứng. */
@@ -135,6 +142,35 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
     let raf = 0
     let stopped = false
     let sig = ''
+    /** Vẽ các mức Fib kiểu TradingView: dải tô màu giữa hai mức liền kề, vạch màu theo mức, nhãn "mức (giá)" nằm bên trái vạch. */
+    const drawFib = (levels: number[], priceOf: (lv: number) => number, x0: number, x1: number, g: NonNullable<ReturnType<typeof geo>>, dashed: boolean) => {
+      const ys = levels.map((lv) => g.s.priceToCoordinate(priceOf(lv)))
+      ctx.lineWidth = 1; ctx.shadowBlur = 0
+      for (let i = 0; i < levels.length - 1; i++) {
+        const ya = ys[i]; const yb = ys[i + 1]
+        if (ya === null || yb === null) continue
+        ctx.fillStyle = FIB_COLORS[levels[i + 1]] ?? '#787b86'
+        ctx.globalAlpha = 0.12
+        ctx.fillRect(x0, Math.min(ya, yb), x1 - x0, Math.abs(yb - ya))
+      }
+      ctx.globalAlpha = 1
+      ctx.font = '11px system-ui, sans-serif'; ctx.textBaseline = 'middle'
+      levels.forEach((lv, i) => {
+        const y = ys[i]
+        if (y === null) return
+        const col = FIB_COLORS[lv] ?? '#787b86'
+        ctx.strokeStyle = col; ctx.fillStyle = col; ctx.setLineDash(dashed ? [5, 4] : [])
+        ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke()
+        const label = `${lv} (${fmtPrice(priceOf(lv))})`
+        const inside = x0 < ctx.measureText(label).width + 12   // sát mép trái thì ghi nhãn bên trong
+        ctx.textAlign = inside ? 'left' : 'right'
+        const lx = inside ? x0 + 4 : x0 - 5
+        ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = dark ? 'rgba(19,23,34,0.85)' : 'rgba(255,255,255,0.85)'   // viền nền để chữ đọc được trên nến
+        ctx.strokeText(label, lx, y)
+        ctx.fillText(label, lx, y)
+      })
+      ctx.setLineDash([])
+    }
     const draw = (force = false) => {
       raf = requestAnimationFrame(() => draw())
       if (stopped) return
@@ -199,36 +235,20 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
         } else if (d.kind === 'fib' && P.length === 2) {
           const [a, b] = d.payload.points
           const x0 = Math.min(P[0].x, P[1].x); const x1 = Math.max(P[0].x, P[1].x, x0 + 60)
-          ctx.font = '10px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'
-          FIB_LEVELS.forEach((lv) => {
-            const price = b.price + (a.price - b.price) * lv
-            const y = g.s.priceToCoordinate(price)
-            if (y === null) return
-            ctx.globalAlpha = lv === 0 || lv === 1 ? 1 : 0.7
-            ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke()
-            ctx.globalAlpha = 1
-            ctx.fillText(`${lv} (${price.toFixed(2)})`, x0 + 3, y - 1)
-          })
+          drawFib(FIB_LEVELS, (lv) => b.price + (a.price - b.price) * lv, x0, x1, g, preview)
+          ctx.strokeStyle = '#787b86'; ctx.lineWidth = 1; ctx.setLineDash([4, 4])
+          ctx.beginPath(); ctx.moveTo(P[0].x, P[0].y); ctx.lineTo(P[1].x, P[1].y); ctx.stroke(); ctx.setLineDash([])
         } else if (d.kind === 'fibx' && P.length >= 2) {
           // A -> B là cú sóng gốc, B -> C là nhịp hồi; các mức tính từ C theo độ dài A -> B
-          ctx.globalAlpha = 0.6; ctx.setLineDash([4, 4])
-          ctx.beginPath(); ctx.moveTo(P[0].x, P[0].y); ctx.lineTo(P[1].x, P[1].y); if (P.length === 3) ctx.lineTo(P[2].x, P[2].y); ctx.stroke()
-          ctx.setLineDash(preview ? [5, 4] : []); ctx.globalAlpha = 1
+          ctx.strokeStyle = '#787b86'; ctx.lineWidth = 1; ctx.setLineDash([4, 4])
+          ctx.beginPath(); ctx.moveTo(P[0].x, P[0].y); ctx.lineTo(P[1].x, P[1].y); if (P.length === 3) ctx.lineTo(P[2].x, P[2].y); ctx.stroke(); ctx.setLineDash([])
           if (P.length === 3) {
             const [pa, pb, pc] = d.payload.points
             const x0 = P[2].x
             const x1 = Math.min(plotW, x0 + Math.max(160, Math.abs(P[2].x - P[0].x)))   // chiều dài hữu hạn, không kéo hết mép phải
-            ctx.font = '10px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'
-            FIBX_LEVELS.forEach((lv) => {
-              const price = pc.price + (pb.price - pa.price) * lv
-              const y = g.s.priceToCoordinate(price)
-              if (y === null) return
-              ctx.globalAlpha = lv === 0 || lv === 1 ? 1 : 0.7
-              ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke()
-              ctx.globalAlpha = 1
-              ctx.fillText(`${lv} (${price.toFixed(2)})`, x0 + 3, y - 1)
-            })
+            drawFib(FIBX_LEVELS, (lv) => pc.price + (pb.price - pa.price) * lv, x0, x1, g, preview)
           }
+          ctx.fillStyle = '#787b86'
           for (const p of P) { ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill() }
         } else if (d.kind === 'ruler' && P.length === 2) {
           const [a, b] = d.payload.points
