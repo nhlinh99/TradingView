@@ -230,3 +230,6 @@ app.sqlite
 # third-party skills installed for local use; reinstall from their source repos
 .claude/skills/
 .claude/settings.local.json
+
+# TypeScript incremental build
+*.tsbuildinfo
