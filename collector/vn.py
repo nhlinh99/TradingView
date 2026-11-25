@@ -2,12 +2,14 @@
 
   - Danh sách VN100 và bảng giá 3 mức: SSI iBoard (`iboard-query.ssi.com.vn/stock/group/VN100`).
   - Nến lịch sử (1 phút trở lên, khoảng 1 năm): VNDirect dchart (`dchart-api.vndirect.com.vn/dchart/history`).
+  - Nến giờ (khoảng 3 năm gần nhất, sâu hơn nhiều so với nến 1 phút của dchart): DNSE/Entrade
+    (`services.entrade.com.vn/chart-api/v2/ohlcs/stock`, resolution `1H`).
 Cả hai là endpoint không có tài liệu chính thức, phục vụ web của nhà cung cấp. Có thể đổi hoặc chặn bất cứ lúc nào;
 chỉ dùng cho mục đích cá nhân, gọi thưa (xem docs/plan/07-vn100.md). Giá nến là nghìn đồng, đã điều chỉnh theo sự kiện doanh nghiệp.
 
 Lệnh:
   python -m collector.vn refresh-vn100              # ghi config/vn100.json từ SSI
-  python -m collector.vn bars [--symbols VNM,FPT] [--days 400]   # nạp nến 1 phút vào kho `bars`
+  python -m collector.vn bars [--symbols VNM,FPT] [--days 400]   # nạp nến 1 phút, nến ngày và nến giờ
 """
 from __future__ import annotations
 
@@ -26,6 +28,7 @@ log = logging.getLogger("collector.vn")
 
 SSI_URL = "https://iboard-query.ssi.com.vn/stock/group/VN100"
 DCHART_URL = "https://dchart-api.vndirect.com.vn/dchart/history"
+DNSE_URL = "https://services.entrade.com.vn/chart-api/v2/ohlcs/stock"
 DAY_MS = 86_400_000
 UA = {"User-Agent": "Mozilla/5.0 tv-local/0.1", "Origin": "https://iboard.ssi.com.vn"}
 
@@ -164,6 +167,58 @@ def refresh_daily(symbol: str, min_interval: float = 60.0) -> bool:
         return False
 
 
+# ---------- nến giờ ----------
+# dchart chỉ giữ nến 1 phút (và `60`) khoảng 6 tháng gần nhất, giai đoạn cũ hơn chỉ lác đác vài ngày, nên khung 1h/4h ghép
+# từ nến 1 phút bị trống trước giữa tháng 5/2026. DNSE trả nến `1H` liên tục khoảng 3 năm (cửa sổ trượt) trong một lần gọi,
+# giá nghìn đồng đã điều chỉnh, cùng mốc giờ UTC với dchart. Gộp theo ts nên lịch sử đã lưu không mất khi cửa sổ trượt đi.
+# Lưu ở DATA_DIR/vn_hourly/<mã>.json, mỗi dòng [t_giây, o, h, l, c, v]. DNSE không có 1 phút/5/15/30 sâu hơn dchart.
+
+def hourly_path(symbol: str):
+    return store.data_dir() / "vn_hourly" / f"{symbol}.json"
+
+
+def load_hourly(symbol: str) -> list[list[float]]:
+    try:
+        return json.loads(hourly_path(symbol).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+
+
+def sync_hourly(client: httpx.Client, symbol: str, full: bool = False, now_ms: int | None = None) -> dict:
+    """Nạp nến giờ từ DNSE. full (hoặc chưa có file): từ 2015; không thì chỉ ~10 ngày gần nhất rồi gộp theo ts."""
+    now_ms = now_ms if now_ms is not None else int(time.time() * 1000)
+    old = load_hourly(symbol)
+    start_s = now_ms // 1000 - (365 * 12 if full or not old else 10) * 86_400
+    d = _get(client, DNSE_URL, {"resolution": "1H", "symbol": symbol, "from": start_s, "to": now_ms // 1000})
+    merged = {int(r[0]): r for r in old}
+    for t, o, h, l, c, v in zip(d.get("t") or [], d.get("o") or [], d.get("h") or [], d.get("l") or [], d.get("c") or [], d.get("v") or []):
+        merged[int(t)] = [int(t), o, h, l, c, float(v)]
+    out = [merged[k] for k in sorted(merged)]
+    p = hourly_path(symbol)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_text(json.dumps(out, separators=(",", ":")), encoding="utf-8")
+    tmp.replace(p)
+    return {"bars": len(out), "new": len(out) - len(old)}
+
+
+_last_hourly: dict[str, float] = {}
+
+
+def refresh_hourly(symbol: str, min_interval: float = 60.0) -> bool:
+    """Làm mới đuôi nến giờ khi có người xem, gọi thưa. Lỗi chỉ ghi log."""
+    if time.monotonic() - _last_hourly.get(symbol, -1e9) < min_interval:
+        return False
+    _last_hourly[symbol] = time.monotonic()
+    try:
+        with make_client() as client:
+            sync_hourly(client, symbol)
+        return True
+    except Exception as e:  # noqa: BLE001
+        log.warning("không làm mới được nến giờ %s: %s", symbol, e)
+        return False
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -186,6 +241,7 @@ def main() -> None:
             try:
                 log.info("[%d/%d] %s %s", i, len(syms), s, sync_bars(client, s, args.days))
                 log.info("%s nến ngày %s", s, sync_daily(client, s, full=True))
+                log.info("%s nến giờ %s", s, sync_hourly(client, s, full=True))
             except Exception as e:  # noqa: BLE001 - một mã lỗi không dừng cả lượt
                 log.warning("%s lỗi: %s", s, e)
                 fail.append(s)

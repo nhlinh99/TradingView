@@ -118,3 +118,46 @@ def test_sync_daily_and_vn_daily_bars(data_root, monkeypatch):
     assert len(w) == 1 and w[0][1:] == [10, 14, 9, 13, 600, 0.0, 0.0]
     m = bars_api.vn_daily_bars("FPT", "1M", 30 * 86_400_000, cfg, None, None, 100)["bars"]
     assert len(m) == 1 and m[0][2] == 14
+
+
+def test_sync_hourly_and_vn_hourly_bars(data_root, monkeypatch):
+    from server import bars_api
+    monkeypatch.setattr(vn, "refresh_hourly", lambda s: False)   # không gọi mạng thật
+    # một phiên: 9h, 10h, 11h sáng và 13h, 14h chiều giờ VN = 02, 03, 04, 06, 07 giờ UTC
+    t = [int(datetime(2026, 3, 2, hh, tzinfo=timezone.utc).timestamp()) for hh in (2, 3, 4, 6, 7)]
+    payload = {"t": t, "o": [10, 11, 12, 13, 14], "h": [11, 12, 13, 14, 15], "l": [9, 10, 11, 12, 13],
+               "c": [11, 12, 13, 14, 15], "v": [100, 200, 300, 400, 500], "nextTime": 0}
+    seen = []
+
+    def handler(req):
+        seen.append(dict(req.url.params))
+        return httpx.Response(200, json=payload)
+
+    now = int(datetime(2026, 3, 3, tzinfo=timezone.utc).timestamp() * 1000)
+    with client_for(handler) as c:
+        assert vn.sync_hourly(c, "FPT", now_ms=now) == {"bars": 5, "new": 5}
+        assert vn.sync_hourly(c, "FPT", now_ms=now) == {"bars": 5, "new": 0}   # gộp theo ts, không nhân đôi
+    assert seen[0]["resolution"] == "1H" and seen[0]["symbol"] == "FPT"
+    assert now // 1000 - int(seen[0]["from"]) > 365 * 86_400      # lần đầu lấy toàn bộ lịch sử
+    assert now // 1000 - int(seen[1]["from"]) == 10 * 86_400       # lần sau chỉ lấy đuôi
+    cfg = store.symbol_config("FPT")
+    h = bars_api.vn_hourly_bars("FPT", "1h", 3_600_000, cfg, None, None, 100)["bars"]
+    assert [b[0] // 1000 for b in h] == t and [b[4] for b in h] == [11, 12, 13, 14, 15]
+    f = bars_api.vn_hourly_bars("FPT", "4h", 4 * 3_600_000, cfg, None, None, 100)["bars"]
+    # 4h chia theo UTC như khi ghép từ nến 1 phút: (02, 03) -> 00h, (04, 06, 07) -> 04h
+    assert [b[1:6] for b in f] == [[10, 12, 9, 12, 300], [12, 15, 11, 15, 1200]]
+    # API đi qua nhánh nến giờ, kể cả khi có `from`/`to`
+    from fastapi.testclient import TestClient
+    from server.main import app
+    j = TestClient(app).get("/api/bars", params={"symbol": "FPT", "tf": "1h", "from": t[0] * 1000, "to": t[3] * 1000}).json()
+    assert [b[0] // 1000 for b in j["bars"]] == t[:3]
+
+
+def test_vn_hourly_falls_back_to_minutes_without_file(data_root, monkeypatch):
+    from fastapi.testclient import TestClient
+    from server.main import app
+    monkeypatch.setattr(vn, "refresh_hourly", lambda s: False)
+    t0 = int(datetime(2026, 11, 13, 2, 15, tzinfo=timezone.utc).timestamp() * 1000)
+    store.write_partition("bars", "VNM", date(2026, 11, 13), [(t0, 54155, 54300, 54100, 54200, 1000.0, 0.0, 0.0)])
+    j = TestClient(app).get("/api/bars", params={"symbol": "VNM", "tf": "1h"}).json()
+    assert j["bars"] == [[t0 // 3_600_000 * 3_600_000, 54.155, 54.3, 54.1, 54.2, 1000.0, 0.0, 0.0]]

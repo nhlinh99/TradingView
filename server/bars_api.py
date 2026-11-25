@@ -142,14 +142,11 @@ def vn_daily_has_data(symbol: str) -> bool:
     return bool(vn.load_daily(symbol))
 
 
-def vn_daily_bars(symbol: str, tf: str, tf_ms: int, cfg: dict, start_ms: int | None, end_ms: int | None, limit: int) -> dict:
-    """Cổ phiếu VN ở khung ngày/tuần/tháng: nến ngày của dchart (đủ lịch sử); tuần và tháng ghép từ nến ngày."""
-    from collector import vn
-    if end_ms is None:
-        vn.refresh_daily(symbol)
+def _vn_group_bars(symbol: str, rows: list, tf: str, tf_ms: int, cfg: dict, start_ms: int | None, end_ms: int | None, limit: int) -> dict:
+    """Gộp các dòng [t_giây, o, h, l, c, v] (giá thật) thành nến tf."""
     tick = cfg["tick"]
     groups: dict[int, list] = {}
-    for t, o, h, l, c, v in vn.load_daily(symbol):
+    for t, o, h, l, c, v in rows:
         ts = int(t) * 1000
         groups.setdefault(tickbars.bucket_start(tf, ts), []).append((ts, o, h, l, c, v))
     bars = []
@@ -163,6 +160,34 @@ def vn_daily_bars(symbol: str, tf: str, tf_ms: int, cfg: dict, start_ms: int | N
     bars = bars[-limit:]
     return {"symbol": symbol, "tf": tf, "tf_ms": tf_ms, "tick": tick, "last_trade_id": None,
             "bars": _convert(bars, tick)}
+
+
+def vn_daily_bars(symbol: str, tf: str, tf_ms: int, cfg: dict, start_ms: int | None, end_ms: int | None, limit: int) -> dict:
+    """Cổ phiếu VN ở khung ngày/tuần/tháng: nến ngày của dchart (đủ lịch sử); tuần và tháng ghép từ nến ngày."""
+    from collector import vn
+    if end_ms is None:
+        vn.refresh_daily(symbol)
+    return _vn_group_bars(symbol, vn.load_daily(symbol), tf, tf_ms, cfg, start_ms, end_ms, limit)
+
+
+VN_HOURLY_TFS = ("1h", "4h")
+
+
+def vn_hourly_has_data(symbol: str) -> bool:
+    """Chưa có nến giờ thì nạp một lần (toàn bộ lịch sử DNSE); vẫn không có thì rơi về ghép từ nến 1 phút."""
+    from collector import vn
+    if not vn.load_hourly(symbol):
+        vn.refresh_hourly(symbol)
+    return bool(vn.load_hourly(symbol))
+
+
+def vn_hourly_bars(symbol: str, tf: str, tf_ms: int, cfg: dict, start_ms: int | None, end_ms: int | None, limit: int) -> dict:
+    """Cổ phiếu VN ở khung 1h/4h: nến giờ của DNSE (khoảng 3 năm). Không trộn với nến 1 phút của dchart (khối lượng
+    hai nguồn lệch nhau chút ít, trộn theo ngày sẽ làm chuỗi không nhất quán)."""
+    from collector import vn
+    if end_ms is None:
+        vn.refresh_hourly(symbol)
+    return _vn_group_bars(symbol, vn.load_hourly(symbol), tf, tf_ms, cfg, start_ms, end_ms, limit)
 
 
 def get_bars(symbol: str, tf: str, start_ms: int | None, end_ms: int | None, limit: int) -> dict:
@@ -180,6 +205,8 @@ def get_bars(symbol: str, tf: str, start_ms: int | None, end_ms: int | None, lim
         return tvc_coarse_bars(symbol, tf, tf_ms, cfg, start_ms, end_ms, limit)
     if cfg.get("market") == "vn" and tf in VN_DAILY_TFS and vn_daily_has_data(symbol):
         return vn_daily_bars(symbol, tf, tf_ms, cfg, start_ms, end_ms, limit)
+    if cfg.get("market") == "vn" and tf in VN_HOURLY_TFS and vn_hourly_has_data(symbol):
+        return vn_hourly_bars(symbol, tf, tf_ms, cfg, start_ms, end_ms, limit)
     is_vn = cfg.get("market") in ("vn", "tvc")   # chỉ có nến 1 phút, không có tick (VN100 và vàng TVC)
     live = end_ms is None and not is_vn   # chỉ yêu cầu nến mới nhất mới cần đuôi từ REST; cổ phiếu VN không có tick
     now_ms = int(time.time() * 1000)

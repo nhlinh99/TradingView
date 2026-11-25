@@ -6,6 +6,11 @@ Theo dạng [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/). Dự án c
 
 Xem `TODO.md` cho việc còn mở và `docs/plan/README.md` cho kế hoạch từng tính năng. Việc quan trọng nhất: chạy collector bằng Task Scheduler, đo phiên giao dịch VN100 thật (Thứ Hai 16/11), đối chiếu engine Pine với TradingView.
 
+## 2026-11-25
+
+### Sửa
+- Khung 1h và 4h của VN100 bị trống trước giữa tháng 5/2026 (ví dụ NKG chỉ có 3 ngày lẻ). Nguyên nhân: dchart chỉ giữ nến 1 phút khoảng 6 tháng gần nhất. Giờ 1h/4h lấy nến `1H` của DNSE/Entrade (khoảng 3 năm, từ 27/11/2023, giá đã điều chỉnh khớp dchart) lưu ở `vn_hourly/<mã>.json`, gộp theo ts nên lịch sử không mất khi cửa sổ của DNSE trượt đi; chưa có file thì nạp một lần khi có người xem, không lấy được thì vẫn ghép từ nến 1 phút như cũ. Khung dưới 1h trước 15/5/2026 vẫn thưa vì chưa nguồn nào có. Ngày 24/11/2026 và 31/8–1/9/2026 không có ở dchart, DNSE lẫn VPS (kể cả VN-INDEX), nên không phải dữ liệu bị mất.
+
 ## 2026-11-18
 
 ### Thêm
