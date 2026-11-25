@@ -7,9 +7,15 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 
 # Only one instance at a time: a scheduled task and a manual start must not both write the same data.
-$createdNew = $false
-$script:mutex = New-Object System.Threading.Mutex($true, 'Global\TradingViewCollectors', [ref]$createdNew)
-if (-not $createdNew) { Write-Host 'collectors already running (another run-collectors.ps1 holds the lock); exiting'; exit 0 }
+# The script runs inside the calling PowerShell process, so the lock must be released in `finally` (Ctrl+C);
+# otherwise it stays held by that console window and every later run there would exit. An abandoned lock
+# (holder died without releasing) counts as free.
+$script:mutex = New-Object System.Threading.Mutex($false, 'Global\TradingViewCollectors')
+try { $owned = $script:mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $owned = $true }
+if (-not $owned) {
+  $script:mutex.Dispose()
+  Write-Host 'collectors already running (another run-collectors.ps1 holds the lock); exiting'; exit 0
+}
 
 $dataDir = $null
 foreach ($line in Get-Content (Join-Path $root '.env')) {
@@ -63,4 +69,6 @@ finally {
   foreach ($p in $procs.Values) {
     if ($p -and -not $p.HasExited) { & taskkill.exe /PID $p.Id /T /F | Out-Null }
   }
+  try { $script:mutex.ReleaseMutex() } catch {}
+  $script:mutex.Dispose()
 }
