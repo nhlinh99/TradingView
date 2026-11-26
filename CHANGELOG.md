@@ -8,6 +8,9 @@ Xem `TODO.md` cho việc còn mở và `docs/plan/README.md` cho kế hoạch t�
 
 ## 2026-11-26
 
+### Thêm
+- Chỉ số VNINDEX và VN30 (nến 1 phút, giờ, ngày từ cùng nguồn với VN100; cảnh báo giá dùng giá đóng của nến ngày đang chạy).
+
 ### Thay đổi
 - Chuột ở vùng trống ngoài dãy nến (ví dụ bên phải nến cuối) thì chú giải OHLC hiện nến gần nhất thay vì ẩn.
 

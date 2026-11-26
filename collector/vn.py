@@ -1,4 +1,4 @@
-"""Cổ phiếu Việt Nam, chỉ rổ VN100 (HOSE). Hai nguồn công khai, không cần khoá:
+"""Cổ phiếu Việt Nam: rổ VN100 (HOSE) và hai chỉ số VNINDEX, VN30. Hai nguồn công khai, không cần khoá:
 
   - Danh sách VN100 và bảng giá 3 mức: SSI iBoard (`iboard-query.ssi.com.vn/stock/group/VN100`).
   - Nến lịch sử (1 phút trở lên, khoảng 1 năm): VNDirect dchart (`dchart-api.vndirect.com.vn/dchart/history`).
@@ -28,7 +28,7 @@ log = logging.getLogger("collector.vn")
 
 SSI_URL = "https://iboard-query.ssi.com.vn/stock/group/VN100"
 DCHART_URL = "https://dchart-api.vndirect.com.vn/dchart/history"
-DNSE_URL = "https://services.entrade.com.vn/chart-api/v2/ohlcs/stock"
+DNSE_URL = "https://services.entrade.com.vn/chart-api/v2/ohlcs/"   # nối thêm "stock" hoặc "index"
 DAY_MS = 86_400_000
 UA = {"User-Agent": "Mozilla/5.0 tv-local/0.1", "Origin": "https://iboard.ssi.com.vn"}
 
@@ -189,7 +189,7 @@ def sync_hourly(client: httpx.Client, symbol: str, full: bool = False, now_ms: i
     now_ms = now_ms if now_ms is not None else int(time.time() * 1000)
     old = load_hourly(symbol)
     start_s = now_ms // 1000 - (365 * 12 if full or not old else 10) * 86_400
-    d = _get(client, DNSE_URL, {"resolution": "1H", "symbol": symbol, "from": start_s, "to": now_ms // 1000})
+    d = _get(client, DNSE_URL + ("index" if symbol in store.VN_INDICES else "stock"), {"resolution": "1H", "symbol": symbol, "from": start_s, "to": now_ms // 1000})
     merged = {int(r[0]): r for r in old}
     for t, o, h, l, c, v in zip(d.get("t") or [], d.get("o") or [], d.get("h") or [], d.get("l") or [], d.get("c") or [], d.get("v") or []):
         merged[int(t)] = [int(t), o, h, l, c, float(v)]
@@ -233,8 +233,8 @@ def main() -> None:
         if args.cmd == "refresh-vn100":
             refresh_vn100(client)
             return
-        syms = args.symbols.split(",") if args.symbols else store.vn100_symbols()
-        if not syms:
+        syms = args.symbols.split(",") if args.symbols else store.vn_symbols()
+        if not args.symbols and not store.vn100_symbols():
             raise SystemExit("chưa có config/vn100.json; chạy refresh-vn100 trước")
         fail = []
         for i, s in enumerate(syms, 1):

@@ -62,7 +62,7 @@ def run(symbols: list[str], backfill_days: int = 3, do_compact: bool = True, vn_
                  lambda s=symbol, d=dataset: {k: v for k, v in backfill.backfill(s, d, start, yesterday).items() if k != "days"})
     if vn_bars:
         with vn.make_client() as client:
-            for symbol in store.vn100_symbols():
+            for symbol in store.vn_symbols():
                 step("vn-bars", symbol, lambda s=symbol: vn.sync_bars(client, s))
                 step("vn-daily", symbol, lambda s=symbol: vn.sync_daily(client, s))
     if do_compact:

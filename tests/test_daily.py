@@ -79,6 +79,7 @@ def test_vn_bars_step_runs_per_symbol_and_isolates_failures(monkeypatch):
     from common import store
 
     monkeypatch.setattr(store, "vn100_symbols", lambda: ["VNM", "FPT"])
+    monkeypatch.setattr(store, "VN_INDICES", ())
 
     class C:
         def __enter__(self): return self

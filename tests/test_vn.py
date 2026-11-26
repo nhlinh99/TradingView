@@ -161,3 +161,16 @@ def test_vn_hourly_falls_back_to_minutes_without_file(data_root, monkeypatch):
     store.write_partition("bars", "VNM", date(2026, 11, 13), [(t0, 54155, 54300, 54100, 54200, 1000.0, 0.0, 0.0)])
     j = TestClient(app).get("/api/bars", params={"symbol": "VNM", "tf": "1h"}).json()
     assert j["bars"] == [[t0 // 3_600_000 * 3_600_000, 54.155, 54.3, 54.1, 54.2, 1000.0, 0.0, 0.0]]
+
+
+def test_indices_are_configured_and_use_dnse_index_endpoint(data_root):
+    assert store.symbol_config("VNINDEX")["tick"] == 0.01 and store.symbol_config("VN30")["market"] == "vn"
+    assert store.vn_symbols()[:2] == ["VNINDEX", "VN30"]
+    urls = []
+
+    def handler(req):
+        urls.append(req.url.path)
+        return httpx.Response(200, json={"t": [1_794_880_800], "o": [1.0], "h": [1.0], "l": [1.0], "c": [1.0], "v": [1]})
+
+    vn.sync_hourly(client_for(handler), "VN30", full=True, now_ms=1_794_900_000_000)
+    assert urls == ["/chart-api/v2/ohlcs/index"]

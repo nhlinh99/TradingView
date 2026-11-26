@@ -133,6 +133,17 @@ def latest_prices(symbols: set[str]) -> dict[str, float]:
                         out[r["stockSymbol"]] = float(r["matchedPrice"]) / 1000.0
         except Exception as e:  # noqa: BLE001
             log.warning("không lấy được bảng giá VN: %s", e)
+    indices = vns.intersection(store.VN_INDICES)   # chỉ số không có trong bảng giá: lấy giá đóng của nến ngày đang chạy
+    if indices:
+        with vn.make_client() as c:
+            now = int(time.time())
+            for s in indices:
+                try:
+                    closes = vn.fetch_history(c, s, "1D", now - 14 * 86_400, now).get("c") or []
+                    if closes:
+                        out[s] = float(closes[-1])
+                except Exception as e:  # noqa: BLE001
+                    log.warning("không lấy được giá %s: %s", s, e)
     return out
 
 

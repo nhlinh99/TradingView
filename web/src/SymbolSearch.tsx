@@ -11,6 +11,8 @@ type Props = {
 
 const KIND: Record<string, string> = { vn: 'VN100 · HOSE', tvc: 'TradingView · TVC', binance_futures: 'Binance Futures' }
 
+const INDICES = ['VNINDEX', 'VN30']
+
 /** Hộp tìm symbol (mở bằng / hoặc Ctrl+K): gõ để lọc, mũi tên để chọn, Enter để mở; mã chưa có trong danh sách theo dõi sẽ được thêm. */
 export default function SymbolSearch({ all, watch, current, onPick, onClose }: Props) {
   const [q, setQ] = useState('')
@@ -50,7 +52,7 @@ export default function SymbolSearch({ all, watch, current, onPick, onClose }: P
             <li key={s.symbol} id={`sym-${s.symbol}`} role="option" aria-selected={i === sel} className={i === sel ? 'on' : ''}
               onMouseEnter={() => setSel(i)} onMouseDown={(e) => { e.preventDefault(); onPick(s.symbol) }}>
               <b>{s.symbol}</b>
-              <span className="mute">{KIND[s.source ?? ''] ?? s.source ?? ''}</span>
+              <span className="mute">{INDICES.includes(s.symbol) ? 'Chỉ số · HOSE' : KIND[s.source ?? ''] ?? s.source ?? ''}</span>
               <span className="tagrow">
                 {s.symbol === current && <em>đang xem</em>}
                 {watch.includes(s.symbol) ? <em>theo dõi</em> : <em className="add">+ thêm</em>}

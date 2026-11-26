@@ -183,6 +183,15 @@ VN_DEFAULTS = {"source": "vn", "market": "vn", "tick": 0.001, "qty_step": 1,
                "footprint_bucket": 0.01, "book_window_pct": 0.0, "book_bucket": 0.01}
 
 
+# Chỉ số của HOSE: có nến ở cùng các nguồn với cổ phiếu, không có sổ lệnh. Đơn vị là điểm, 2 chữ số thập phân.
+VN_INDICES = ("VNINDEX", "VN30")
+
+
+def vn_symbols() -> list[str]:
+    """Mọi mã thị trường VN có trong app: chỉ số rồi tới VN100."""
+    return [*VN_INDICES, *vn100_symbols()]
+
+
 def vn100_symbols() -> list[str]:
     try:
         with open(VN100_FILE, "rb") as f:
@@ -208,6 +217,8 @@ def _load_symbols() -> dict:
             return _symbols_cache[1]
         with open(_SYMBOLS_FILE, "rb") as f:
             cfg = tomllib.load(f)
+        for sym in VN_INDICES:
+            cfg.setdefault(sym, {**VN_DEFAULTS, "tick": 0.01})
         for sym in vn100_symbols():
             cfg.setdefault(sym, dict(VN_DEFAULTS))
         _symbols_cache = ((m1, m2), cfg)
