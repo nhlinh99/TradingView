@@ -231,6 +231,17 @@ export function indexToTime(times: number[], idx: number, stepSec: number): numb
   return times[lo] + (idx - lo) * (times[lo + 1] - times[lo])
 }
 
+/**
+ * Số giây ứng với một chỗ nến khi phải ngoại suy ra ngoài dãy nến đã tải (điểm neo trước nến đầu hoặc sau nến cuối).
+ * Thị trường có giờ nghỉ (cổ phiếu VN, cuối tuần) thì một nến chiếm nhiều thời gian lịch hơn bề rộng khung: dùng khoảng cách
+ * trung bình thật, nếu không điểm neo lệch hàng trăm nến khi đổi khung. Thị trường chạy liên tục thì giữ bề rộng khung.
+ */
+export function extrapolationStep(times: number[], stepSec: number): number {
+  if (times.length < 2) return stepSec
+  const avg = (times[times.length - 1] - times[0]) / (times.length - 1)
+  return avg > stepSec * 1.2 ? avg : stepSec
+}
+
 export type DrawKind = 'trend' | 'ray' | 'hray' | 'xline' | 'hline' | 'vline' | 'cross' | 'info' | 'angle' | 'arrow' | 'channel' | 'regression'
   | 'rect' | 'brush' | 'fib' | 'fibx' | 'ruler' | 'daterange' | 'pricerange' | 'text'
   | 'long' | 'short' | 'circle' | 'ellipse' | 'triangle' | 'polyline' | 'note' | 'callout' | 'pricelabel' | 'flag'

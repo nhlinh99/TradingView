@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject, type R
 import { createPortal } from 'react-dom'
 import type { IChartApi, ISeriesApi } from 'lightweight-charts'
 import { clearDrawings, createAlert, createDrawing, deleteDrawing, fetchDrawings, updateDrawing } from './api'
-import { indexToTime, tfMs, timeToIndex, type Bar, type DrawKind, type DrawPoint, type Drawing } from './logic'
+import { extrapolationStep, indexToTime, tfMs, timeToIndex, type Bar, type DrawKind, type DrawPoint, type Drawing } from './logic'
 import { GROUP_LABEL, GROUP_ORDER, KINDS, REGISTRY, fmtPrice, handlesFor, zOrdered, type Geo, type Group, type Pt } from './drawTools'
 
 type Tool = 'cursor' | DrawKind | 'erase'
@@ -125,11 +125,12 @@ export default function Drawings({ symbol, tf, dark, chart, candles, bars }: Pro
     if (xa === null || xb === null) return null
     const times = list.map((b) => b.time)
     const sp = xb - xa
+    const gap = extrapolationStep(times, step)
     return {
       c, s, times,
-      x: (time: number) => xa + (timeToIndex(times, time, step) - a) * sp,
-      time: (px: number) => indexToTime(times, a + (px - xa) / sp, step),
-      idx: (time: number) => timeToIndex(times, time, step),
+      x: (time: number) => xa + (timeToIndex(times, time, gap) - a) * sp,
+      time: (px: number) => indexToTime(times, a + (px - xa) / sp, gap),
+      idx: (time: number) => timeToIndex(times, time, gap),
     }
   }, [chart, candles, bars, step])
 

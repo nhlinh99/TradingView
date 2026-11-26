@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  applyTrade, barFromRow, decimalsFromTick, formatTime, mergeOlder, tfMs, tickLabel, type Bar, type Trade,
+  applyTrade, barFromRow, decimalsFromTick, extrapolationStep, formatTime, mergeOlder, tfMs, tickLabel, type Bar, type Trade,
 } from './logic.ts'
 
 const bar = (time: number, p = 100): Bar => ({ time, open: p, high: p, low: p, close: p, volume: 1, buy: 1, sell: 0 })
@@ -234,4 +234,11 @@ test('highlightPine round-trips the source and classifies tokens', () => {
   assert.ok(kinds('number').includes('20') && kinds('number').includes('1.5e3'))
   assert.deepEqual(kinds('const'), ['#ff0000'])
   assert.equal(highlightPine('').length, 0)
+})
+
+test('extrapolationStep: thị trường có giờ nghỉ dùng mật độ nến thật, thị trường liên tục giữ bề rộng khung', () => {
+  const hours = [0, 3600, 7200, 86400, 90000]          // nghỉ qua đêm
+  assert.equal(extrapolationStep(hours, 3600), 22500)
+  assert.equal(extrapolationStep([0, 60, 120, 180], 60), 60)
+  assert.equal(extrapolationStep([5], 60), 60)
 })
