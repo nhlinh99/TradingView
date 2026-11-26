@@ -266,3 +266,10 @@ def test_week_and_month_timeframes_use_calendar_boundaries(data_root):
     assert mth["bars"][0][5] == 12.0 and mth["bars"][1][5] == 20.0          # 26-31/10 = 6 ngày, 1-10/11 = 10 ngày, mỗi ngày volume 2
     assert client.get("/api/bars", params={"symbol": "BTCUSDT", "tf": "2M"}).status_code == 422
     assert client.get("/api/footprint", params={"symbol": "BTCUSDT", "tf": "1w"}).status_code == 400
+
+
+def test_tvc_daily_volume_is_summed_from_finer_bars():
+    daily = [[0, 1, 1, 1, 1, 0.0], [100, 1, 1, 1, 1, 0.0], [200, 1, 1, 1, 1, 0.0], [300, 1, 1, 1, 1, 7.0]]
+    finer = [[100, 1, 1, 1, 1, 2.0], [150, 1, 1, 1, 1, 3.0], [200, 1, 1, 1, 1, 4.0], [300, 1, 1, 1, 1, 9.0]]
+    assert [r[5] for r in bars_api.fill_volume(daily, finer)] == [0.0, 5.0, 4.0, 7.0]   # nến trước dữ liệu giữ 0; volume sẵn có giữ nguyên
+    assert bars_api.fill_volume(daily, []) == daily

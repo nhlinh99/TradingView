@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import time
+from bisect import bisect_left
 from typing import Callable
 
 import duckdb
@@ -119,12 +120,36 @@ def aggregate_minutes(symbol: str, tf_ms: int, start_ms: int, end_ms: int, live:
 COARSE_TVC = ("5m", "15m", "1h", "4h", "1d", "1w", "1M")
 
 
+TVC_NO_VOLUME = ("1d", "1w", "1M")
+
+
+def fill_volume(rows: list, finer: list) -> list:
+    """TVC trả volume 0 cho nến ngày, tuần, tháng: cộng từ nến khung nhỏ hơn trong [mở nến này, mở nến sau).
+
+    Nến mở trước dữ liệu khung nhỏ thì giữ nguyên 0, không cộng thiếu. rows và finer đều là [t, o, h, l, c, v], cũ trước.
+    """
+    if not finer:
+        return rows
+    ts = [r[0] for r in finer]
+    out = []
+    for i, r in enumerate(rows):
+        if not r[5] and r[0] >= ts[0]:
+            end = bisect_left(ts, rows[i + 1][0]) if i + 1 < len(rows) else len(ts)
+            r = [*r[:5], sum(x[5] for x in finer[bisect_left(ts, r[0]):end])]
+        out.append(r)
+    return out
+
+
 def tvc_coarse_bars(symbol: str, tf: str, tf_ms: int, cfg: dict, start_ms: int | None, end_ms: int | None, limit: int) -> dict:
     """Vàng TVC ở khung lớn: lấy thẳng nến TradingView đã lưu (sâu hơn nhiều so với nến 1 phút ẩn danh)."""
     from collector import tvc
     if end_ms is None:
         tvc.refresh_coarse(tf)
+        if tf in TVC_NO_VOLUME:
+            tvc.refresh_coarse("4h")
     rows = tvc.load_coarse(tf)
+    if tf in TVC_NO_VOLUME:
+        rows = fill_volume(rows, tvc.load_coarse("4h"))
     out = [r for r in rows if (start_ms is None or r[0] * 1000 >= start_ms) and (end_ms is None or r[0] * 1000 < end_ms)]
     out = out[-limit:]
     bars = [[int(r[0]) * 1000, r[1], r[2], r[3], r[4], round(r[5], 6), 0.0, 0.0] for r in out]
