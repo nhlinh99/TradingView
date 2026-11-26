@@ -95,6 +95,8 @@ export default function Dom({ on, dark, symbol, tf, chart, candles, bars }: Prop
     const pollTraded = async () => {
       if (stopped) return
       const started = Date.now()
+      const first = tradedBase === 0   // lần đầu chưa biết bucket footprint nên hỏi mult = 1
+      let refine = false
       try {
         const c = chart.current
         const list = bars.current
@@ -113,6 +115,7 @@ export default function Dom({ on, dark, symbol, tf, chart, candles, bars }: Prop
             traded = j.rows.map(([price, buy, sell]) => ({ price, buy, sell }))
             tradedBucket = j.bucket
             tradedBase = j.bucket / mult
+            refine = first && Math.round(dom.bucket / tradedBase) > 1
             tradedSig++
             sig = ''
           }
@@ -121,7 +124,8 @@ export default function Dom({ on, dark, symbol, tf, chart, candles, bars }: Prop
         if ((e as Error)?.name === 'AbortError' || stopped) return
       } finally {
         // khoảng xem rộng thì truy vấn lâu: giãn nhịp để máy chủ không bận liên tục
-        if (!stopped) tradedTimer = window.setTimeout(() => void pollTraded(), Math.max(TRADED_MS, (Date.now() - started) * 10))
+        // lần đầu cần gom lại theo độ gom của DOM thì hỏi lại ngay
+        if (!stopped) tradedTimer = window.setTimeout(() => void pollTraded(), refine ? 300 : Math.max(TRADED_MS, (Date.now() - started) * 3))
       }
     }
 
