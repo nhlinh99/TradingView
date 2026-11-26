@@ -88,8 +88,13 @@ export default function Chart({ symbol, tf, tz, flow, pines, indLegend, replay, 
     chart.panes()[1]?.setStretchFactor(0.25)
     chart.subscribeCrosshairMove((p) => {
       const d = p.seriesData.get(c) as { time: number } | undefined
-      if (!p.time || !d) return setLegend(null)
-      const b = bars.current.find((x) => x.time === (p.time as number))
+      const list = bars.current
+      let b = d ? list.find((x) => x.time === d.time) : undefined
+      // chuột ra vùng trống (bên phải nến cuối hoặc bên trái nến đầu): lấy nến gần nhất
+      if (!b && p.point && list.length > 0) {
+        const lastX = chart.timeScale().timeToCoordinate(list[list.length - 1].time as UTCTimestamp)
+        b = lastX === null || p.point.x >= lastX ? list[list.length - 1] : list[0]
+      }
       setLegend(b ? { time: b.time, bar: b } : null)
     })
     chartRef.current = chart

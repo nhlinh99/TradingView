@@ -8,6 +8,9 @@ Xem `TODO.md` cho việc còn mở và `docs/plan/README.md` cho kế hoạch t�
 
 ## 2026-11-26
 
+### Thay đổi
+- Chuột ở vùng trống ngoài dãy nến (ví dụ bên phải nến cuối) thì chú giải OHLC hiện nến gần nhất thay vì ẩn.
+
 ### Sửa
 - Truy vấn tick trên khoảng dài (cột Khớp của DOM, volume profile, bong bóng) ngốn RAM và ghi đĩa hàng trăm MB/s: loại trùng chạy cửa sổ `row_number()` trên mọi dòng (30 ngày là 53 triệu dòng), vượt trần 1 GB nên tràn ra `DATA_DIR\tmp`; trình duyệt huỷ yêu cầu nhưng máy chủ vẫn chạy tiếp. Giờ chỉ loại trùng cho ngày còn file con. Đo trên 10 ngày: 12,6 s còn 0,4 s, đỉnh bộ nhớ 1.118 MB còn 113 MB, ghi đĩa 280 MB còn 0. Cột Khớp ở khung 1h trước đó mất vài phút mới có.
 - DOM bị xoá trắng mỗi khi biểu đồ nạp lại nến (nối lại WebSocket, kéo về quá khứ). Cột Khớp giãn nhịp làm mới khi truy vấn chậm.
