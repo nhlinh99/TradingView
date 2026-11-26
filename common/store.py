@@ -449,6 +449,10 @@ def range_select(
         phải khoá phân vùng xuống dưới, nên lọc sau sẽ phải quét và sắp xếp mọi file.
     Lọc trước khi loại trùng là an toàn: các bản sao của cùng một dòng có cùng ts, nên cả hai
     cùng nằm trong hoặc cùng nằm ngoài khoảng.
+
+    Chỉ loại trùng cho ngày còn file con. Ngày chỉ có file chuẩn thì đã sạch (merge_day loại trùng, backfill ghi từ kho
+    không trùng) và file của ngày nào chỉ chứa ngày đó, nên đọc thẳng. Cửa sổ row_number() phải giữ mọi dòng cùng lúc: chạy nó
+    trên 30 ngày tick (53 triệu dòng) vượt trần bộ nhớ, tràn ra đĩa hàng trăm MB/s và mất vài phút.
     """
     _check(kind, symbol)
     folder = data_dir() / kind / symbol
@@ -456,28 +460,39 @@ def range_select(
         return None
     d0 = _ms_to_day(start_ms) if start_ms is not None else None
     d1 = _ms_to_day(end_ms - 1) if end_ms is not None else None
-    files = []
+    days: dict[date, list[Path]] = {}
     for p in sorted(folder.glob("date=*.parquet")):
         m = _FILE_DATE_RE.match(p.name)
         if not m:
             continue
         d = date.fromisoformat(m.group(1))
         if (d0 is None or d >= d0) and (d1 is None or d <= d1):
-            files.append(p)
-    if not files:
+            days.setdefault(d, []).append(p)
+    if not days:
         return None
-    flist = "[" + ", ".join(_sql_str(f) for f in files) + "]"
     conds = []
     if start_ms is not None:
         conds.append(f"ts >= {int(start_ms)}")
     if end_ms is not None:
         conds.append(f"ts < {int(end_ms)}")
-    inner = f"SELECT * FROM read_parquet({flist}, union_by_name=true)"
-    if conds:
-        inner += " WHERE " + " AND ".join(conds)
+    where = " WHERE " + " AND ".join(conds) if conds else ""
+
+    def select(files: list[Path]) -> str:
+        flist = "[" + ", ".join(_sql_str(f) for f in files) + "]"
+        return f"SELECT * FROM read_parquet({flist}, union_by_name=true){where}"
+
     if not dedupe:
-        return inner
-    return _dedupe_from(kind, f"({inner})")
+        return select([f for files in days.values() for f in files])
+    clean: list[Path] = []
+    dirty: list[Path] = []
+    for d, files in days.items():
+        (clean if [f.name for f in files] == [f"date={d.isoformat()}.parquet"] else dirty).extend(files)
+    parts = []
+    if clean:
+        parts.append(select(clean))
+    if dirty:
+        parts.append(_dedupe_from(kind, f"({select(dirty)})"))
+    return " UNION ALL BY NAME ".join(parts)
 
 
 def read(

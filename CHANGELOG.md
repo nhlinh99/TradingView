@@ -6,6 +6,12 @@ Theo dạng [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/). Dự án c
 
 Xem `TODO.md` cho việc còn mở và `docs/plan/README.md` cho kế hoạch từng tính năng. Việc quan trọng nhất: chạy collector bằng Task Scheduler, đo phiên giao dịch VN100 thật (Thứ Hai 16/11), đối chiếu engine Pine với TradingView.
 
+## 2026-11-26
+
+### Sửa
+- Truy vấn tick trên khoảng dài (cột Khớp của DOM, volume profile, bong bóng) ngốn RAM và ghi đĩa hàng trăm MB/s: loại trùng chạy cửa sổ `row_number()` trên mọi dòng (30 ngày là 53 triệu dòng), vượt trần 1 GB nên tràn ra `DATA_DIR\tmp`; trình duyệt huỷ yêu cầu nhưng máy chủ vẫn chạy tiếp. Giờ chỉ loại trùng cho ngày còn file con. Đo trên 10 ngày: 12,6 s còn 0,4 s, đỉnh bộ nhớ 1.118 MB còn 113 MB, ghi đĩa 280 MB còn 0. Cột Khớp ở khung 1h trước đó mất vài phút mới có.
+- DOM bị xoá trắng mỗi khi biểu đồ nạp lại nến (nối lại WebSocket, kéo về quá khứ). Cột Khớp giãn nhịp làm mới khi truy vấn chậm.
+
 ## 2026-11-25
 
 ### Sửa

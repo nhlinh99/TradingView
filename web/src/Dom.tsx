@@ -11,7 +11,6 @@ type Props = {
   chart: MutableRefObject<IChartApi | null>
   candles: MutableRefObject<ISeriesApi<'Candlestick'> | null>
   bars: MutableRefObject<Bar[]>
-  version: number
 }
 
 const POLL_MS = 2000
@@ -26,7 +25,7 @@ const fmtSize = (q: number) => (q >= 1000 ? `${(q / 1000).toFixed(1)}k` : q >= 1
  * Từ trên xuống: ask (đỏ) rồi bid (xanh); thanh bắt đầu từ mép trái cột và dài theo khối lượng chờ, số ghi ở mọi dòng;
  * dòng bid tốt nhất và ask tốt nhất được tô nền, giá hiện tại có vạch ngang qua cột.
  */
-export default function Dom({ on, dark, symbol, tf, chart, candles, bars, version }: Props) {
+export default function Dom({ on, dark, symbol, tf, chart, candles, bars }: Props) {
   const panel = useRef<HTMLDivElement>(null)
   const cv = useRef<HTMLCanvasElement>(null)
   const [info, setInfo] = useState<{ text: string; warn: boolean; group: string } | null>(null)
@@ -95,6 +94,7 @@ export default function Dom({ on, dark, symbol, tf, chart, candles, bars, versio
     /** Khối lượng khớp theo giá trong khoảng đang xem (cùng khoảng với heatmap), gom theo bội của bucket footprint gần với độ gom của DOM. */
     const pollTraded = async () => {
       if (stopped) return
+      const started = Date.now()
       try {
         const c = chart.current
         const list = bars.current
@@ -120,7 +120,8 @@ export default function Dom({ on, dark, symbol, tf, chart, candles, bars, versio
       } catch (e) {
         if ((e as Error)?.name === 'AbortError' || stopped) return
       } finally {
-        if (!stopped) tradedTimer = window.setTimeout(() => void pollTraded(), TRADED_MS)
+        // khoảng xem rộng thì truy vấn lâu: giãn nhịp để máy chủ không bận liên tục
+        if (!stopped) tradedTimer = window.setTimeout(() => void pollTraded(), Math.max(TRADED_MS, (Date.now() - started) * 10))
       }
     }
 
@@ -254,7 +255,7 @@ export default function Dom({ on, dark, symbol, tf, chart, candles, bars, versio
       setInfo(null)
       ctx.clearRect(0, 0, canvas.width, canvas.height)
     }
-  }, [on, dark, symbol, tf, chart, candles, bars, version])
+  }, [on, dark, symbol, tf, chart, candles, bars])   // không phụ thuộc `version`: nạp lại nến không được xoá DOM đang hiện (bars là ref)
 
   if (!on) return null
   return (

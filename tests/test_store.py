@@ -1,6 +1,6 @@
 import os
 import random
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -333,3 +333,15 @@ def test_range_read_dedupes_within_range(data_root):
     store.write_partition("ticks", "BTCUSDT", DAY, rows)
     store.write_partition("ticks", "BTCUSDT", DAY, rows[4:], part="live")
     assert len(store.read("ticks", "BTCUSDT", BASE_TS + 2, BASE_TS + 8)) == 6
+
+
+def test_range_select_dedupes_only_days_with_parts(data_root):
+    """Ngày chỉ có file chuẩn đọc thẳng (không tốn cửa sổ loại trùng); ngày còn file con vẫn được loại trùng."""
+    day = 86_400_000
+    old = [(BASE_TS - day + i, i, 1, 1.0, True) for i in range(5)]
+    new = [(BASE_TS + i, 100 + i, 1, 1.0, True) for i in range(10)]
+    store.write_partition("ticks", "BTCUSDT", DAY - timedelta(days=1), old)
+    assert "row_number" not in store.range_select("ticks", "BTCUSDT")
+    store.write_partition("ticks", "BTCUSDT", DAY, new)
+    store.write_partition("ticks", "BTCUSDT", DAY, new[4:], part="live")
+    assert len(store.read("ticks", "BTCUSDT")) == 5 + 10

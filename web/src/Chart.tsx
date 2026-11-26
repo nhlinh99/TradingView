@@ -390,7 +390,7 @@ export default function Chart({ symbol, tf, tz, flow, pines, indLegend, replay, 
       {loading && <div className="overlay">Đang tải...</div>}
       {error && <div className="overlay bad" role="alert">Không tải được nến: {error}</div>}
       </div>
-      <Dom on={flow.dom} dark={theme === 'dark'} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} version={version} />
+      <Dom on={flow.dom} dark={theme === 'dark'} symbol={symbol} tf={tf} chart={chartRef} candles={candles} bars={bars} />
     </div>
   )
 }

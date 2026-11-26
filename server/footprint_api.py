@@ -42,7 +42,8 @@ def footprint_sql(symbol: str, tf_ms: int, start_ms: int, end_ms: int, mult: int
         )
     if fp:
         # chỉ lấy ngày UTC không có tick; footprint_1m cũng được tái gom theo bucket thô hơn
-        day_has_ticks = f"(SELECT DISTINCT ts // 86400000 FROM ({ticks}))" if ticks else "(SELECT NULL::BIGINT WHERE false)"
+        raw = store.range_select("ticks", symbol, start_ms, end_ms, dedupe=False)   # chỉ cần biết ngày nào có tick, không cần loại trùng
+        day_has_ticks = f"(SELECT DISTINCT ts // 86400000 FROM ({raw}))" if ticks else "(SELECT NULL::BIGINT WHERE false)"
         parts.append(
             f"SELECT ts, (p // {bucket}) * {bucket} AS p, sum(buy::DOUBLE) AS buy, sum(sell::DOUBLE) AS sell "
             f"FROM ({fp}) WHERE ts // 86400000 NOT IN {day_has_ticks} GROUP BY 1, 2"
